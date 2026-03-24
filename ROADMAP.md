@@ -4,144 +4,202 @@
 
 ## Vision
 
-Make AI-assisted development seamless by providing structured workspaces, relevant context, and appropriate personas for every task.
+Make AI-assisted development seamless by providing structured workspaces, relevant context, and appropriate personas for every task. Inspired by [jeff](https://github.com/NeerajG03/JEFF) but with native yoke integration.
+
+## Architecture
+
+```
+$OX_HOME/                     (~/.ox)
+├── ox.yaml                   # Config (repos, defaults, skill mappings)
+├── repos/                    # Registered codebases (cloned via ox repo add)
+│   ├── backend/
+│   ├── frontend/
+│   └── jarvis/
+├── tasks/                    # Active task workspaces
+│   └── 9-refactor-linkedin/
+│       ├── CLAUDE.md         # Generated (persona + task + skills)
+│       ├── backend/          # Symlink → worktrees/backend/9
+│       └── state.yaml        # Checkpoint state
+├── worktrees/                # Git worktrees (managed by ox)
+│   └── backend/
+│       └── 9/                # Branch: ox/9-refactor-linkedin
+├── skills/                   # Flat skill files (SKILL.md)
+│   ├── go.md
+│   ├── java.md
+│   ├── testing.md
+│   └── debugging.md
+├── personas/                 # Persona definitions
+│   ├── captain.md            # Orchestrator
+│   ├── builder.md            # Implementer
+│   ├── explorer.md           # Researcher
+│   └── reviewer.md           # Quality checker
+└── memory.db                 # SQLite for cross-session memory
+```
 
 ## Dependency
 
-**ox requires yoke** - Task management is handled by yoke. Ox focuses on:
-- Workspace creation and management
-- Context generation (CLAUDE.md)
-- Persona loading
-- Skill injection
-- Memory and checkpoints
-- AI integration
+**ox requires yoke** - Task management handled by yoke. Ox imports yoke as a Go library for direct access to:
+- Task data (title, status, priority, tags, body)
+- Notes and event history
+- Parent/child relationships and blockers
+- Notion sync metadata
 
-```
-yoke (tasks) ──────▶ ox (workspaces + AI)
+```go
+import "github.com/ashvinbhat/yoke/internal/task"
+
+store, _ := task.NewStore("~/.yoke/yoke.db")
+t, _ := store.Get("9")
+notes, _ := store.GetNotes(t.ID)
 ```
 
 ---
 
-## Phase O0: Basic Workspace 📋 WAITING ON YOKE
+## Phase O0: Foundation ✅ READY
 
-**Goal:** Create workspace for a task
+**Goal:** Basic workspace creation and repo management
 
 ### Deliverables
-- [ ] `ox pickup <task-id>` - Create workspace for yoke task
+- [ ] `ox init` - Initialize ~/.ox structure
+- [ ] `ox repo add <url> [--name x]` - Register and clone codebase
+- [ ] `ox repo list` - Show registered repos
+- [ ] `ox repo remove <name>` - Unregister repo
+- [ ] `ox pickup <task-id> --repos <name>` - Create workspace with worktree
 - [ ] `ox status` - Show current task/workspace
-- [ ] `ox done` - Complete task (calls yoke done)
-- [ ] Basic CLAUDE.md generation with task details
+- [ ] `ox done [task-id]` - Complete task, cleanup workspace
+- [ ] Basic CLAUDE.md generation
 
-### Workspace Structure
-```
-~/workspaces/<task-id>/
-├── CLAUDE.md            # Generated context
-└── (git worktree or clone)
+### Config (ox.yaml)
+```yaml
+agent: claude
+ide: cursor
+
+repos:
+  backend:
+    url: git@github.com:company/backend.git
+    base_branch: main
+  frontend:
+    url: git@github.com:company/frontend.git
+
+defaults:
+  persona: builder
 ```
 
 ### Exit Criteria
+- Can register repos via CLI
 - Can create workspace from yoke task
-- CLAUDE.md has task context
-- Can complete task from ox
+- Worktree created and symlinked
+- Basic CLAUDE.md generated
+- Can complete and cleanup
 
 ---
 
 ## Phase O1: Git Integration
 
-**Goal:** Automatic branch management
+**Goal:** Full worktree and branch lifecycle
 
 ### Deliverables
-- [ ] Auto-create branch on `ox pickup`
-- [ ] Branch naming: `ox/<id>-<slug>`
-- [ ] Git worktree support (isolated directory)
-- [ ] `ox ship` - Create PR from workspace
-- [ ] Return to main on `ox done`
+- [ ] Auto-create branch: `ox/<task-id>-<slug>`
+- [ ] `ox worktree list` - Show all worktrees
+- [ ] `ox worktree add <repo>` - Add worktree to current task
+- [ ] `ox worktree rm <repo>` - Remove worktree
+- [ ] `ox ship [--repo x] [--draft]` - Push and create PR
+- [ ] `ox open [task-id]` - Open workspace in IDE
+- [ ] Cleanup worktrees on `ox done`
 
 ### Exit Criteria
-- Never manually create task branches
-- PRs created automatically
-- Clean branch management
+- Never manually create branches
+- PRs created via `ox ship`
+- Clean worktree lifecycle
 
 ---
 
-## Phase O2: Context Generation
+## Phase O2: Rich Context Generation
 
-**Goal:** Rich CLAUDE.md for AI
+**Goal:** CLAUDE.md with full yoke context
 
 ### Deliverables
-- [ ] Include task title, body, status
-- [ ] Include task notes from yoke
-- [ ] Include related/blocked tasks
-- [ ] Include recent git history
-- [ ] Custom templates support
+- [ ] Task title, body, status, priority
+- [ ] All notes from yoke
+- [ ] Blockers and dependencies
+- [ ] Parent/child task hierarchy
+- [ ] Event history (recent activity)
+- [ ] Notion link if available
+- [ ] Custom template support
 
 ### CLAUDE.md Structure
 ```markdown
-# Task: <title>
-
-## Context
-<task body>
+# Task #9: Refactor LinkedIn workflow
 
 ## Status
-<current status, blockers>
+IN PROGRESS | P4 | Tags: backend, refactor
+
+## Context
+[Task body from yoke]
 
 ## Notes
-<notes from yoke>
+- 2024-03-25: Started investigation
+- 2024-03-24: Linked from Notion
 
-## Related Tasks
-<parent, children, blockers>
+## Dependencies
+Blocked by: (none)
+Blocking: (none)
+Parent: (none)
 
 ## Recent Activity
-<recent commits, changes>
+- status: pending → in_progress
+- linked to Notion
 
-## Skills
-<injected skills below>
+## External
+Notion: https://notion.so/...
+
+---
+[Persona section]
+---
+[Skills section]
 ```
 
 ### Exit Criteria
-- AI has full task context
-- Context is accurate and useful
+- AI has complete task context
+- Notes and history visible
+- Dependencies clear
 
 ---
 
 ## Phase O3: Skills System
 
-**Goal:** Inject relevant expertise
+**Goal:** Auto-inject relevant expertise
 
 ### Deliverables
-- [ ] Skill directory structure
-- [ ] `ox skills` - List available skills
-- [ ] `ox inject <skill>` - Add to workspace
-- [ ] `ox eject <skill>` - Remove from workspace
+- [ ] `ox skill list` - Available skills
+- [ ] `ox skill add <path>` - Register skill
+- [ ] `ox skill remove <name>` - Unregister
+- [ ] `ox skill inject <name>` - Add to current workspace
+- [ ] `ox skill eject <name>` - Remove from workspace
 - [ ] Auto-inject based on task tags
 - [ ] Symlink-based (no copying)
 
 ### Skill Structure
 ```
 ~/.ox/skills/
-├── git/
-│   └── SKILL.md         # Git workflow expertise
-├── testing/
-│   └── SKILL.md         # Testing patterns
-├── debugging/
-│   └── SKILL.md         # Debug methodology
-├── go/
-│   └── SKILL.md         # Go best practices
-└── ...
+├── go.md           # Go best practices
+├── java.md         # Java/Spring patterns
+├── testing.md      # Testing methodology
+├── debugging.md    # Debug approach
+└── git.md          # Git workflow
 ```
 
-### Skill Matching
+### Skill Mapping (ox.yaml)
 ```yaml
-# Task tags → Skills
-backend: [go, testing, debugging]
-frontend: [typescript, react, testing]
-bug: [debugging, git]
-feature: [testing, git]
+skill_tags:
+  backend: [java, testing, debugging]
+  frontend: [typescript, react]
+  go: [go, testing]
+  bug: [debugging]
 ```
 
 ### Exit Criteria
-- Skills auto-inject based on tags
-- Can manually add/remove skills
+- Skills auto-inject from tags
+- Manual inject/eject works
 - CLAUDE.md includes skill content
 
 ---
@@ -151,88 +209,77 @@ feature: [testing, git]
 **Goal:** Right mindset for the task
 
 ### Deliverables
-- [ ] Persona definitions
-- [ ] `ox pickup --as <persona>`
+- [ ] `ox pickup --persona <name>` - Start with persona
 - [ ] `ox morph <persona>` - Switch mid-task
-- [ ] `ox personas` - List personas
-- [ ] Auto-select based on task tags
+- [ ] `ox personas` - List available
+- [ ] Auto-select from task tags
+- [ ] Persona in CLAUDE.md
 
 ### Personas
-```
-~/.ox/personas/
-├── builder.md           # Implementation focus
-├── explorer.md          # Research focus
-├── reviewer.md          # Quality focus
-└── planner.md           # Architecture focus
-```
 
-### Persona Content
+| Persona | Role | Auto-triggers |
+|---------|------|---------------|
+| **captain** | Orchestrates, plans, delegates | `epic`, `project` |
+| **builder** | Implements, ships code | `bug`, `feature` |
+| **explorer** | Researches, investigates | `research`, `spike` |
+| **reviewer** | Reviews, checks quality | `review`, `pr` |
+
+### Captain Persona (Orchestrator)
 ```markdown
-# Builder Persona
+# Captain Persona
 
-You are in BUILDER mode. Focus on:
-- Implementing working solutions
-- Writing clean, tested code
-- Shipping incrementally
-- Pragmatic decisions over perfect
+You are the Captain — an orchestrator.
 
-Avoid:
-- Over-engineering
-- Rabbit holes
-- Scope creep
-```
+## Role
+- Break down complex tasks into steps
+- Decide which mode is best for each step
+- Maintain big picture while delegating
 
-### Auto-Selection
-```yaml
-# Task tags → Persona
-bug: builder
-feature: builder
-spike: explorer
-research: explorer
-rfc: planner
-review: reviewer
+## Workflow
+1. Analyze task, create plan
+2. For each step:
+   - Handle planning/coordination yourself
+   - Instruct: "Run `ox morph builder` for implementation"
+   - Instruct: "Run `ox morph reviewer` for review"
+3. Integrate and ship
 ```
 
 ### Exit Criteria
-- Personas change AI behavior appropriately
+- Personas change AI behavior
+- Captain can orchestrate workflow
 - Auto-selection works
-- Can override manually
 
 ---
 
-## Phase O5: Memory & Checkpoints
+## Phase O5: Checkpoints & Memory
 
 **Goal:** Survive context resets
 
 ### Deliverables
-- [ ] `ox checkpoint "description"` - Save state
+- [ ] `ox checkpoint --done "x" --next "y"` - Save progress
 - [ ] `ox resume` - Restore from checkpoint
 - [ ] `ox checkpoints` - List checkpoints
-- [ ] Auto-checkpoint before ox done
-- [ ] Memory database for cross-session context
+- [ ] Auto-checkpoint on `ox done`
+- [ ] Checkpoint syncs to yoke notes
+- [ ] SQLite memory for patterns
 
-### Checkpoint Content
+### Checkpoint Structure
 ```yaml
-task_id: "a3f8"
-description: "Implemented auth middleware"
-created_at: "2024-03-24T15:30:00Z"
+task_id: "9"
+created_at: "2024-03-25T15:30:00Z"
+done: "Implemented auth flow"
+next: "Add unit tests"
 files_changed:
-  - "internal/auth/middleware.go"
-  - "internal/auth/middleware_test.go"
-context_summary: |
-  Working on JWT validation.
-  Middleware structure done.
-  Next: add token refresh logic.
+  - internal/auth/handler.go
 decisions:
-  - "Using RS256 for JWT signing"
-  - "Tokens expire in 1 hour"
+  - "Using JWT with RS256"
 blockers: []
 ```
 
 ### Exit Criteria
-- Can checkpoint and resume
-- Context survives session breaks
-- Decisions are preserved
+- Checkpoints persist across sessions
+- Context survives compaction
+- Decisions preserved
 
 ---
 
@@ -241,98 +288,132 @@ blockers: []
 **Goal:** Get better over time
 
 ### Deliverables
-- [ ] Capture outcome on task completion
-- [ ] `ox learn "insight"` - Manual learning
-- [ ] `ox learnings` - View learnings
+- [ ] `ox learn "insight"` - Capture learning
+- [ ] `ox learnings [--tag x]` - View learnings
+- [ ] Auto-capture on task completion
 - [ ] Surface relevant learnings on pickup
-- [ ] Pattern detection over time
+- [ ] Pattern detection
 
-### Learning Store
-```yaml
-- task_type: "bug"
-  tags: ["auth", "backend"]
-  outcome: "success"
-  duration: "2h"
-  insight: "Auth bugs usually in token validation"
+### Exit Criteria
+- Learnings captured
+- Relevant insights shown
+- Actually improving
 
-- task_type: "feature"
-  tags: ["api"]
-  outcome: "success"
-  insight: "Always write tests first for APIs"
+---
+
+## Phase O7: Multi-Agent Support 💡 FUTURE
+
+**Goal:** Multiple agents collaborate on complex tasks
+
+### Why Consider Multi-Agent?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Single agent + personas** | Simple, shared context, easy debug | Sequential, single perspective |
+| **True multi-agent** | Parallel work, independent review, catches more errors | Complex coordination, context sync |
+
+### When Multi-Agent Helps
+- **Complex refactors**: Explorer researches while Builder prototypes
+- **Critical changes**: Independent review from separate agent
+- **Large tasks**: Parallel work on different components
+
+### Proposed Design
+```bash
+# Default: single agent with personas
+ox pickup 9 --persona captain
+
+# Optional: spawn background agent
+ox spawn explorer "research the auth flow" --background
+ox spawn reviewer "review my changes" --wait
+
+# Or: full multi-agent mode
+ox pickup 9 --multi-agent
+# Captain spawns builder + reviewer automatically
+```
+
+### Coordination via Shared Workspace
+```
+tasks/9-feature/
+├── CLAUDE.md           # Shared context
+├── .agents/
+│   ├── captain.log     # Captain's decisions
+│   ├── builder.log     # Builder's progress
+│   └── reviewer.log    # Reviewer's feedback
+└── handoff.yaml        # Inter-agent communication
 ```
 
 ### Exit Criteria
-- Learnings captured automatically
-- Relevant learnings shown on new tasks
-- Actually getting better
+- Can spawn parallel agents
+- Agents coordinate via workspace
+- Quality improves on complex tasks
 
 ---
 
-## Phase O7: Scheduling
+## Phase O8: Advanced Features 💡 FUTURE
 
-**Goal:** Proactive assistance
-
-### Deliverables
+### Scheduling
 - [ ] `ox daily` - Morning briefing
 - [ ] Deadline awareness from yoke
-- [ ] `ox remind <task> <time>` - Set reminder
-- [ ] Overdue task alerts
-- [ ] Weekly summary
+- [ ] `ox remind <task> <time>`
+- [ ] Overdue alerts
 
-### Exit Criteria
-- Never miss deadlines
-- Daily focus is clear
+### Integrations
+- [ ] VS Code extension
+- [ ] TUI dashboard
+- [ ] Slack notifications
+- [ ] Custom agent providers (Ollama, etc.)
 
----
-
-## Phase O8: Multi-Agent (Future)
-
-**Goal:** Supervisor delegates work
-
-### Deliverables
-- [ ] Supervisor agent
-- [ ] Spawn sub-tasks
-- [ ] Delegate to personas
-- [ ] Progress tracking
-- [ ] Parallel work
-
-### Exit Criteria
-- Complex tasks auto-decompose
-- Multiple agents collaborate
-
----
-
-## Future Ideas (Not Planned)
-
-- TUI dashboard
-- VS Code extension
-- Workflow engine (multi-step automation)
-- Team collaboration
-- Custom agent providers
+### Team Features
+- [ ] Shared skill libraries
+- [ ] Team learnings
+- [ ] Handoff between team members
 
 ---
 
 ## Technical Decisions
 
 ### Why Go?
-- Matches yoke (can import as library)
-- Single binary
-- Fast
+- Import yoke as library (no shell-out)
+- Single binary distribution
+- Fast compilation
 
-### Workspace Strategy
-- Git worktrees for isolation (preferred)
-- Fallback: branch in same repo
+### Config Format
+- YAML (matches yoke, human-friendly)
+- JSON schema for editor support
+
+### Storage
+- Workspaces: filesystem
+- Config: ox.yaml
+- Memory/Learnings: SQLite
 
 ### AI Integration
-- Start with Claude Code CLI
-- Abstract provider for future (Ollama, etc.)
+- Primary: Claude Code CLI
+- Future: Abstract provider interface
+
+---
+
+## Comparison: Ox vs Jeff vs Jarvis
+
+| Aspect | Jarvis (old) | Jeff | Ox |
+|--------|--------------|------|-----|
+| Task system | Beads (external) | gig (external CLI) | yoke (Go library) |
+| Repo management | Manual + symlinks | `jeff repo add` | `ox repo add` |
+| Config | Scattered YAML | Single JSON | Single YAML |
+| Skills | Deep hierarchy | Flat .skills/ | Flat skills/ |
+| Context | Static CLAUDE.md | Generated | Generated + yoke data |
+| Multi-agent | No | No (personas only) | Personas + optional spawn |
+
+### Ox's Unique Value
+1. **Native yoke integration** - Full access to task data, notes, history
+2. **Richer context** - Blockers, dependencies, Notion links in CLAUDE.md
+3. **Checkpoint → yoke** - Progress saved as yoke notes
+4. **Learning feedback** - Insights improve future tasks
 
 ---
 
 ## Status Key
 
-- ✅ CURRENT - Active phase
+- ✅ READY - Can start now
 - 🔜 NEXT - Coming up
 - 📋 PLANNED - On roadmap
-- 💡 IDEA - Not committed
-- ⏳ WAITING - Blocked on dependency
+- 💡 FUTURE - Not committed

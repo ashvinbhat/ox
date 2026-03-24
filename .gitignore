@@ -1,5 +1,5 @@
 # Binaries
-ox
+/ox
 *.exe
 *.exe~
 *.dll
