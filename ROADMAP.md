@@ -138,19 +138,19 @@ defaults:
 
 ---
 
-## Phase O2: Rich Context Generation 🔜 NEXT
+## Phase O2: Rich Context Generation ✅ DONE
 
-**Goal:** CLAUDE.md with full yoke context
+**Goal:** AGENTS.md with full yoke context (CLAUDE.md symlinks to it)
 
 ### Deliverables
-- [ ] Task title, body, status, priority
-- [ ] All notes from yoke
-- [ ] Blockers and dependencies
-- [ ] Parent/child task hierarchy
-- [ ] Event history (recent activity)
-- [ ] Notion link if available
+- [x] Task title, body, status, priority
+- [x] All notes from yoke
+- [x] Blockers and dependencies (resolved with titles)
+- [x] Parent/child task hierarchy
+- [x] Event history (recent activity)
+- [x] Notion link if available
 - [ ] Custom template support
-- [ ] Related files detection (from git history)
+- [x] Related files detection (from git history)
 
 ### CLAUDE.md Structure
 ```markdown
@@ -188,14 +188,14 @@ Notion: https://notion.so/...
 [Skills section]
 ```
 
-### Exit Criteria
+### Exit Criteria ✅
 - AI has complete task context
 - Notes and history visible
 - Dependencies clear
 
 ---
 
-## Phase O3: Skills System 📋 PLANNED
+## Phase O3: Skills System 🔜 NEXT
 
 **Goal:** Auto-inject relevant expertise based on task attributes
 
