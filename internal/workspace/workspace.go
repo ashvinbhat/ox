@@ -117,9 +117,24 @@ func (ws *TaskWorkspace) AddRepoLink(repoName, worktreePath string) error {
 	return nil
 }
 
-// loadState loads workspace state from state.yaml if it exists.
+// loadState loads workspace state by examining the workspace directory.
 func (ws *TaskWorkspace) loadState() {
-	// TODO: Load from state.yaml
+	// Discover repos by finding symlinks in the workspace
+	entries, err := os.ReadDir(ws.Path)
+	if err != nil {
+		return
+	}
+
+	for _, e := range entries {
+		// Check if it's a symlink
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			ws.Repos = append(ws.Repos, e.Name())
+		}
+	}
 }
 
 // SaveState saves workspace state to state.yaml.
