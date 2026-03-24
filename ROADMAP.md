@@ -45,7 +45,7 @@ $OX_HOME/                     (~/.ox)
 - Notion sync metadata
 
 ```go
-import "github.com/ashvinbhat/yoke/internal/task"
+import "github.com/ashvinbhat/yoke/task"
 
 store, _ := task.NewStore("~/.yoke/yoke.db")
 t, _ := store.Get("9")
@@ -54,19 +54,21 @@ notes, _ := store.GetNotes(t.ID)
 
 ---
 
-## Phase O0: Foundation ✅ READY
+## Phase O0: Foundation ✅ DONE
 
 **Goal:** Basic workspace creation and repo management
 
 ### Deliverables
-- [ ] `ox init` - Initialize ~/.ox structure
-- [ ] `ox repo add <url> [--name x]` - Register and clone codebase
-- [ ] `ox repo list` - Show registered repos
-- [ ] `ox repo remove <name>` - Unregister repo
-- [ ] `ox pickup <task-id> --repos <name>` - Create workspace with worktree
-- [ ] `ox status` - Show current task/workspace
-- [ ] `ox done [task-id]` - Complete task, cleanup workspace
-- [ ] Basic CLAUDE.md generation
+- [x] `ox init` - Initialize ~/.ox structure
+- [x] `ox repo add <url> [--name x]` - Register and clone codebase
+- [x] `ox repo list` - Show registered repos
+- [x] `ox repo remove <name>` - Unregister repo
+- [x] `ox pickup <task-id> --repos <name>` - Create workspace with worktree
+- [x] `ox status` - Show current task/workspace
+- [x] `ox done [task-id]` - Complete task, cleanup workspace
+- [x] Basic CLAUDE.md generation
+- [x] `ox tasks` - List yoke tasks
+- [x] `ox task <id>` - Show yoke task details
 
 ### Config (ox.yaml)
 ```yaml
@@ -93,18 +95,18 @@ defaults:
 
 ---
 
-## Phase O1: Git Integration
+## Phase O1: Git Integration ✅ DONE
 
 **Goal:** Full worktree and branch lifecycle
 
 ### Deliverables
-- [ ] Auto-create branch: `ox/<task-id>-<slug>`
-- [ ] `ox worktree list` - Show all worktrees
-- [ ] `ox worktree add <repo>` - Add worktree to current task
-- [ ] `ox worktree rm <repo>` - Remove worktree
-- [ ] `ox ship [--repo x] [--draft]` - Push and create PR
-- [ ] `ox open [task-id]` - Open workspace in IDE
-- [ ] Cleanup worktrees on `ox done`
+- [x] Auto-create branch: `ox/<task-id>-<slug>`
+- [x] `ox worktree list` - Show all worktrees
+- [x] `ox worktree add <repo>` - Add worktree to current task
+- [x] `ox worktree rm <repo>` - Remove worktree
+- [x] `ox ship [--repo x] [--draft]` - Push and create PR
+- [x] `ox open [task-id]` - Open workspace in IDE
+- [x] Cleanup worktrees on `ox done`
 
 ### Exit Criteria
 - Never manually create branches
