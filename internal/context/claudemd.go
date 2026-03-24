@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/yoke/task"
 )
 
 // Generator creates CLAUDE.md files for task workspaces.
@@ -28,9 +28,9 @@ func NewGenerator(oxHome string) *Generator {
 
 // TaskContext holds all context for generating CLAUDE.md.
 type TaskContext struct {
-	Task     *yoke.Task
-	Notes    []yoke.Note
-	Events   []yoke.Event
+	Task     *task.Task
+	Notes    []task.Note
+	Events   []task.Event
 	Persona  string
 	Skills   []string
 	Repos    []string

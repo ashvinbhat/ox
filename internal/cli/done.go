@@ -7,7 +7,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +67,7 @@ func runDone(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Completing task #%d...\n", ws.TaskSeq)
 
 	// Mark task as done in yoke
-	yokeClient, err := yoke.NewClient()
+	yokeClient, err := yokehelper.NewClient()
 	if err != nil {
 		fmt.Printf("Warning: could not open yoke: %v\n", err)
 	} else {

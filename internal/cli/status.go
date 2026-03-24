@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +35,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Try to get task details from yoke
-	yokeClient, _ := yoke.NewClient()
+	yokeClient, _ := yokehelper.NewClient()
 	if yokeClient != nil {
 		defer yokeClient.Close()
 	}

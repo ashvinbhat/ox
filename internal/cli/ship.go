@@ -9,7 +9,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -68,7 +68,7 @@ func runShip(cmd *cobra.Command, args []string) error {
 	// Get task info for PR title/body
 	var taskTitle string
 	var taskSeq int
-	yokeClient, err := yoke.NewClient()
+	yokeClient, err := yokehelper.NewClient()
 	if err == nil {
 		defer yokeClient.Close()
 		if t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {

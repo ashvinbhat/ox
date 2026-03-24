@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ Examples:
 }
 
 func runTasks(cmd *cobra.Command, args []string) error {
-	yokeClient, err := yoke.NewClient()
+	yokeClient, err := yokehelper.NewClient()
 	if err != nil {
 		return fmt.Errorf("connect to yoke: %w", err)
 	}

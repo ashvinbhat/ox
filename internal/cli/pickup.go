@@ -9,7 +9,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/context"
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yoke"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +53,7 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load yoke task
-	yokeClient, err := yoke.NewClient()
+	yokeClient, err := yokehelper.NewClient()
 	if err != nil {
 		return fmt.Errorf("open yoke: %w", err)
 	}
