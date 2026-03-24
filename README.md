@@ -2,7 +2,7 @@
 
 > The ox that pulls your workload.
 
-An agent workspace manager built on [yoke](../yoke). Gives AI agents structured workspaces, personas, skills, and lifecycle management for task-driven development.
+An agent workspace manager built on [yoke](https://github.com/ashvinbhat/yoke). Gives AI agents structured workspaces, personas, skills, and lifecycle management for task-driven development.
 
 ## Philosophy
 
@@ -48,10 +48,10 @@ An agent workspace manager built on [yoke](../yoke). Gives AI agents structured 
 ## Installation
 
 ```bash
-go install github.com/yourusername/ox/cmd/ox@latest
+go install github.com/ashvinbhat/ox/cmd/ox@latest
 ```
 
-Requires: [yoke](../yoke) installed and initialized.
+Requires: [yoke](https://github.com/ashvinbhat/yoke) installed and initialized.
 
 ## Quick Start
 
@@ -162,4 +162,4 @@ defaults:
 
 Under development. See [ROADMAP.md](./ROADMAP.md) for plan.
 
-Depends on [yoke](../yoke) for task management.
+Depends on [yoke](https://github.com/ashvinbhat/yoke) for task management.
