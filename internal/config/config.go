@@ -10,9 +10,10 @@ import (
 
 // RepoConfig holds per-repo configuration.
 type RepoConfig struct {
-	URL        string `yaml:"url"`
-	BaseBranch string `yaml:"base_branch,omitempty"`
-	PostSetup  string `yaml:"post_setup,omitempty"`
+	URL        string   `yaml:"url"`
+	BaseBranch string   `yaml:"base_branch,omitempty"`
+	CopyFiles  []string `yaml:"copy_files,omitempty"`  // Files/dirs to copy from repo to worktree
+	PostSetup  string   `yaml:"post_setup,omitempty"`  // Command to run after worktree setup
 }
 
 // Defaults holds default settings.

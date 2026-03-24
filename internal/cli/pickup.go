@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -108,6 +110,31 @@ func runPickup(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("create worktree for %s: %w", repoName, err)
 		}
 
+		// Copy files from repo to worktree (e.g., .env, .vscode/)
+		if len(rc.CopyFiles) > 0 {
+			for _, file := range rc.CopyFiles {
+				src := filepath.Join(repoPath, file)
+				dst := filepath.Join(worktreePath, file)
+				if err := copyPath(src, dst); err != nil {
+					fmt.Printf("Warning: failed to copy %s: %v\n", file, err)
+				} else {
+					fmt.Printf("  Copied %s\n", file)
+				}
+			}
+		}
+
+		// Run post-setup command if specified
+		if rc.PostSetup != "" {
+			fmt.Printf("Running post-setup: %s\n", rc.PostSetup)
+			cmd := exec.Command("sh", "-c", rc.PostSetup)
+			cmd.Dir = worktreePath
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("Warning: post-setup failed: %v\n", err)
+			}
+		}
+
 		// Symlink worktree into workspace
 		if err := ws.AddRepoLink(repoName, worktreePath); err != nil {
 			return fmt.Errorf("link worktree: %w", err)
@@ -179,6 +206,81 @@ func slugify(s string) string {
 		s = strings.TrimRight(s, "-")
 	}
 	return s
+}
+
+// copyPath copies a file or directory from src to dst.
+func copyPath(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return copyDir(src, dst)
+	}
+	return copyFile(src, dst)
+}
+
+// copyFile copies a single file.
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	// Preserve permissions
+	info, _ := os.Stat(src)
+	return os.Chmod(dst, info.Mode())
+}
+
+// copyDir recursively copies a directory.
+func copyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func init() {

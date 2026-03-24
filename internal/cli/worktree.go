@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -140,6 +141,31 @@ func runWorktreeAdd(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
 	if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
 		return fmt.Errorf("create worktree: %w", err)
+	}
+
+	// Copy files from repo to worktree (e.g., .env, .vscode/)
+	if len(rc.CopyFiles) > 0 {
+		for _, file := range rc.CopyFiles {
+			src := filepath.Join(repoPath, file)
+			dst := filepath.Join(worktreePath, file)
+			if err := copyPath(src, dst); err != nil {
+				fmt.Printf("Warning: failed to copy %s: %v\n", file, err)
+			} else {
+				fmt.Printf("  Copied %s\n", file)
+			}
+		}
+	}
+
+	// Run post-setup command if specified
+	if rc.PostSetup != "" {
+		fmt.Printf("Running post-setup: %s\n", rc.PostSetup)
+		cmd := exec.Command("sh", "-c", rc.PostSetup)
+		cmd.Dir = worktreePath
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: post-setup failed: %v\n", err)
+		}
 	}
 
 	// Symlink into workspace
