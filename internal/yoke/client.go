@@ -164,6 +164,72 @@ func (c *Client) GetEvents(taskID string) ([]Event, error) {
 	return events, nil
 }
 
+// List retrieves tasks with optional filtering.
+func (c *Client) List(all bool, status string) ([]Task, error) {
+	var query string
+	var args []interface{}
+
+	if status != "" {
+		query = `SELECT id, seq, title, body, status, priority, tags, parent_id, blockers,
+		         notion_id, notion_url, created_at, updated_at
+		         FROM tasks WHERE status = ? ORDER BY priority ASC, seq DESC`
+		args = append(args, status)
+	} else if all {
+		query = `SELECT id, seq, title, body, status, priority, tags, parent_id, blockers,
+		         notion_id, notion_url, created_at, updated_at
+		         FROM tasks ORDER BY priority ASC, seq DESC`
+	} else {
+		// Active tasks only (pending, in_progress, blocked)
+		query = `SELECT id, seq, title, body, status, priority, tags, parent_id, blockers,
+		         notion_id, notion_url, created_at, updated_at
+		         FROM tasks WHERE status IN ('pending', 'in_progress', 'blocked')
+		         ORDER BY priority ASC, seq DESC`
+	}
+
+	rows, err := c.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var t Task
+		var tagsJSON, blockersJSON string
+		var parent, notionID, notionURL sql.NullString
+
+		if err := rows.Scan(
+			&t.ID, &t.Seq, &t.Title, &t.Body, &t.Status, &t.Priority,
+			&tagsJSON, &parent, &blockersJSON, &notionID, &notionURL,
+			&t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+
+		// Parse JSON arrays
+		if tagsJSON != "" && tagsJSON != "null" {
+			json.Unmarshal([]byte(tagsJSON), &t.Tags)
+		}
+		if blockersJSON != "" && blockersJSON != "null" {
+			json.Unmarshal([]byte(blockersJSON), &t.Blockers)
+		}
+
+		if parent.Valid {
+			t.Parent = &parent.String
+		}
+		if notionID.Valid {
+			t.NotionID = &notionID.String
+		}
+		if notionURL.Valid {
+			t.NotionURL = &notionURL.String
+		}
+
+		tasks = append(tasks, t)
+	}
+
+	return tasks, nil
+}
+
 // UpdateStatus updates a task's status.
 func (c *Client) UpdateStatus(taskID string, status string) error {
 	_, err := c.db.Exec(`UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?`,
