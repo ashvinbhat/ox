@@ -34,7 +34,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Agent:    "claude",
-		IDE:      "cursor",
+		IDE:      "windsurf",
 		Repos:    make(map[string]*RepoConfig),
 		Defaults: Defaults{Persona: "builder"},
 	}
