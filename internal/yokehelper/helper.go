@@ -89,6 +89,32 @@ func (c *Client) UpdateOutcome(taskID string, outcome string) error {
 	return c.store.Update(t)
 }
 
+// GetParent retrieves the parent task if one exists.
+func (c *Client) GetParent(t *task.Task) (*task.Task, error) {
+	if t.Parent == nil || *t.Parent == "" {
+		return nil, nil
+	}
+	return c.store.Get(*t.Parent)
+}
+
+// GetChildren retrieves all child tasks.
+func (c *Client) GetChildren(taskID string) ([]*task.Task, error) {
+	return c.store.List(task.ListOptions{ParentID: &taskID})
+}
+
+// GetBlockers retrieves tasks that block the given task.
+func (c *Client) GetBlockers(t *task.Task) ([]*task.Task, error) {
+	var blockers []*task.Task
+	for _, blockerRef := range t.Blockers {
+		blocker, err := c.store.Get(blockerRef)
+		if err != nil {
+			continue // Skip if blocker not found
+		}
+		blockers = append(blockers, blocker)
+	}
+	return blockers, nil
+}
+
 // findYokeDB locates the yoke database file.
 func findYokeDB() (string, error) {
 	// Check YOKE_HOME env var

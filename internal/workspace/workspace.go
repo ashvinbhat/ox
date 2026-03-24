@@ -125,7 +125,18 @@ func (ws *TaskWorkspace) loadState() {
 		return
 	}
 
+	// Known non-repo symlinks to exclude
+	exclude := map[string]bool{
+		"CLAUDE.md": true,
+		"AGENTS.md": true,
+	}
+
 	for _, e := range entries {
+		// Skip known non-repo files
+		if exclude[e.Name()] {
+			continue
+		}
+
 		// Check if it's a symlink
 		info, err := e.Info()
 		if err != nil {

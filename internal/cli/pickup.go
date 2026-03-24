@@ -153,21 +153,27 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	}
 	ws.Persona = persona
 
-	// Load notes and generate CLAUDE.md
+	// Load context and generate AGENTS.md (with CLAUDE.md symlink)
 	notes, _ := yokeClient.GetNotes(t.ID)
 	events, _ := yokeClient.GetEvents(t.ID)
+	parent, _ := yokeClient.GetParent(t)
+	children, _ := yokeClient.GetChildren(t.ID)
+	blockers, _ := yokeClient.GetBlockers(t)
 
 	gen := context.NewGenerator(cfg.Home)
 	taskCtx := &context.TaskContext{
-		Task:    t,
-		Notes:   notes,
-		Events:  events,
-		Persona: persona,
-		Repos:   pickupRepos,
+		Task:     t,
+		Notes:    notes,
+		Events:   events,
+		Parent:   parent,
+		Children: children,
+		Blockers: blockers,
+		Persona:  persona,
+		Repos:    pickupRepos,
 	}
 
 	if err := gen.Generate(ws.Path, taskCtx); err != nil {
-		fmt.Printf("Warning: failed to generate CLAUDE.md: %v\n", err)
+		fmt.Printf("Warning: failed to generate AGENTS.md: %v\n", err)
 	}
 
 	// Update task status in yoke to in_progress
