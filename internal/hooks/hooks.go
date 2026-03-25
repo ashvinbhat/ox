@@ -252,47 +252,54 @@ func (m *Manager) HooksDir() string {
 	return m.hooksDir
 }
 
-// ClaudeCodeHookEntry represents a hook entry in Claude Code settings.
-type ClaudeCodeHookEntry struct {
-	Matcher string `json:"matcher"`
-	Hooks   []struct {
-		Type    string `json:"type"`
-		Command string `json:"command"`
-	} `json:"hooks"`
+// ClaudeCodeHookHandler represents a single hook handler.
+type ClaudeCodeHookHandler struct {
+	Type    string `json:"type"`
+	Command string `json:"command"`
 }
 
+// ClaudeCodeMatcherGroup represents a matcher group with its hooks.
+type ClaudeCodeMatcherGroup struct {
+	Matcher string                  `json:"matcher"`
+	Hooks   []ClaudeCodeHookHandler `json:"hooks"`
+}
+
+// ClaudeCodeHooks represents the new hooks format keyed by event name.
+type ClaudeCodeHooks map[string][]ClaudeCodeMatcherGroup
+
 // GenerateClaudeCodeSettings generates the hooks section for Claude Code settings.
-func (m *Manager) GenerateClaudeCodeSettings() ([]ClaudeCodeHookEntry, error) {
+func (m *Manager) GenerateClaudeCodeSettings() (ClaudeCodeHooks, error) {
 	hooks := m.List()
 	if len(hooks) == 0 {
 		return nil, nil
 	}
 
-	var entries []ClaudeCodeHookEntry
-
-	// Create a single entry for all ox hooks
-	entry := ClaudeCodeHookEntry{
-		Matcher: "", // Empty matcher means all directories
-	}
-
+	// Create handlers for all enabled hooks
+	var handlers []ClaudeCodeHookHandler
 	for _, h := range hooks {
 		if !h.Enabled {
 			continue
 		}
-		entry.Hooks = append(entry.Hooks, struct {
-			Type    string `json:"type"`
-			Command string `json:"command"`
-		}{
+		handlers = append(handlers, ClaudeCodeHookHandler{
 			Type:    "command",
 			Command: h.Script,
 		})
 	}
 
-	if len(entry.Hooks) > 0 {
-		entries = append(entries, entry)
+	if len(handlers) == 0 {
+		return nil, nil
 	}
 
-	return entries, nil
+	// Create matcher group (empty matcher = match all)
+	matcherGroup := ClaudeCodeMatcherGroup{
+		Matcher: "",
+		Hooks:   handlers,
+	}
+
+	// Return hooks keyed by SessionStart event
+	return ClaudeCodeHooks{
+		"SessionStart": []ClaudeCodeMatcherGroup{matcherGroup},
+	}, nil
 }
 
 // InstallToClaudeCode adds ox hooks to Claude Code settings.json.
@@ -315,14 +322,22 @@ func (m *Manager) InstallToClaudeCode() error {
 	}
 
 	// Generate hook entries
-	entries, err := m.GenerateClaudeCodeSettings()
+	hooksConfig, err := m.GenerateClaudeCodeSettings()
 	if err != nil {
 		return err
 	}
 
-	// Update hooks section
-	if len(entries) > 0 {
-		settings["hooks"] = entries
+	// Update hooks section (new format: object keyed by event name)
+	if len(hooksConfig) > 0 {
+		// Get existing hooks or create new map
+		existingHooks, ok := settings["hooks"].(map[string]interface{})
+		if !ok {
+			existingHooks = make(map[string]interface{})
+		}
+
+		// Merge ox hooks into SessionStart
+		existingHooks["SessionStart"] = hooksConfig["SessionStart"]
+		settings["hooks"] = existingHooks
 	}
 
 	// Ensure .claude directory exists
