@@ -4,9 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/spf13/cobra"
+)
+
+var (
+	openRepoFlag string
 )
 
 var openCmd = &cobra.Command{
@@ -14,12 +19,16 @@ var openCmd = &cobra.Command{
 	Short: "Open workspace in IDE",
 	Long: `Opens the task workspace in your configured IDE.
 
+Opens the repo folder(s) directly, not the workspace root.
+If multiple repos exist, opens all of them (or use --repo to specify one).
+
 Uses the 'ide' setting from ox.yaml (default: windsurf).
 Supported: windsurf, cursor, code/vscode, zed, idea, goland
 
 Examples:
-  ox open          # Open current workspace
-  ox open 9        # Open workspace for task #9`,
+  ox open              # Open current workspace repos
+  ox open 9            # Open workspace for task #9
+  ox open --repo backend   # Open only the backend repo`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runOpen,
 }
@@ -62,15 +71,57 @@ func runOpen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown IDE: %s (supported: cursor, code, vscode, zed)", ide)
 	}
 
-	fmt.Printf("Opening %s in %s...\n", ws.Path, ide)
+	// Get repos to open
+	var reposToOpen []string
+	if openRepoFlag != "" {
+		// Open specific repo
+		found := false
+		for _, r := range ws.Repos {
+			if r == openRepoFlag {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("repo %q not in workspace (available: %v)", openRepoFlag, ws.Repos)
+		}
+		reposToOpen = []string{openRepoFlag}
+	} else if len(ws.Repos) > 0 {
+		// Open all repos
+		reposToOpen = ws.Repos
+	} else {
+		// No repos, open workspace root
+		reposToOpen = []string{}
+	}
 
-	// Open the workspace
-	execCmd := exec.Command(ideCmd, ws.Path)
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
+	// Open repos
+	if len(reposToOpen) == 0 {
+		// Fallback to workspace root if no repos
+		fmt.Printf("Opening %s in %s...\n", ws.Path, ide)
+		execCmd := exec.Command(ideCmd, ws.Path)
+		execCmd.Stdout = os.Stdout
+		execCmd.Stderr = os.Stderr
+		return execCmd.Start()
+	}
 
-	if err := execCmd.Start(); err != nil {
-		return fmt.Errorf("failed to open IDE: %w", err)
+	// Open each repo folder
+	for _, repo := range reposToOpen {
+		repoPath := filepath.Join(ws.Path, repo)
+
+		// Resolve symlink to get actual worktree path
+		resolved, err := filepath.EvalSymlinks(repoPath)
+		if err != nil {
+			fmt.Printf("Warning: could not resolve %s: %v\n", repo, err)
+			resolved = repoPath
+		}
+
+		fmt.Printf("Opening %s (%s) in %s...\n", repo, resolved, ide)
+		execCmd := exec.Command(ideCmd, resolved)
+		execCmd.Stdout = os.Stdout
+		execCmd.Stderr = os.Stderr
+		if err := execCmd.Start(); err != nil {
+			return fmt.Errorf("failed to open %s: %w", repo, err)
+		}
 	}
 
 	return nil
@@ -97,5 +148,6 @@ func getIDECommand(ide string) string {
 }
 
 func init() {
+	openCmd.Flags().StringVar(&openRepoFlag, "repo", "", "Open specific repo only")
 	rootCmd.AddCommand(openCmd)
 }

@@ -26,6 +26,12 @@ func CreateWorktreeFromRef(repoPath, worktreePath, branch, ref string) error {
 	return Run(repoPath, "worktree", "add", "-b", branch, worktreePath, ref)
 }
 
+// CreateWorktreeFromRemoteBranch creates a worktree that tracks a remote branch.
+func CreateWorktreeFromRemoteBranch(repoPath, worktreePath, localBranch, remoteBranch string) error {
+	// Create worktree with tracking branch
+	return Run(repoPath, "worktree", "add", "--track", "-b", localBranch, worktreePath, remoteBranch)
+}
+
 // RemoveWorktree removes a git worktree.
 func RemoveWorktree(repoPath, worktreePath string) error {
 	return Run(repoPath, "worktree", "remove", worktreePath, "--force")

@@ -82,6 +82,10 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var (
+	worktreeAddBranch string
+)
+
 var worktreeAddCmd = &cobra.Command{
 	Use:   "add <repo>",
 	Short: "Add a worktree to current task",
@@ -89,8 +93,9 @@ var worktreeAddCmd = &cobra.Command{
 
 Use this when you need to work on another repo for the same task.
 
-Example:
-  ox worktree add frontend   # Add frontend repo to current task`,
+Examples:
+  ox worktree add frontend                           # New branch from main
+  ox worktree add backend --branch feat/my-feature   # Use existing branch`,
 	Args: cobra.ExactArgs(1),
 	RunE: runWorktreeAdd,
 }
@@ -128,19 +133,40 @@ func runWorktreeAdd(cmd *cobra.Command, args []string) error {
 
 	// Create worktree
 	repoPath := filepath.Join(cfg.Home, "repos", repoName)
-	branchName := fmt.Sprintf("ox/%d-%s", ws.TaskSeq, slugify(ws.Slug))
 
 	// Ensure parent dir exists
 	os.MkdirAll(filepath.Dir(worktreePath), 0o755)
 
-	baseBranch := rc.BaseBranch
-	if baseBranch == "" {
-		baseBranch = "origin/main"
+	// Fetch latest
+	fmt.Printf("Fetching %s...\n", repoName)
+	if err := gitutil.Fetch(repoPath); err != nil {
+		fmt.Printf("Warning: fetch failed: %v\n", err)
 	}
 
-	fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
-	if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
-		return fmt.Errorf("create worktree: %w", err)
+	if worktreeAddBranch != "" {
+		// Use existing branch
+		remoteBranch := worktreeAddBranch
+		if !strings.HasPrefix(remoteBranch, "origin/") {
+			remoteBranch = "origin/" + remoteBranch
+		}
+
+		fmt.Printf("Creating worktree from existing branch %s...\n", remoteBranch)
+		// Create worktree tracking the remote branch
+		if err := gitutil.CreateWorktreeFromRemoteBranch(repoPath, worktreePath, worktreeAddBranch, remoteBranch); err != nil {
+			return fmt.Errorf("create worktree: %w", err)
+		}
+	} else {
+		// Create new branch from base
+		branchName := fmt.Sprintf("ox/%d-%s", ws.TaskSeq, slugify(ws.Slug))
+		baseBranch := rc.BaseBranch
+		if baseBranch == "" {
+			baseBranch = "origin/main"
+		}
+
+		fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
+		if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
+			return fmt.Errorf("create worktree: %w", err)
+		}
 	}
 
 	// Copy files from repo to worktree (e.g., .env, .vscode/)
@@ -226,6 +252,8 @@ func runWorktreeRm(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	worktreeAddCmd.Flags().StringVar(&worktreeAddBranch, "branch", "", "Use existing remote branch instead of creating new")
+
 	worktreeCmd.AddCommand(worktreeListCmd)
 	worktreeCmd.AddCommand(worktreeAddCmd)
 	worktreeCmd.AddCommand(worktreeRmCmd)
