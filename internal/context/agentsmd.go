@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ashvinbhat/ox/internal/skills"
 	"github.com/ashvinbhat/yoke/task"
 )
 
@@ -37,8 +38,9 @@ type TaskContext struct {
 	Children []*task.Task // Child tasks (if any)
 	Blockers []*task.Task // Tasks blocking this one (resolved)
 	Persona  string
-	Skills   []string
+	Skills   []string // Explicitly requested skills (legacy)
 	Repos    []string
+	TaskType string   // bug, feature, refactor, etc. (for skill matching)
 }
 
 // Generate creates an AGENTS.md file in the workspace and symlinks CLAUDE.md to it.
@@ -136,19 +138,8 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 		}
 	}
 
-	// Skills
-	if len(ctx.Skills) > 0 {
-		sb.WriteString("---\n\n")
-		sb.WriteString("# Skills\n\n")
-		for _, skill := range ctx.Skills {
-			skillContent, err := g.loadSkill(skill)
-			if err == nil {
-				sb.WriteString(fmt.Sprintf("## %s\n", skill))
-				sb.WriteString(skillContent)
-				sb.WriteString("\n\n")
-			}
-		}
-	}
+	// Skills - auto-inject based on tags, persona, task type
+	g.writeSkills(&sb, workspacePath, ctx)
 
 	// Footer
 	sb.WriteString("---\n")
@@ -189,6 +180,86 @@ func (g *Generator) writeDependencies(sb *strings.Builder, ctx *TaskContext) {
 		}
 	}
 	sb.WriteString("\n")
+}
+
+// writeSkills auto-injects skills based on tags, persona, and task type.
+func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *TaskContext) {
+	// Load skills registry
+	reg, err := skills.LoadRegistry(g.oxHome)
+	if err != nil {
+		return // No skills registry
+	}
+
+	// Collect skills to include
+	var skillsToInclude []*skills.Skill
+	skillNames := make(map[string]bool)
+
+	// 1. Auto-match from registry based on tags, persona, task type
+	matched := reg.MatchForTask(ctx.Task.Tags, ctx.Persona, ctx.TaskType)
+	for _, s := range matched {
+		if !skillNames[s.Name] {
+			skillsToInclude = append(skillsToInclude, s)
+			skillNames[s.Name] = true
+		}
+	}
+
+	// 2. Include explicitly requested skills (legacy)
+	for _, name := range ctx.Skills {
+		if skillNames[name] {
+			continue
+		}
+		if s, ok := reg.Get(name); ok {
+			skillsToInclude = append(skillsToInclude, s)
+			skillNames[name] = true
+		}
+	}
+
+	// 3. Include workspace-injected skills from .skills/
+	wsSkillsDir := filepath.Join(workspacePath, ".skills")
+	if entries, err := os.ReadDir(wsSkillsDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".md")
+			if skillNames[name] {
+				continue
+			}
+			// Create a temporary skill for workspace-injected ones
+			skillsToInclude = append(skillsToInclude, &skills.Skill{
+				Name: name,
+				File: e.Name(),
+			})
+			skillNames[name] = true
+		}
+	}
+
+	if len(skillsToInclude) == 0 {
+		return
+	}
+
+	sb.WriteString("---\n\n")
+	sb.WriteString("# Skills\n\n")
+
+	for _, skill := range skillsToInclude {
+		// Try workspace .skills/ first, then global
+		var content string
+		wsPath := filepath.Join(workspacePath, ".skills", skill.File)
+		if data, err := os.ReadFile(wsPath); err == nil {
+			content = string(data)
+		} else if c, err := reg.GetContent(skill); err == nil {
+			content = c
+		} else {
+			continue // Skip if can't load
+		}
+
+		sb.WriteString(fmt.Sprintf("## %s\n", skill.Name))
+		if skill.Description != "" {
+			sb.WriteString(fmt.Sprintf("_%s_\n\n", skill.Description))
+		}
+		sb.WriteString(content)
+		sb.WriteString("\n\n")
+	}
 }
 
 // writeHierarchy writes parent and children info.
