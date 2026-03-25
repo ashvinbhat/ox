@@ -195,22 +195,22 @@ Notion: https://notion.so/...
 
 ---
 
-## Phase O3: Skills System 🔜 NEXT
+## Phase O3: Skills System ✅ DONE
 
 **Goal:** Auto-inject relevant expertise based on task attributes
 
 ### Deliverables
-- [ ] `ox skill list` - Available skills
-- [ ] `ox skill add <path>` - Register skill with metadata
-- [ ] `ox skill remove <name>` - Unregister
-- [ ] `ox skill inject <name>` - Add to current workspace
-- [ ] `ox skill eject <name>` - Remove from workspace
-- [ ] **3D Auto-injection**:
+- [x] `ox skill list` - Available skills
+- [x] `ox skill add <path>` - Register skill with metadata
+- [x] `ox skill remove <name>` - Unregister
+- [x] `ox skill inject <name>` - Add to current workspace
+- [x] `ox skill eject <name>` - Remove from workspace
+- [x] **3D Auto-injection**:
   - Match by persona (builder gets testing.md)
   - Match by tags (backend gets java.md)
   - Match by task type (bug gets debugging.md)
-- [ ] Symlink-based (no copying)
-- [ ] `skills.yaml` registry with metadata
+- [x] Symlink-based (no copying)
+- [x] `skills.yaml` registry with metadata
 
 ### Skill Registry (skills.yaml)
 ```yaml
@@ -229,14 +229,14 @@ skills:
     personas: [builder, reviewer]
 ```
 
-### Exit Criteria
+### Exit Criteria ✅
 - Skills auto-inject from tags/persona/type
 - Manual inject/eject works
-- CLAUDE.md includes skill content
+- AGENTS.md includes skill content
 
 ---
 
-## Phase O4: Personas 📋 PLANNED
+## Phase O4: Personas 🔜 NEXT
 
 **Goal:** Right mindset for the task
 
