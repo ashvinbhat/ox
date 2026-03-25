@@ -113,6 +113,14 @@ ox hooks init                    # Initialize and install to Claude Code
 ox hooks run <name>              # Test a hook
 ```
 
+### Checkpoints
+```bash
+ox checkpoint --done "..." --next "..."   # Save progress checkpoint
+ox checkpoints                            # List checkpoints for current task
+ox resume                                 # Show latest checkpoint context
+ox resume <checkpoint-id>                 # Show specific checkpoint
+```
+
 ## Personas
 
 | Persona | Role | Auto-triggers |
@@ -195,9 +203,9 @@ defaults:
 - Phase O3: Skills System (auto-injection)
 - Phase O4: Personas (auto-selection)
 - Phase O5: Hook System (Claude Code integration)
+- Phase O6: Checkpoints & Memory
 
 **Coming:**
-- Phase O6: Checkpoints & Memory
 - Phase O7: Learning System
 
 See [ROADMAP.md](./ROADMAP.md) for full plan.

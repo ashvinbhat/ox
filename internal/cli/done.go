@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ashvinbhat/ox/internal/checkpoint"
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokehelper"
@@ -12,8 +13,9 @@ import (
 )
 
 var (
-	doneKeep   bool
-	doneReason string
+	doneKeep         bool
+	doneReason       string
+	doneNoCheckpoint bool
 )
 
 var doneCmd = &cobra.Command{
@@ -22,16 +24,19 @@ var doneCmd = &cobra.Command{
 	Long: `Marks a task as done in yoke and cleans up the workspace.
 
 This command:
-1. Marks the task as done in yoke
-2. Removes git worktrees
-3. Removes the workspace directory
+1. Creates a final checkpoint (captures files changed)
+2. Marks the task as done in yoke
+3. Removes git worktrees
+4. Removes the workspace directory
 
 Use --keep to preserve the workspace files.
+Use --no-checkpoint to skip the final checkpoint.
 
 Examples:
   ox done 9
   ox done 9 --keep
-  ox done 9 --reason "Shipped in PR #123"`,
+  ox done 9 --reason "Shipped in PR #123"
+  ox done 9 --no-checkpoint`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDone,
 }
@@ -65,6 +70,21 @@ func runDone(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Completing task #%d...\n", ws.TaskSeq)
+
+	// Auto-checkpoint before cleanup (unless --no-checkpoint)
+	if !doneNoCheckpoint {
+		mgr := checkpoint.NewManager(ws.Path, fmt.Sprintf("%d", ws.TaskSeq))
+		doneMsg := "Task completed"
+		if doneReason != "" {
+			doneMsg = doneReason
+		}
+		cp, err := mgr.Create(doneMsg, "", nil)
+		if err != nil {
+			fmt.Printf("Warning: failed to create final checkpoint: %v\n", err)
+		} else {
+			fmt.Printf("Final checkpoint saved: %s\n", cp.ID)
+		}
+	}
 
 	// Mark task as done in yoke
 	yokeClient, err := yokehelper.NewClient()
@@ -120,5 +140,6 @@ func runDone(cmd *cobra.Command, args []string) error {
 func init() {
 	doneCmd.Flags().BoolVar(&doneKeep, "keep", false, "Keep workspace files")
 	doneCmd.Flags().StringVar(&doneReason, "reason", "", "Completion reason/outcome")
+	doneCmd.Flags().BoolVar(&doneNoCheckpoint, "no-checkpoint", false, "Skip final checkpoint")
 	rootCmd.AddCommand(doneCmd)
 }

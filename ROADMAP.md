@@ -307,18 +307,18 @@ jq -n --arg ctx "$CONTEXT" '{
 
 ---
 
-## Phase O6: Checkpoints & Memory 🔜 NEXT
+## Phase O6: Checkpoints & Memory ✅ DONE
 
 **Goal:** Survive context resets
 
 ### Deliverables
-- [ ] `ox checkpoint [--done "x"] [--next "y"]` - Save progress
-- [ ] `ox resume` - Restore from checkpoint
-- [ ] `ox checkpoints` - List checkpoints
-- [ ] Auto-checkpoint on `ox done`
-- [ ] Checkpoint syncs to yoke notes
-- [ ] SQLite memory for patterns
-- [ ] Track files changed since last checkpoint
+- [x] `ox checkpoint [--done "x"] [--next "y"]` - Save progress
+- [x] `ox resume` - Restore from checkpoint
+- [x] `ox checkpoints` - List checkpoints
+- [x] Auto-checkpoint on `ox done`
+- [x] Checkpoint syncs to yoke notes (via --sync flag)
+- [ ] SQLite memory for patterns (deferred to O7)
+- [x] Track files changed since last checkpoint
 
 ### Checkpoint Structure
 ```yaml
@@ -335,11 +335,11 @@ decisions:
 blockers: []
 ```
 
-### Exit Criteria
+### Exit Criteria ✅
 - Checkpoints persist across sessions
 - Context survives compaction
 - Decisions preserved
-- Synced to yoke notes
+- Synced to yoke notes (with --sync)
 
 ---
 

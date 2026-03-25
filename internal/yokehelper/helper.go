@@ -115,6 +115,11 @@ func (c *Client) GetBlockers(t *task.Task) ([]*task.Task, error) {
 	return blockers, nil
 }
 
+// AddNote adds a note to a task.
+func (c *Client) AddNote(taskID string, content string) error {
+	return c.store.AddNote(taskID, content)
+}
+
 // findYokeDB locates the yoke database file.
 func findYokeDB() (string, error) {
 	// Check YOKE_HOME env var
