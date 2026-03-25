@@ -236,34 +236,34 @@ skills:
 
 ---
 
-## Phase O4: Personas 🔜 NEXT
+## Phase O4: Personas ✅ DONE
 
 **Goal:** Right mindset for the task
 
 ### Deliverables
-- [ ] `ox pickup --persona <name>` - Start with persona
-- [ ] `ox morph <persona>` - Switch mid-task (regenerates CLAUDE.md)
-- [ ] `ox personas` - List available
-- [ ] Auto-select from task tags
-- [ ] Persona in CLAUDE.md
+- [x] `ox pickup --persona <name>` - Start with persona
+- [x] `ox morph <persona>` - Switch mid-task (regenerates AGENTS.md)
+- [x] `ox personas` - List available with metadata
+- [x] Auto-select from task tags
+- [x] Persona in AGENTS.md with role and content
 
 ### Personas
 
 | Persona | Role | Auto-triggers |
 |---------|------|---------------|
-| **captain** | Orchestrates, plans, delegates | `epic`, `project` |
-| **builder** | Implements, ships code | `bug`, `feature` |
-| **explorer** | Researches, investigates | `research`, `spike` |
-| **reviewer** | Reviews, checks quality | `review`, `pr` |
+| **captain** | Orchestrates, plans, delegates | `epic`, `project`, `plan`, `design` |
+| **builder** | Implements, ships code | `bug`, `feature`, `fix`, `implement` |
+| **explorer** | Researches, investigates | `research`, `spike`, `investigate`, `explore` |
+| **reviewer** | Reviews, checks quality | `review`, `pr`, `audit`, `quality` |
 
-### Exit Criteria
+### Exit Criteria ✅
 - Personas change AI behavior
 - Captain can orchestrate workflow
 - Auto-selection works
 
 ---
 
-## Phase O5: Hook System 📋 PLANNED
+## Phase O5: Hook System 🔜 NEXT
 
 **Goal:** Inject context at agent session start
 

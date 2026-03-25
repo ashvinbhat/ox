@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/skills"
 	"github.com/ashvinbhat/yoke/task"
 )
@@ -131,10 +132,15 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 	// Persona
 	if ctx.Persona != "" {
 		sb.WriteString("---\n\n")
-		personaContent, err := g.loadPersona(ctx.Persona)
-		if err == nil {
-			sb.WriteString(personaContent)
-			sb.WriteString("\n")
+		if reg, err := personas.LoadRegistry(g.oxHome); err == nil {
+			if p, ok := reg.Get(ctx.Persona); ok {
+				sb.WriteString(fmt.Sprintf("# Persona: %s\n", p.Name))
+				if p.Role != "" {
+					sb.WriteString(fmt.Sprintf("**Role:** %s\n\n", p.Role))
+				}
+				sb.WriteString(p.Content)
+				sb.WriteString("\n")
+			}
 		}
 	}
 
@@ -430,40 +436,13 @@ func searchGitHistory(repoPath, keyword string) map[string]int {
 	return files
 }
 
-// loadPersona reads a persona file.
-func (g *Generator) loadPersona(name string) (string, error) {
-	path := filepath.Join(g.personaDir, name+".md")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// loadSkill reads a skill file.
-func (g *Generator) loadSkill(name string) (string, error) {
-	path := filepath.Join(g.skillsDir, name+".md")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 // ListPersonas returns available persona names.
 func (g *Generator) ListPersonas() ([]string, error) {
-	entries, err := os.ReadDir(g.personaDir)
+	reg, err := personas.LoadRegistry(g.oxHome)
 	if err != nil {
 		return nil, err
 	}
-
-	var personas []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
-			personas = append(personas, strings.TrimSuffix(e.Name(), ".md"))
-		}
-	}
-	return personas, nil
+	return reg.List(), nil
 }
 
 // ListSkills returns available skill names.

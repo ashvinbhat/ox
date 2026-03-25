@@ -10,6 +10,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/context"
 	"github.com/ashvinbhat/ox/internal/gitutil"
+	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
@@ -143,8 +144,17 @@ func runPickup(cmd *cobra.Command, args []string) error {
 		ws.Repos = append(ws.Repos, repoName)
 	}
 
-	// Determine persona
+	// Determine persona (priority: flag > auto-select from tags > config default > builder)
 	persona := pickupPersona
+	if persona == "" {
+		// Try auto-select from task tags
+		if reg, err := personas.LoadRegistry(cfg.Home); err == nil {
+			if matched := reg.SelectForTask(t.Tags); matched != nil {
+				persona = matched.Name
+				fmt.Printf("Auto-selected persona: %s (matched tag)\n", persona)
+			}
+		}
+	}
 	if persona == "" {
 		persona = cfg.Defaults.Persona
 	}
