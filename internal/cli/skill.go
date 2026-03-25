@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/ashvinbhat/ox/internal/skills"
 	"github.com/ashvinbhat/ox/internal/workspace"
@@ -45,8 +46,9 @@ func runSkillList(cmd *cobra.Command, args []string) error {
 	names := reg.List()
 	sort.Strings(names)
 
-	fmt.Printf("%-15s %-20s %-20s %-15s %s\n", "NAME", "TAGS", "PERSONAS", "TASK TYPES", "FILE")
-	fmt.Println(strings.Repeat("-", 85))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tTAGS\tPERSONAS\tTASK TYPES")
+	fmt.Fprintln(w, "----\t----\t--------\t----------")
 
 	for _, name := range names {
 		skill := reg.Skills[name]
@@ -63,8 +65,9 @@ func runSkillList(cmd *cobra.Command, args []string) error {
 			taskTypes = "-"
 		}
 
-		fmt.Printf("%-15s %-20s %-20s %-15s %s\n", name, truncate(tags, 20), truncate(personas, 20), truncate(taskTypes, 15), skill.File)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", name, truncate(tags, 30), truncate(personas, 25), taskTypes)
 	}
+	w.Flush()
 
 	return nil
 }
