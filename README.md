@@ -121,6 +121,15 @@ ox resume                                 # Show latest checkpoint context
 ox resume <checkpoint-id>                 # Show specific checkpoint
 ```
 
+### Learnings
+```bash
+ox learn "insight" [-c category] [-t tag] # Capture a learning
+ox learnings                              # List all learnings
+ox learnings --tag backend                # Filter by tag
+ox learnings --category gotcha            # Filter by category
+ox done --learn "insight"                 # Capture learning on completion
+```
+
 ## Personas
 
 | Persona | Role | Auto-triggers |
@@ -204,9 +213,10 @@ defaults:
 - Phase O4: Personas (auto-selection)
 - Phase O5: Hook System (Claude Code integration)
 - Phase O6: Checkpoints & Memory
+- Phase O7: Learning System
 
 **Coming:**
-- Phase O7: Learning System
+- Phase O8: Pre-Ship Quality Gates
 
 See [ROADMAP.md](./ROADMAP.md) for full plan.
 

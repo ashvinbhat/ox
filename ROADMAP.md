@@ -343,28 +343,29 @@ blockers: []
 
 ---
 
-## Phase O7: Learning System 📋 PLANNED
+## Phase O7: Learning System ✅ DONE
 
 **Goal:** Get better over time
 
 ### Deliverables
-- [ ] `ox learn "insight"` - Capture learning
-- [ ] `ox learnings [--tag x]` - View learnings
-- [ ] Auto-capture on task completion (outcome)
-- [ ] Surface relevant learnings on pickup
-- [ ] Pattern detection (what works for which task types)
-- [ ] Store in yoke task outcome field
+- [x] `ox learn "insight"` - Capture learning
+- [x] `ox learnings [--tag x] [--category y]` - View learnings
+- [x] Capture on task completion (`ox done --learn "..."`)
+- [x] Surface relevant learnings on pickup
+- [ ] Pattern detection (what works for which task types) - deferred
+- [ ] Store in yoke task outcome field - deferred
 
 ### Learning Categories
-- **Approaches that worked** - "Using feature flags for gradual rollout"
-- **Gotchas discovered** - "MongoDB aggregations need index hints"
-- **Time estimates** - "Auth features take 2x estimated time"
-- **Tool preferences** - "Use REST Assured for API tests"
+- **approach** - Approaches that worked
+- **gotcha** - Gotchas and pitfalls discovered
+- **tool** - Tool preferences and tips
+- **pattern** - Patterns observed
+- **general** - General insights (default)
 
-### Exit Criteria
-- Learnings captured
-- Relevant insights shown on pickup
-- Actually improving task execution
+### Exit Criteria ✅
+- Learnings captured in SQLite database
+- Relevant insights shown on pickup (matched by tags/repos)
+- Categories and tags for filtering
 
 ---
 

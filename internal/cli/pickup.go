@@ -10,6 +10,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/context"
 	"github.com/ashvinbhat/ox/internal/gitutil"
+	"github.com/ashvinbhat/ox/internal/learning"
 	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokehelper"
@@ -196,11 +197,42 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nWorkspace created: %s\n", ws.Path)
 	fmt.Printf("Persona: %s\n", persona)
 	fmt.Printf("Repos: %s\n", strings.Join(pickupRepos, ", "))
+
+	// Surface relevant learnings
+	surfaceRelevantLearnings(cfg.Home, t.Tags, pickupRepos)
+
 	fmt.Println("\nNext steps:")
 	fmt.Printf("  cd %s\n", ws.Path)
 	fmt.Println("  # Start working with your AI agent")
 
 	return nil
+}
+
+// surfaceRelevantLearnings shows learnings matching task tags or repos.
+func surfaceRelevantLearnings(oxHome string, taskTags, repos []string) {
+	store, err := learning.NewStore(oxHome)
+	if err != nil {
+		return
+	}
+	defer store.Close()
+
+	// Combine task tags and repo names for search
+	searchTags := append([]string{}, taskTags...)
+	searchTags = append(searchTags, repos...)
+
+	learnings, err := store.SearchByTags(searchTags, 5)
+	if err != nil || len(learnings) == 0 {
+		return
+	}
+
+	fmt.Println("\nRelevant learnings:")
+	for _, l := range learnings {
+		content := l.Content
+		if len(content) > 60 {
+			content = content[:57] + "..."
+		}
+		fmt.Printf("  [%s] %s\n", l.Category, content)
+	}
 }
 
 // slugify converts a title to a URL-safe slug.

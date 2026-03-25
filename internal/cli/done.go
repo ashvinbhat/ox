@@ -7,6 +7,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/checkpoint"
 	"github.com/ashvinbhat/ox/internal/gitutil"
+	"github.com/ashvinbhat/ox/internal/learning"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
@@ -16,6 +17,7 @@ var (
 	doneKeep         bool
 	doneReason       string
 	doneNoCheckpoint bool
+	doneLearn        string
 )
 
 var doneCmd = &cobra.Command{
@@ -36,7 +38,7 @@ Examples:
   ox done 9
   ox done 9 --keep
   ox done 9 --reason "Shipped in PR #123"
-  ox done 9 --no-checkpoint`,
+  ox done 9 --learn "Always add index hints for MongoDB aggregations"`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDone,
 }
@@ -83,6 +85,23 @@ func runDone(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Warning: failed to create final checkpoint: %v\n", err)
 		} else {
 			fmt.Printf("Final checkpoint saved: %s\n", cp.ID)
+		}
+	}
+
+	// Capture learning if provided
+	if doneLearn != "" {
+		store, err := learning.NewStore(cfg.Home)
+		if err != nil {
+			fmt.Printf("Warning: failed to save learning: %v\n", err)
+		} else {
+			defer store.Close()
+			taskSeq := ws.TaskSeq
+			l, err := store.Add(doneLearn, learning.CategoryGeneral, ws.Repos, &taskSeq)
+			if err != nil {
+				fmt.Printf("Warning: failed to save learning: %v\n", err)
+			} else {
+				fmt.Printf("Learning captured (#%d)\n", l.ID)
+			}
 		}
 	}
 
@@ -141,5 +160,6 @@ func init() {
 	doneCmd.Flags().BoolVar(&doneKeep, "keep", false, "Keep workspace files")
 	doneCmd.Flags().StringVar(&doneReason, "reason", "", "Completion reason/outcome")
 	doneCmd.Flags().BoolVar(&doneNoCheckpoint, "no-checkpoint", false, "Skip final checkpoint")
+	doneCmd.Flags().StringVar(&doneLearn, "learn", "", "Capture a learning from this task")
 	rootCmd.AddCommand(doneCmd)
 }
