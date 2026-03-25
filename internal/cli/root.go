@@ -29,8 +29,8 @@ Quick start:
   ox status                         # Show current workspace
   ox done                           # Complete and cleanup`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Skip config loading for init command
-		if cmd.Name() == "init" {
+		// Skip config loading for root init command only
+		if cmd.Name() == "init" && cmd.Parent() != nil && cmd.Parent().Name() == "ox" {
 			return
 		}
 		cfg, cfgErr = config.Load()

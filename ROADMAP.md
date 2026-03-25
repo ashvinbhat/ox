@@ -263,19 +263,28 @@ skills:
 
 ---
 
-## Phase O5: Hook System 🔜 NEXT
+## Phase O5: Hook System ✅ DONE
 
 **Goal:** Inject context at agent session start
 
 ### Deliverables
-- [ ] Hook scripts in `~/.ox/hooks/`
-- [ ] Built-in hooks:
+- [x] Hook scripts in `~/.ox/hooks/`
+- [x] Built-in hooks:
   - `yoke-ready-tasks` - Show ready tasks at session start
   - `ox-instructions` - ox CLI reference
   - `workspace-context` - Current task summary
-- [ ] Custom hooks support
-- [ ] Claude Code integration (`~/.claude/settings.json`)
-- [ ] Hook enable/disable in config
+- [x] Custom hooks support (add .sh scripts to ~/.ox/hooks/)
+- [x] Claude Code integration (`~/.claude/settings.json`)
+- [x] `ox hooks init` - Initialize and install hooks
+- [x] `ox hooks` - List available hooks
+- [x] `ox hooks run <name>` - Test hook output
+
+### Commands
+```bash
+ox hooks             # List available hooks
+ox hooks init        # Create scripts and install to Claude Code
+ox hooks run <name>  # Test a hook manually
+```
 
 ### Hook Script Format
 ```bash
@@ -291,22 +300,14 @@ jq -n --arg ctx "$CONTEXT" '{
 }'
 ```
 
-### Config
-```yaml
-hooks:
-  yoke-ready-tasks: true
-  ox-instructions: true
-  workspace-context: true
-```
-
-### Exit Criteria
+### Exit Criteria ✅
 - Context injected at session start
 - AI knows ready tasks without asking
 - Custom hooks work
 
 ---
 
-## Phase O6: Checkpoints & Memory 📋 PLANNED
+## Phase O6: Checkpoints & Memory 🔜 NEXT
 
 **Goal:** Survive context resets
 

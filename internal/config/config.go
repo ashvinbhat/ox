@@ -117,6 +117,7 @@ func EnsureDirs(oxHome string) error {
 		filepath.Join(oxHome, "worktrees"),
 		filepath.Join(oxHome, "skills"),
 		filepath.Join(oxHome, "personas"),
+		filepath.Join(oxHome, "hooks"),
 	}
 
 	for _, dir := range dirs {

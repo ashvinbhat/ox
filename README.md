@@ -1,47 +1,43 @@
 # ox
 
-> The ox that pulls your workload.
+> Agent workspace manager - Built on yoke
 
-An agent workspace manager built on [yoke](https://github.com/ashvinbhat/yoke). Gives AI agents structured workspaces, personas, skills, and lifecycle management for task-driven development.
+Creates structured workspaces for AI-assisted development with context, personas, skills, and Claude Code hooks.
 
-## Philosophy
+## Features
 
-- **Task-driven**: Every work session tied to a yoke task
-- **Context-rich**: AI always has full context (CLAUDE.md)
-- **Persona-based**: Right mindset for the job
-- **Skill-augmented**: Relevant expertise auto-injected
-- **Checkpoint-able**: Survive context resets
+- **Task-driven**: Every session tied to a [yoke](https://github.com/ashvinbhat/yoke) task
+- **Context-rich**: AGENTS.md with full task context, notes, dependencies
+- **Persona-based**: Right mindset for the job (builder, explorer, reviewer, captain)
+- **Skill-augmented**: Relevant expertise auto-injected based on tags
+- **Hook-enabled**: Context injected at Claude Code session start
 
-## Architecture
+## How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                           YOKE                                  │
-│                    (Task management)                            │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │ uses
-                              ▼
+│  Terminal 1: ox CLI                                             │
+│  $ ox pickup 9 --repos backend                                  │
+│    → Creates workspace at ~/.ox/tasks/9-feature/                │
+│    → Creates git worktree with branch ox/9-feature              │
+│    → Generates AGENTS.md with task context + persona + skills   │
+│    → Symlinks CLAUDE.md → AGENTS.md                             │
+│                                                                 │
+│  $ ox open                                                      │
+│    → Opens workspace in IDE                                     │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                            OX                                   │
-│                  (Agent workspace manager)                      │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                     SUPERVISOR                            │  │
-│  │  • Routes to personas    • Manages lifecycle              │  │
-│  │  • Schedules work        • Tracks progress                │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                              │                                  │
-│         ┌────────────────────┼────────────────────┐            │
-│         ▼                    ▼                    ▼            │
-│  ┌────────────┐       ┌────────────┐       ┌────────────┐     │
-│  │  BUILDER   │       │  EXPLORER  │       │  REVIEWER  │     │
-│  │  (jock)    │       │  (nerd)    │       │  (scout)   │     │
-│  └────────────┘       └────────────┘       └────────────┘     │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   SHARED SERVICES                         │  │
-│  │  Workspace │ Skills │ Memory │ Context Gen │ Learning     │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  Terminal 2: Claude Code (in workspace)                         │
+│  $ cd ~/.ox/tasks/9-feature/ && claude                          │
+│    → Claude Code reads CLAUDE.md automatically                  │
+│    → Has full task context, skills, related files               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Back to Terminal 1                                             │
+│  $ ox ship                    # Push branch, create PR          │
+│  $ ox done                    # Cleanup workspace, mark done    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,6 +45,7 @@ An agent workspace manager built on [yoke](https://github.com/ashvinbhat/yoke). 
 
 ```bash
 go install github.com/ashvinbhat/ox/cmd/ox@latest
+ox init
 ```
 
 Requires: [yoke](https://github.com/ashvinbhat/yoke) installed and initialized.
@@ -56,22 +53,24 @@ Requires: [yoke](https://github.com/ashvinbhat/yoke) installed and initialized.
 ## Quick Start
 
 ```bash
-# Pick up a task (creates workspace)
-ox pickup <task-id>
+# Initialize ox
+ox init
 
-# Check status
-ox status
+# Register a codebase
+ox repo add git@github.com:company/backend.git --name backend
 
-# Work with AI
-ox work
+# Pick up a yoke task
+ox pickup 9 --repos backend
 
-# Save progress
-ox checkpoint "implemented auth flow"
+# Open in IDE
+ox open
 
-# Create PR
+# Work with Claude Code in the workspace...
+
+# Create PR when ready
 ox ship
 
-# Complete
+# Complete and cleanup
 ox done
 ```
 
@@ -79,87 +78,132 @@ ox done
 
 ### Workspace
 ```bash
-ox pickup <task-id>           # Create workspace, branch, inject context
-ox status                     # Current task and workspace status
-ox checkpoint "msg"           # Save progress
-ox resume                     # Resume from checkpoint
-ox ship                       # Create PR from workspace
-ox done                       # Complete task, cleanup workspace
+ox pickup <id> --repos <repo>    # Create workspace for task
+ox status                        # Current task and workspace
+ox open                          # Open workspace in IDE
+ox ship                          # Push and create PR
+ox done [id]                     # Complete task, cleanup
+```
+
+### Repos
+```bash
+ox repo add <url> [--name x]     # Register a codebase
+ox repo list                     # Show registered repos
+ox repo remove <name>            # Unregister repo
 ```
 
 ### Personas
 ```bash
-ox pickup --as builder        # Work as builder persona
-ox morph explorer             # Switch persona mid-task
-ox personas                   # List available personas
+ox personas                      # List available personas
+ox pickup --persona explorer     # Start with specific persona
+ox morph <persona>               # Switch persona mid-task
 ```
 
 ### Skills
 ```bash
-ox skills                     # List available skills
-ox inject <skill>             # Add skill to current workspace
-ox eject <skill>              # Remove skill from workspace
+ox skill list                    # List available skills
+ox skill inject <name>           # Add skill to workspace
+ox skill eject <name>            # Remove skill from workspace
 ```
 
-### AI Integration
+### Hooks
 ```bash
-ox work                       # Launch Claude Code with context
-ox ask "question"             # Quick question about current task
+ox hooks                         # List hooks
+ox hooks init                    # Initialize and install to Claude Code
+ox hooks run <name>              # Test a hook
 ```
 
 ## Personas
 
-| Persona | Focus | Auto-triggers |
-|---------|-------|---------------|
-| **builder** | Implementation, shipping code | `bug`, `feature`, `impl` |
-| **explorer** | Research, investigation | `research`, `spike`, `rfc` |
-| **reviewer** | Code review, quality | `review`, `pr` |
-| **planner** | Architecture, planning | `design`, `plan`, `arch` |
+| Persona | Role | Auto-triggers |
+|---------|------|---------------|
+| **captain** | Orchestrates, plans, delegates | `epic`, `project`, `plan`, `design` |
+| **builder** | Implements, ships code | `bug`, `feature`, `fix`, `implement` |
+| **explorer** | Researches, investigates | `research`, `spike`, `investigate` |
+| **reviewer** | Reviews, checks quality | `review`, `pr`, `audit`, `quality` |
+
+Personas are auto-selected based on task tags, or specified with `--persona`.
 
 ## Skills
 
-Skills are expertise modules auto-injected based on task tags:
+Skills are expertise modules auto-injected based on task tags, persona, or task type:
 
-```
-~/.ox/skills/
-├── git/
-│   └── SKILL.md
-├── testing/
-│   └── SKILL.md
-├── debugging/
-│   └── SKILL.md
-└── ...
+```yaml
+# ~/.ox/skills/skills.yaml
+skills:
+  backend-engineer:
+    file: backend-engineer.md
+    tags: [backend, java, python]
+    personas: [builder]
+  debugging:
+    file: debugging.md
+    tags: [bug, incident]
+    personas: [builder, explorer]
 ```
 
-## Storage
+## Hooks
+
+Hooks inject context into Claude Code sessions:
+
+- **yoke-ready-tasks**: Show ready tasks at session start
+- **ox-instructions**: ox CLI quick reference
+- **workspace-context**: Current task summary
+
+Run `ox hooks init` to install hooks to Claude Code.
+
+## Directory Structure
 
 ```
 ~/.ox/
-├── config.yaml          # Configuration
+├── ox.yaml              # Configuration
+├── repos/               # Registered codebases (cloned)
+├── tasks/               # Active task workspaces
+│   └── 9-feature/       # Workspace directory
+│       ├── AGENTS.md    # Generated context
+│       ├── CLAUDE.md    # Symlink → AGENTS.md
+│       └── backend/     # Symlink → worktree
+├── worktrees/           # Git worktrees
+├── skills/              # Skill definitions
 ├── personas/            # Persona definitions
-├── skills/              # Skill modules
-├── memory/              # Cross-session memory
-└── checkpoints/         # Saved progress
+└── hooks/               # Claude Code hooks
 ```
 
 ## Configuration
 
 ```yaml
-# ~/.ox/config.yaml
-workspace:
-  base_dir: "~/workspaces"   # Where to create workspaces
-  use_worktree: true         # Use git worktrees
+# ~/.ox/ox.yaml
+agent: claude
+ide: windsurf
 
-ai:
-  provider: "claude"         # claude, ollama, etc.
-  model: "claude-sonnet"     # Model to use
+repos:
+  backend:
+    url: git@github.com:company/backend.git
+    base_branch: main
+    copy_files: [.env, .vscode]
+    post_setup: npm install
 
 defaults:
-  persona: "builder"         # Default persona
+  persona: builder
 ```
 
 ## Status
 
-Under development. See [ROADMAP.md](./ROADMAP.md) for plan.
+**Implemented:**
+- Phase O0: Foundation (repos, pickup, done)
+- Phase O1: Git Integration (worktrees, ship)
+- Phase O2: Rich Context Generation (AGENTS.md)
+- Phase O3: Skills System (auto-injection)
+- Phase O4: Personas (auto-selection)
+- Phase O5: Hook System (Claude Code integration)
 
-Depends on [yoke](https://github.com/ashvinbhat/yoke) for task management.
+**Coming:**
+- Phase O6: Checkpoints & Memory
+- Phase O7: Learning System
+
+See [ROADMAP.md](./ROADMAP.md) for full plan.
+
+## Dependencies
+
+- [yoke](https://github.com/ashvinbhat/yoke) - Task management
+- Git with worktree support
+- Claude Code (optional, for hooks)
