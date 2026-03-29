@@ -130,6 +130,38 @@ ox learnings --category gotcha            # Filter by category
 ox done --learn "insight"                 # Capture learning on completion
 ```
 
+### Dashboard
+```bash
+ox dashboard                   # Start web dashboard on port 8080
+ox dashboard -p 3000           # Start on custom port
+```
+
+The dashboard provides a visual interface for:
+- **Task list** - All tasks with status, priority, tags
+- **Task tree** - Hierarchical view showing parent/child relationships
+- **Ready tasks** - Tasks with no blockers, ready to work on
+- **Workspaces** - Active workspaces and git worktrees
+- **Learnings** - Captured insights and gotchas
+- **Task creation** - Add tasks with title, tags, priority, parent
+
+### Task Management (yoke pass-through)
+```bash
+ox add "title"                 # Create a new task
+ox tree                        # Show task hierarchy
+ox search "query"              # Search tasks
+ox edit <id>                   # Edit a task
+ox tag <id> <tag>              # Add tag
+ox untag <id> <tag>            # Remove tag
+ox block <id> --by <blocker>   # Add dependency
+ox unblock <id> <blocker>      # Remove dependency
+ox subtask <parent> "title"    # Create subtask
+ox note <id> "text"            # Add note
+ox notes <id>                  # Show notes
+ox log <id>                    # Show task history
+ox tags                        # List all tags
+ox ready                       # Show ready tasks
+```
+
 ## Personas
 
 | Persona | Role | Auto-triggers |
@@ -214,9 +246,11 @@ defaults:
 - Phase O5: Hook System (Claude Code integration)
 - Phase O6: Checkpoints & Memory
 - Phase O7: Learning System
+- Phase O8: Web Dashboard (task views, tree, task creation)
+- Phase O9: Yoke Integration (all yoke commands via ox)
 
 **Coming:**
-- Phase O8: Pre-Ship Quality Gates
+- Pre-Ship Quality Gates
 
 See [ROADMAP.md](./ROADMAP.md) for full plan.
 
