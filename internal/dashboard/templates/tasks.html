@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .status-pending { color: #6b7280; }
+        .status-in_progress { color: #3b82f6; }
+        .status-active { color: #3b82f6; }
+        .status-blocked { color: #ef4444; }
+        .status-done { color: #10b981; }
+        .status-dropped { color: #9ca3af; }
+        .priority-1 { border-left: 4px solid #ef4444; }
+        .priority-2 { border-left: 4px solid #f97316; }
+        .priority-3 { border-left: 4px solid #eab308; }
+        .priority-4 { border-left: 4px solid #22c55e; }
+        .priority-5 { border-left: 4px solid #6b7280; }
+        .htmx-request { opacity: 0.5; }
+        pre { white-space: pre-wrap; font-family: ui-monospace, monospace; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "tasks"}}bg-gray-700{{end}}">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "tree"}}bg-gray-700{{end}}">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "ready"}}bg-gray-700{{end}}">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "workspaces"}}bg-gray-700{{end}}">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "learnings"}}bg-gray-700{{end}}">Learnings</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400 text-sm">ox dashboard</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="space-y-6">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold">Tasks</h1>
+                <div class="flex space-x-4">
+                    <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 rounded-lg px-4 py-2 text-sm transition">
+                        ↻ Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div id="task-list" class="space-y-2" hx-get="/api/tasks" hx-trigger="load" hx-swap="innerHTML">
+                <div class="animate-pulse space-y-2">
+                    <div class="bg-gray-800 h-16 rounded"></div>
+                    <div class="bg-gray-800 h-16 rounded"></div>
+                    <div class="bg-gray-800 h-16 rounded"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

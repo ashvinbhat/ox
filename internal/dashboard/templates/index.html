@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .status-pending { color: #6b7280; }
+        .status-in_progress { color: #3b82f6; }
+        .status-active { color: #3b82f6; }
+        .status-blocked { color: #ef4444; }
+        .status-done { color: #10b981; }
+        .status-dropped { color: #9ca3af; }
+        .priority-1 { border-left: 4px solid #ef4444; }
+        .priority-2 { border-left: 4px solid #f97316; }
+        .priority-3 { border-left: 4px solid #eab308; }
+        .priority-4 { border-left: 4px solid #22c55e; }
+        .priority-5 { border-left: 4px solid #6b7280; }
+        .htmx-request { opacity: 0.5; }
+        pre { white-space: pre-wrap; font-family: ui-monospace, monospace; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "tasks"}}bg-gray-700{{end}}">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "tree"}}bg-gray-700{{end}}">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "ready"}}bg-gray-700{{end}}">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "workspaces"}}bg-gray-700{{end}}">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "learnings"}}bg-gray-700{{end}}">Learnings</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400 text-sm">ox dashboard</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="space-y-8">
+            <div class="text-center py-8">
+                <h1 class="text-4xl font-bold text-white mb-2">🐂 Ox Dashboard</h1>
+                <p class="text-gray-400">Agent workspace manager</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Tasks Overview -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <span class="text-2xl mr-2">📋</span> Tasks
+                    </h2>
+                    <div hx-get="/api/tasks/summary" hx-trigger="load" hx-swap="innerHTML" class="space-y-2">
+                        <div class="animate-pulse bg-gray-700 h-4 rounded w-3/4"></div>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <a href="/tasks" class="text-blue-400 hover:text-blue-300 text-sm">View all →</a>
+                        <a href="/tasks/tree" class="text-blue-400 hover:text-blue-300 text-sm">Tree view →</a>
+                    </div>
+                </div>
+
+                <!-- Workspaces -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <span class="text-2xl mr-2">📁</span> Workspaces
+                    </h2>
+                    <div hx-get="/api/workspaces/summary" hx-trigger="load" hx-swap="innerHTML">
+                        <div class="animate-pulse bg-gray-700 h-4 rounded w-3/4"></div>
+                    </div>
+                    <div class="mt-4">
+                        <a href="/workspaces" class="text-blue-400 hover:text-blue-300 text-sm">Manage workspaces →</a>
+                    </div>
+                </div>
+
+                <!-- Worktrees -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <span class="text-2xl mr-2">🌳</span> Worktrees
+                    </h2>
+                    <div hx-get="/api/worktrees/summary" hx-trigger="load" hx-swap="innerHTML">
+                        <div class="animate-pulse bg-gray-700 h-4 rounded w-3/4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">Quick Actions</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <a href="/tasks/ready" class="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 text-center transition">
+                        <span class="text-2xl block mb-2">🎯</span>
+                        <span class="text-sm">Ready Tasks</span>
+                    </a>
+                    <a href="/tasks/tree" class="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 text-center transition">
+                        <span class="text-2xl block mb-2">🌲</span>
+                        <span class="text-sm">Task Tree</span>
+                    </a>
+                    <a href="/workspaces" class="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 text-center transition">
+                        <span class="text-2xl block mb-2">📂</span>
+                        <span class="text-sm">Workspaces</span>
+                    </a>
+                    <a href="/learnings" class="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 text-center transition">
+                        <span class="text-2xl block mb-2">💡</span>
+                        <span class="text-sm">Learnings</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
