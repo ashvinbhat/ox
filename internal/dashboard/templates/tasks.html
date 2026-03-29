@@ -47,13 +47,65 @@
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-bold">Tasks</h1>
                 <div class="flex space-x-4">
+                    <button onclick="document.getElementById('add-modal').classList.remove('hidden')"
+                            class="bg-green-600 hover:bg-green-500 rounded-lg px-4 py-2 text-sm transition flex items-center">
+                        <span class="mr-1">+</span> Add Task
+                    </button>
                     <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 rounded-lg px-4 py-2 text-sm transition">
                         ↻ Refresh
                     </button>
                 </div>
             </div>
 
-            <div id="task-list" class="space-y-2" hx-get="/api/tasks" hx-trigger="load" hx-swap="innerHTML">
+            <!-- Add Task Form (inline, collapsible) -->
+            <div id="add-form" class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <form hx-post="/api/add" hx-target="#add-result" hx-swap="innerHTML" class="space-y-4"
+                      hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('task-list').dispatchEvent(new Event('refresh')); }">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Title *</label>
+                            <input type="text" name="title" required
+                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                                   placeholder="Task title...">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Tags (comma separated)</label>
+                            <input type="text" name="tags"
+                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                                   placeholder="backend, feature">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Priority</label>
+                            <select name="priority" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                                <option value="1">P1 - Urgent</option>
+                                <option value="2">P2 - High</option>
+                                <option value="3" selected>P3 - Normal</option>
+                                <option value="4">P4 - Low</option>
+                                <option value="5">P5 - Backlog</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Parent Task (for subtask)</label>
+                            <input type="text" name="parent"
+                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                                   placeholder="Leave empty for top-level task">
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button type="submit" class="bg-green-600 hover:bg-green-500 rounded-lg px-6 py-2 text-sm transition">
+                            Create Task
+                        </button>
+                        <div id="add-result"></div>
+                    </div>
+                </form>
+            </div>
+
+            <div id="task-list" class="space-y-2"
+                 hx-get="/api/tasks"
+                 hx-trigger="load, refresh from:body"
+                 hx-swap="innerHTML">
                 <div class="animate-pulse space-y-2">
                     <div class="bg-gray-800 h-16 rounded"></div>
                     <div class="bg-gray-800 h-16 rounded"></div>
@@ -62,5 +114,16 @@
             </div>
         </div>
     </main>
+
+    <script>
+        // Refresh task list after adding
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath === '/api/add' && evt.detail.successful) {
+                setTimeout(function() {
+                    htmx.trigger('#task-list', 'refresh');
+                }, 500);
+            }
+        });
+    </script>
 </body>
 </html>

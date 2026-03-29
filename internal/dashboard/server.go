@@ -64,6 +64,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/done", s.apiDone)
 	http.HandleFunc("/api/open", s.apiOpen)
 	http.HandleFunc("/api/start", s.apiStart)
+	http.HandleFunc("/api/add", s.apiAddTask)
 
 	addr := fmt.Sprintf(":%d", s.port)
 	fmt.Printf("🐂 Ox Dashboard running at http://localhost%s\n", addr)
@@ -176,8 +177,99 @@ func (s *Server) apiTasksTree(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(output))
+
+	w.Header().Set("Content-Type", "text/html")
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		if strings.Contains(line, "task(s)") || line == "" {
+			continue
+		}
+
+		// Calculate indent level by counting leading │ characters
+		// Root: "├── ● #28" (0 leading │)
+		// Child: "│   ├── ○ #27" (1 leading │)
+		indentLevel := 0
+		for _, char := range line {
+			if char == '│' {
+				indentLevel++
+			} else if char != ' ' {
+				break
+			}
+		}
+
+		// Extract status icon
+		isActive := strings.Contains(line, "●")
+		isDone := strings.Contains(line, "✓")
+		isBlocked := strings.Contains(line, "⊘")
+
+		statusColor := "text-gray-400"
+		statusIcon := "○"
+		if isActive {
+			statusColor = "text-blue-400"
+			statusIcon = "●"
+		} else if isDone {
+			statusColor = "text-green-400"
+			statusIcon = "✓"
+		} else if isBlocked {
+			statusColor = "text-red-400"
+			statusIcon = "⊘"
+		}
+
+		// Extract task number
+		seqStart := strings.Index(line, "#")
+		if seqStart == -1 {
+			continue
+		}
+
+		// Parse: #28 Title [tags]
+		rest := line[seqStart:]
+		parts := strings.SplitN(rest, " ", 2)
+		if len(parts) < 2 {
+			continue
+		}
+
+		seq := strings.TrimPrefix(parts[0], "#")
+		titleWithTags := parts[1]
+
+		// Extract tags
+		title := titleWithTags
+		var tags []string
+		if idx := strings.LastIndex(titleWithTags, "["); idx != -1 {
+			if endIdx := strings.LastIndex(titleWithTags, "]"); endIdx > idx {
+				tagStr := titleWithTags[idx+1 : endIdx]
+				tags = strings.Split(tagStr, ", ")
+				title = strings.TrimSpace(titleWithTags[:idx])
+			}
+		}
+
+		// Build tag HTML
+		tagHTML := ""
+		for _, tag := range tags {
+			tagHTML += fmt.Sprintf(`<span class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs">%s</span> `, tag)
+		}
+
+		// Render as card with proper indentation
+		marginLeft := indentLevel * 24
+		borderClass := ""
+		if indentLevel > 0 {
+			borderClass = "border-l-2 border-gray-600"
+		}
+
+		fmt.Fprintf(w, `
+		<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-gray-500 transition %s" style="margin-left: %dpx;">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center space-x-3">
+					<span class="%s text-lg">%s</span>
+					<span class="text-gray-500 text-sm">#%s</span>
+					<span class="font-medium text-gray-200">%s</span>
+				</div>
+				<div class="flex items-center space-x-1">
+					%s
+				</div>
+			</div>
+		</div>`, borderClass, marginLeft, statusColor, statusIcon, seq, title, tagHTML)
+	}
 }
 
 func (s *Server) apiTasksReady(w http.ResponseWriter, r *http.Request) {
@@ -405,6 +497,57 @@ func (s *Server) apiStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte(output))
+}
+
+func (s *Server) apiAddTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	title := r.FormValue("title")
+	tags := r.FormValue("tags")
+	priority := r.FormValue("priority")
+	parent := r.FormValue("parent")
+
+	if title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+
+	// Build args slice for proper argument handling
+	var args []string
+	if parent != "" {
+		// Create as subtask
+		args = append(args, "subtask", parent, title)
+	} else {
+		args = append(args, "add", title)
+	}
+
+	// Add tags
+	if tags != "" {
+		for _, tag := range strings.Split(tags, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				args = append(args, "-t", tag)
+			}
+		}
+	}
+
+	// Add priority
+	if priority != "" && priority != "3" {
+		args = append(args, "-p", priority)
+	}
+
+	cmd := exec.Command(s.yokePath, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("%s: %s", err, output), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, `<div class="text-green-400 p-2">%s</div>`, strings.TrimSpace(string(output)))
 }
 
 // Helper functions
