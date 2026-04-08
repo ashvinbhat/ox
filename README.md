@@ -76,11 +76,24 @@ ox done
 
 ## Commands
 
+### Assistant Mode
+```bash
+ox assist                        # General AI assistant with ox knowledge
+ox assist --persona builder      # Start with builder mindset
+ox assist --skill mongodb,debug  # Load specific skills
+
+ox claude 18                     # Start Claude in task workspace with full ox context
+ox claude --persona captain      # Override persona (orchestration mode)
+```
+
 ### Workspace
 ```bash
 ox pickup <id> --repos <repo>    # Create workspace for task
 ox status                        # Current task and workspace
 ox open                          # Open workspace in IDE
+ox review [task-id] [repo]       # AI code review with Mycroft
+ox review --local                # Review current directory (any git repo)
+ox review --dir ~/path           # Review specific directory
 ox ship                          # Push and create PR
 ox done [id]                     # Complete task, cleanup
 ```

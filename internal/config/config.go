@@ -23,12 +23,15 @@ type Defaults struct {
 
 // Config represents the ox.yaml configuration file.
 type Config struct {
-	Agent    string                 `yaml:"agent,omitempty"`
-	IDE      string                 `yaml:"ide,omitempty"`
-	YokeHome string                 `yaml:"yoke_home,omitempty"`
-	Repos    map[string]*RepoConfig `yaml:"repos,omitempty"`
-	Defaults Defaults               `yaml:"defaults,omitempty"`
-	Home     string                 `yaml:"-"` // resolved OX_HOME (not persisted)
+	Agent            string                 `yaml:"agent,omitempty"`
+	IDE              string                 `yaml:"ide,omitempty"`
+	YokeHome         string                 `yaml:"yoke_home,omitempty"`
+	Repos            map[string]*RepoConfig `yaml:"repos,omitempty"`
+	Defaults         Defaults               `yaml:"defaults,omitempty"`
+	DashboardPort    int                    `yaml:"dashboard_port,omitempty"`
+	SlackWebhookURL  string                 `yaml:"slack_webhook_url,omitempty"`
+	FeedbackPassword string                 `yaml:"feedback_password,omitempty"`
+	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
 }
 
 // DefaultConfig returns a Config with sensible defaults.

@@ -23,6 +23,18 @@
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Toast notification container -->
+    <div id="toast" class="fixed top-4 right-4 z-[100] transition-all duration-300"></div>
+    <script>
+        // Auto-hide toast after 3 seconds
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'toast') {
+                setTimeout(function() {
+                    evt.detail.target.innerHTML = '';
+                }, 3000);
+            }
+        });
+    </script>
     <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex items-center justify-between h-14">
@@ -35,6 +47,7 @@
                     <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "ready"}}bg-gray-700{{end}}">Ready</a>
                     <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "workspaces"}}bg-gray-700{{end}}">Workspaces</a>
                     <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "learnings"}}bg-gray-700{{end}}">Learnings</a>
+                    <a href="/feedback" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm {{if eq .Active "feedback"}}bg-gray-700{{end}}">Feedback</a>
                 </div>
                 <div class="flex items-center space-x-4">
                     <span class="text-gray-400 text-sm">ox dashboard</span>
@@ -46,10 +59,10 @@
         <div class="space-y-6">
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-bold">Tasks</h1>
-                <div class="flex space-x-4">
-                    <button onclick="document.getElementById('add-modal').classList.remove('hidden')"
-                            class="bg-green-600 hover:bg-green-500 rounded-lg px-4 py-2 text-sm transition flex items-center">
-                        <span class="mr-1">+</span> Add Task
+                <div class="flex space-x-2">
+                    <button onclick="document.getElementById('add-form').classList.toggle('hidden')"
+                            class="bg-green-600 hover:bg-green-500 rounded-lg px-4 py-2 text-sm transition">
+                        + Add Task
                     </button>
                     <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 rounded-lg px-4 py-2 text-sm transition">
                         ↻ Refresh
@@ -57,8 +70,8 @@
                 </div>
             </div>
 
-            <!-- Add Task Form (inline, collapsible) -->
-            <div id="add-form" class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <!-- Add Task Form (collapsible, hidden by default) -->
+            <div id="add-form" class="hidden bg-gray-800 rounded-lg p-4 border border-gray-700">
                 <form hx-post="/api/add" hx-target="#add-result" hx-swap="innerHTML" class="space-y-4"
                       hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('task-list').dispatchEvent(new Event('refresh')); }">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -104,7 +117,7 @@
 
             <div id="task-list" class="space-y-2"
                  hx-get="/api/tasks"
-                 hx-trigger="load, refresh from:body"
+                 hx-trigger="load"
                  hx-swap="innerHTML">
                 <div class="animate-pulse space-y-2">
                     <div class="bg-gray-800 h-16 rounded"></div>
@@ -112,6 +125,22 @@
                     <div class="bg-gray-800 h-16 rounded"></div>
                 </div>
             </div>
+
+            <!-- Done Tasks (collapsible) -->
+            <details class="bg-gray-800 rounded-lg border border-gray-700">
+                <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700 flex items-center justify-between">
+                    <span class="text-gray-400 font-medium">Done Tasks</span>
+                    <span class="text-gray-500 text-sm" id="done-count"></span>
+                </summary>
+                <div id="done-list" class="p-4 pt-0 space-y-2"
+                     hx-get="/api/tasks/done"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="animate-pulse space-y-2">
+                        <div class="bg-gray-700 h-12 rounded"></div>
+                    </div>
+                </div>
+            </details>
         </div>
     </main>
 
