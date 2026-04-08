@@ -192,7 +192,7 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update task status in yoke to in_progress
-	if t.Status == "pending" || t.Status == "active" {
+	if t.Status != "in_progress" {
 		if err := yokeClient.UpdateStatus(t.ID, "in_progress"); err != nil {
 			fmt.Printf("Warning: failed to update task status: %v\n", err)
 		}
