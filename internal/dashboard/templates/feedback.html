@@ -47,7 +47,7 @@
                 </select>
                 <span class="text-gray-400">Week: {{.CurrentWeek}}</span>
                 {{if gt .PendingWeeks 0}}
-                <span class="bg-yellow-600 px-3 py-1 rounded text-sm">{{.PendingWeeks}} weeks pending</span>
+                <span class="bg-yellow-600 px-3 py-1 rounded text-sm">{{.PendingWeeks}} week{{if eq .PendingWeeks 1}}{{else}}s{{end}} pending</span>
                 {{else}}
                 <span class="bg-green-600 px-3 py-1 rounded text-sm">All caught up</span>
                 {{end}}

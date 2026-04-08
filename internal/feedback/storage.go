@@ -521,10 +521,17 @@ func (s *Store) GetPendingWeeks() ([]string, error) {
 	}
 
 	now := time.Now()
+	currentYear, currentWeek := now.ISOWeek()
+	currentWeekStr := fmt.Sprintf("%d-W%02d", currentYear, currentWeek)
+
 	var pending []string
 	for d := startDate; d.Before(now); d = d.AddDate(0, 0, 7) {
 		year, week := d.ISOWeek()
 		weekStr := fmt.Sprintf("%d-W%02d", year, week)
+		// Skip the current week — it hasn't ended yet
+		if weekStr == currentWeekStr {
+			continue
+		}
 		if !completedWeeks[weekStr] {
 			pending = append(pending, weekStr)
 		}
