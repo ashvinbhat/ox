@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .htmx-request { opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Learnings</a>
+                    <a href="/feedback" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm bg-gray-700">Feedback</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div id="toast" class="fixed top-20 right-4 z-50"></div>
+
+        <div class="mb-6">
+            <a href="/feedback" class="text-blue-400 hover:text-blue-300 text-sm">&larr; Back to Feedback</a>
+            <h1 class="text-2xl font-bold mt-2">Prepare Cycle Feedback</h1>
+            <p class="text-gray-400">Review observations and prepare SBI feedback for each person</p>
+        </div>
+
+        <!-- SBI Guide -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-3">SBI Framework</h2>
+            <div class="grid grid-cols-3 gap-4 text-sm">
+                <div class="bg-gray-700 rounded p-3">
+                    <div class="font-medium text-blue-400 mb-1">Situation</div>
+                    <p class="text-gray-400">When/where did this happen? Set the context.</p>
+                </div>
+                <div class="bg-gray-700 rounded p-3">
+                    <div class="font-medium text-green-400 mb-1">Behavior</div>
+                    <p class="text-gray-400">What specific actions did you observe?</p>
+                </div>
+                <div class="bg-gray-700 rounded p-3">
+                    <div class="font-medium text-purple-400 mb-1">Impact</div>
+                    <p class="text-gray-400">What was the result? How did it affect the team?</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- People summaries -->
+        <div class="space-y-6">
+            {{if .Summaries}}
+            {{range .Summaries}}
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-xl font-semibold">{{.Person.Name}}</h2>
+                        {{if .Person.Team}}<p class="text-gray-400 text-sm">{{.Person.Team}}</p>{{end}}
+                    </div>
+                    <div class="flex items-center space-x-4 text-sm">
+                        <span class="text-green-400">{{len .Strengths}} strengths</span>
+                        <span class="text-orange-400">{{len .GrowthAreas}} growth</span>
+                        <a href="/feedback/person/{{.Person.ID}}" class="text-blue-400 hover:text-blue-300">View details &rarr;</a>
+                    </div>
+                </div>
+
+                <!-- Strengths -->
+                {{if .Strengths}}
+                <div class="mb-4">
+                    <h3 class="text-sm font-medium text-green-400 mb-2">Strengths</h3>
+                    <div class="space-y-2">
+                        {{range .Strengths}}
+                        <div class="bg-gray-700 rounded p-3 text-sm">
+                            <p>{{.Text}}</p>
+                            {{if .TaskTitle}}<p class="text-gray-500 text-xs mt-1">Task: #{{.TaskSeq}} {{.TaskTitle}}</p>{{end}}
+                            <p class="text-gray-500 text-xs">{{.Week}}</p>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                <!-- Growth Areas -->
+                {{if .GrowthAreas}}
+                <div class="mb-4">
+                    <h3 class="text-sm font-medium text-orange-400 mb-2">Growth Areas</h3>
+                    <div class="space-y-2">
+                        {{range .GrowthAreas}}
+                        <div class="bg-gray-700 rounded p-3 text-sm">
+                            <p>{{.Text}}</p>
+                            {{if .TaskTitle}}<p class="text-gray-500 text-xs mt-1">Task: #{{.TaskSeq}} {{.TaskTitle}}</p>{{end}}
+                            <p class="text-gray-500 text-xs">{{.Week}}</p>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                <!-- Related Tasks -->
+                {{if .Tasks}}
+                <div>
+                    <h3 class="text-sm font-medium text-gray-400 mb-2">Related Tasks</h3>
+                    <div class="flex flex-wrap gap-2">
+                        {{range .Tasks}}
+                        <span class="bg-gray-700 px-2 py-1 rounded text-xs">#{{.Seq}} {{.Title}}</span>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+            {{else}}
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 text-center text-gray-400">
+                No observations this cycle yet. <a href="/feedback/week" class="text-blue-400 hover:text-blue-300">Start logging</a>
+            </div>
+            {{end}}
+        </div>
+    </main>
+</body>
+</html>

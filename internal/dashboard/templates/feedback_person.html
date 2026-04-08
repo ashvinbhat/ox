@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .htmx-request { opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Learnings</a>
+                    <a href="/feedback" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm bg-gray-700">Feedback</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        <div id="toast" class="fixed top-20 right-4 z-50"></div>
+
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <a href="/feedback?cycle={{.SelectedCycle}}" class="text-blue-400 hover:text-blue-300 text-sm">&larr; Back to Feedback</a>
+                <h1 class="text-2xl font-bold mt-2">{{.Person.Name}}</h1>
+                {{if .Person.Team}}<p class="text-gray-400">{{.Person.Team}}</p>{{end}}
+            </div>
+            <div>
+                <select id="cycle-select" onchange="changeCycle(this.value)"
+                        class="bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
+                    {{range .Cycles}}
+                    <option value="{{.}}" {{if eq . $.SelectedCycle}}selected{{end}}>
+                        {{.}}{{if eq . $.CurrentCycle}} (current){{end}}
+                    </option>
+                    {{end}}
+                </select>
+            </div>
+        </div>
+
+        <!-- Quick Add Observation -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-4">Add Observation</h2>
+            <form hx-post="/api/feedback/observation/add" hx-target="#toast" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { this.reset(); location.reload(); }">
+                <input type="hidden" name="person_id" value="{{.Person.ID}}">
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                        <select name="type" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                            <option value="strength">Strength (+)</option>
+                            <option value="growth">Growth Area (~)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Task (optional)</label>
+                        <select name="task_id" id="task-select" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                            <option value="">No task</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Observation</label>
+                    <textarea name="text" required rows="3" placeholder="What did you observe?"
+                              class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium">
+                    Add Observation
+                </button>
+            </form>
+        </div>
+
+        <!-- All Observations -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h2 class="text-lg font-semibold mb-4">Observations - {{.SelectedCycle}} ({{len .Observations}})</h2>
+
+            {{if .Observations}}
+            <div class="space-y-4">
+                {{range .Observations}}
+                <div id="obs-{{.ID}}" class="bg-gray-700 rounded-lg p-4 {{if eq .Type "strength"}}border-l-4 border-green-500{{else}}border-l-4 border-orange-500{{end}}">
+                    <div class="flex items-start justify-between mb-2">
+                        <span class="{{if eq .Type "strength"}}text-green-400{{else}}text-orange-400{{end}} text-sm font-medium">
+                            {{if eq .Type "strength"}}Strength{{else}}Growth Area{{end}}
+                        </span>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-gray-500 text-xs">{{.Week}}</span>
+                            <button onclick="editObservation('{{.ID}}', '{{.Type}}', `{{.Text}}`)"
+                                    class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+                            <button onclick="deleteObservation('{{.ID}}')"
+                                    class="text-red-400 hover:text-red-300 text-xs">Delete</button>
+                        </div>
+                    </div>
+                    <p class="text-gray-200 whitespace-pre-wrap">{{.Text}}</p>
+                    {{if .TaskTitle}}
+                    <p class="text-gray-500 text-sm mt-2">
+                        <span class="bg-gray-600 px-2 py-0.5 rounded text-xs">#{{.TaskSeq}} {{.TaskTitle}}</span>
+                    </p>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <p class="text-gray-400 text-center py-8">No observations yet for this cycle</p>
+            {{end}}
+        </div>
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-semibold mb-4">Edit Observation</h3>
+            <form id="edit-form" hx-post="/api/feedback/observation/edit" hx-target="#toast" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { closeModal(); location.reload(); }">
+                <input type="hidden" name="id" id="edit-id">
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                    <select name="type" id="edit-type" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <option value="strength">Strength (+)</option>
+                        <option value="growth">Growth Area (~)</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Observation</label>
+                    <textarea name="text" id="edit-text" required rows="8"
+                              class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded">Cancel</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function changeCycle(cycle) {
+            window.location.href = '/feedback/person/{{.Person.ID}}?cycle=' + encodeURIComponent(cycle);
+        }
+
+        // Load tasks once on page load
+        fetch('/api/feedback/tasks')
+            .then(r => r.text())
+            .then(html => {
+                document.getElementById('task-select').innerHTML = html;
+            });
+
+        function editObservation(id, type, text) {
+            document.getElementById('edit-id').value = id;
+            document.getElementById('edit-type').value = type;
+            document.getElementById('edit-text').value = text;
+            document.getElementById('edit-modal').classList.remove('hidden');
+            document.getElementById('edit-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            document.getElementById('edit-modal').classList.remove('flex');
+        }
+
+        function deleteObservation(id) {
+            if (!confirm('Delete this observation?')) return;
+
+            fetch('/api/feedback/observation/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'id=' + encodeURIComponent(id)
+            })
+            .then(r => r.text())
+            .then(html => {
+                document.getElementById('toast').innerHTML = html;
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Close modal on backdrop click
+        document.getElementById('edit-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Auto-hide toast after 3 seconds
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'toast') {
+                setTimeout(function() {
+                    evt.detail.target.innerHTML = '';
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>

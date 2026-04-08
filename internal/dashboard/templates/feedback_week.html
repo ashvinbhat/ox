@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .htmx-request { opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Learnings</a>
+                    <a href="/feedback" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm bg-gray-700">Feedback</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        <div id="toast" class="fixed top-20 right-4 z-50"></div>
+
+        <div class="mb-6">
+            <a href="/feedback" class="text-blue-400 hover:text-blue-300 text-sm">&larr; Back to Feedback</a>
+            <h1 class="text-2xl font-bold mt-2">Weekly Review: {{.CurrentWeek}}</h1>
+            <p class="text-gray-400">Who did you collaborate with this week? What did you observe?</p>
+        </div>
+
+        <!-- Observation Form -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-4">Add Observation</h2>
+            <form hx-post="/api/feedback/observation/add" hx-target="#toast" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { this.reset(); htmx.trigger('#observations-list', 'refresh'); }">
+
+                <!-- Person search -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Person</label>
+                    <div class="relative">
+                        <input type="text" id="person-search" placeholder="Search by name..."
+                               autocomplete="off"
+                               class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <input type="hidden" name="person_id" id="person-id">
+                        <div id="person-results" class="absolute z-10 w-full mt-1 bg-gray-700 rounded-lg shadow-lg border border-gray-600 hidden max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <div id="selected-person" class="mt-2 text-green-400 hidden"></div>
+                </div>
+
+                <!-- Week selector (for backfilling) -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Week</label>
+                    <select name="week" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <option value="{{.CurrentWeek}}" selected>{{.CurrentWeek}} (current)</option>
+                        <!-- Recent weeks for backfilling -->
+                        {{range .RecentWeeks}}
+                        <option value="{{.}}">{{.}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Task dropdown -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Related Task (optional)</label>
+                    <select name="task_id" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <option value="">No task</option>
+                        {{range .Tasks}}
+                        <option value="{{.ID}}">#{{.Seq}} {{.Title}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Type dropdown -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                    <select name="type" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <option value="strength">Strength (+)</option>
+                        <option value="growth">Growth Area (~)</option>
+                    </select>
+                </div>
+
+                <!-- Observation text -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Observation</label>
+                    <textarea name="text" required rows="3" placeholder="What did you observe? Be specific about the situation and behavior..."
+                              class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500"></textarea>
+                    <p class="text-gray-500 text-xs mt-1">Focus on observable behaviors, not interpretations</p>
+                </div>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium">
+                    Add Observation
+                </button>
+            </form>
+        </div>
+
+        <!-- New Person Form (hidden by default) -->
+        <div id="new-person-form" class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6 hidden">
+            <h2 class="text-lg font-semibold mb-4">Add New Person</h2>
+            <form hx-post="/api/feedback/people/add" hx-target="#toast" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { hideNewPerson(); }">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Name</label>
+                        <input type="text" name="name" id="new-person-name" required
+                               class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Team (optional)</label>
+                        <input type="text" name="team"
+                               class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-medium">Add Person</button>
+                    <button type="button" onclick="hideNewPerson()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- This week's observations -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-4">This Week's Observations</h2>
+            <div id="observations-list" hx-get="/api/feedback/observations?week={{.CurrentWeek}}" hx-trigger="load, refresh" hx-swap="innerHTML">
+                <div class="animate-pulse bg-gray-700 h-16 rounded"></div>
+            </div>
+        </div>
+
+        <!-- Complete Week -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h2 class="text-lg font-semibold mb-4">Complete Week Review</h2>
+            <p class="text-gray-400 mb-4">Mark this week as reviewed when you're done adding observations.</p>
+            <form hx-post="/api/feedback/week/complete" hx-target="#toast" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { setTimeout(function() { window.location.href = '/feedback'; }, 1000); }">
+                <input type="hidden" name="week" value="{{.CurrentWeek}}">
+                <button type="submit" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-medium">
+                    Mark Week Complete
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        // Person search with debounce
+        let searchTimeout;
+        const searchInput = document.getElementById('person-search');
+        const resultsDiv = document.getElementById('person-results');
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+
+            if (query.length === 0) {
+                resultsDiv.innerHTML = '';
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            searchTimeout = setTimeout(function() {
+                fetch('/api/feedback/people/search?person_search=' + encodeURIComponent(query))
+                    .then(r => r.text())
+                    .then(html => {
+                        resultsDiv.innerHTML = html;
+                        if (html.trim()) {
+                            resultsDiv.classList.remove('hidden');
+                        } else {
+                            resultsDiv.classList.add('hidden');
+                        }
+                    });
+            }, 300);
+        });
+
+        // Hide results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#person-search') && !e.target.closest('#person-results')) {
+                resultsDiv.classList.add('hidden');
+            }
+        });
+
+        // Show results on focus if there's content
+        searchInput.addEventListener('focus', function() {
+            if (resultsDiv.innerHTML.trim()) {
+                resultsDiv.classList.remove('hidden');
+            }
+        });
+
+        function selectPerson(id, name) {
+            document.getElementById('person-id').value = id;
+            searchInput.value = name;
+            document.getElementById('selected-person').textContent = 'Selected: ' + name;
+            document.getElementById('selected-person').classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+        }
+
+        function showNewPerson(name) {
+            document.getElementById('new-person-form').classList.remove('hidden');
+            document.getElementById('new-person-name').value = name || '';
+            resultsDiv.classList.add('hidden');
+        }
+
+        function hideNewPerson() {
+            document.getElementById('new-person-form').classList.add('hidden');
+        }
+
+        // Auto-hide toast after 3 seconds
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'toast') {
+                setTimeout(function() {
+                    evt.detail.target.innerHTML = '';
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Ox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .htmx-request { opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="text-xl font-bold text-white flex items-center">
+                        <span class="text-2xl mr-2">🐂</span> Ox
+                    </a>
+                    <a href="/tasks" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tasks</a>
+                    <a href="/tasks/tree" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Tree</a>
+                    <a href="/tasks/ready" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Ready</a>
+                    <a href="/workspaces" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Workspaces</a>
+                    <a href="/learnings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">Learnings</a>
+                    <a href="/feedback" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm bg-gray-700">Feedback</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div id="toast" class="fixed top-20 right-4 z-50"></div>
+
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold">Feedback Cycle</h1>
+                <p class="text-gray-400">Track observations for collaborators</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <select id="cycle-select" onchange="changeCycle(this.value)"
+                        class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500">
+                    {{range .Cycles}}
+                    <option value="{{.}}" {{if eq . $.SelectedCycle}}selected{{end}}>
+                        {{.}}{{if eq . $.CurrentCycle}} (current){{end}}
+                    </option>
+                    {{end}}
+                </select>
+                <span class="text-gray-400">Week: {{.CurrentWeek}}</span>
+                {{if gt .PendingWeeks 0}}
+                <span class="bg-yellow-600 px-3 py-1 rounded text-sm">{{.PendingWeeks}} weeks pending</span>
+                {{else}}
+                <span class="bg-green-600 px-3 py-1 rounded text-sm">All caught up</span>
+                {{end}}
+            </div>
+        </div>
+        <script>
+            function changeCycle(cycle) {
+                window.location.href = '/feedback?cycle=' + encodeURIComponent(cycle);
+            }
+        </script>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <a href="/feedback/week" class="bg-blue-600 hover:bg-blue-500 rounded-lg p-6 text-center transition block">
+                <span class="text-3xl block mb-2">📝</span>
+                <span class="text-lg font-medium">Log Weekly Observations</span>
+                <p class="text-blue-200 text-sm mt-2">Record observations from this week's work</p>
+            </a>
+            <a href="/feedback/prepare" class="bg-purple-600 hover:bg-purple-500 rounded-lg p-6 text-center transition block">
+                <span class="text-3xl block mb-2">📋</span>
+                <span class="text-lg font-medium">Prepare Cycle Feedback</span>
+                <p class="text-purple-200 text-sm mt-2">Review and prepare SBI feedback</p>
+            </a>
+        </div>
+
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h2 class="text-xl font-semibold mb-4">People This Cycle</h2>
+            <div id="summaries" hx-get="/api/feedback/summaries?cycle={{.SelectedCycle}}" hx-trigger="load" hx-swap="innerHTML" class="space-y-3">
+                <div class="animate-pulse bg-gray-700 h-16 rounded"></div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
