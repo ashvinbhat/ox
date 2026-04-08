@@ -125,10 +125,12 @@ func (ws *TaskWorkspace) loadState() {
 		return
 	}
 
-	// Known non-repo symlinks to exclude
+	// Known non-repo files to exclude
 	exclude := map[string]bool{
-		"CLAUDE.md": true,
-		"AGENTS.md": true,
+		"CLAUDE.md":    true,
+		"AGENTS.md":    true,
+		"state.yaml":   true,
+		".checkpoints": true,
 	}
 
 	for _, e := range entries {
@@ -137,8 +139,9 @@ func (ws *TaskWorkspace) loadState() {
 			continue
 		}
 
-		// Check if it's a symlink
-		info, err := e.Info()
+		// Use Lstat to check if it's a symlink (Info follows symlinks)
+		fullPath := filepath.Join(ws.Path, e.Name())
+		info, err := os.Lstat(fullPath)
 		if err != nil {
 			continue
 		}

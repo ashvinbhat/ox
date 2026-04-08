@@ -104,6 +104,10 @@ func runPickup(cmd *cobra.Command, args []string) error {
 		if baseBranch == "" {
 			baseBranch = "origin/main"
 		}
+		// Ensure we use remote ref for fresh code (if not already a remote ref)
+		if !strings.HasPrefix(baseBranch, "origin/") && !strings.Contains(baseBranch, "/") {
+			baseBranch = "origin/" + baseBranch
+		}
 
 		fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
 		if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {

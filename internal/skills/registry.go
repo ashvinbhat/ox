@@ -119,6 +119,8 @@ func (r *Registry) List() []string {
 }
 
 // MatchForTask returns skills that match the given criteria.
+// Skills are matched by tags first. Persona-only matching is only used for
+// skills that have NO tags defined (generic skills that apply to all tasks).
 func (r *Registry) MatchForTask(tags []string, persona string, taskType string) []*Skill {
 	var matches []*Skill
 	seen := make(map[string]bool)
@@ -133,23 +135,13 @@ func (r *Registry) MatchForTask(tags []string, persona string, taskType string) 
 			continue
 		}
 
-		// Check tag match
+		// Check tag match - this is the primary filter
+		tagMatched := false
 		for _, st := range skill.Tags {
 			if tagSet[strings.ToLower(st)] {
 				matches = append(matches, skill)
 				seen[skill.Name] = true
-				break
-			}
-		}
-		if seen[skill.Name] {
-			continue
-		}
-
-		// Check persona match
-		for _, sp := range skill.Personas {
-			if strings.EqualFold(sp, persona) {
-				matches = append(matches, skill)
-				seen[skill.Name] = true
+				tagMatched = true
 				break
 			}
 		}
@@ -163,6 +155,22 @@ func (r *Registry) MatchForTask(tags []string, persona string, taskType string) 
 				matches = append(matches, skill)
 				seen[skill.Name] = true
 				break
+			}
+		}
+		if seen[skill.Name] {
+			continue
+		}
+
+		// Persona-only matching: ONLY if skill has no tags defined
+		// This prevents backend skills from being included in frontend tasks
+		// just because they share the same persona
+		if len(skill.Tags) == 0 && !tagMatched {
+			for _, sp := range skill.Personas {
+				if strings.EqualFold(sp, persona) {
+					matches = append(matches, skill)
+					seen[skill.Name] = true
+					break
+				}
 			}
 		}
 	}
