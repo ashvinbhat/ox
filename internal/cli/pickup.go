@@ -87,10 +87,10 @@ func runPickup(cmd *cobra.Command, args []string) error {
 		rc := cfg.Repos[repoName]
 		repoPath := filepath.Join(cfg.Home, "repos", repoName)
 
-		// Fetch latest
+		// Fetch latest - must succeed to ensure worktree starts from fresh code
 		fmt.Printf("Fetching %s...\n", repoName)
 		if err := gitutil.Fetch(repoPath); err != nil {
-			fmt.Printf("Warning: fetch failed: %v\n", err)
+			return fmt.Errorf("fetch %s failed (need latest origin/main): %w", repoName, err)
 		}
 
 		// Create worktree
