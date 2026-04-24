@@ -10,10 +10,21 @@ import (
 
 // RepoConfig holds per-repo configuration.
 type RepoConfig struct {
-	URL        string   `yaml:"url"`
-	BaseBranch string   `yaml:"base_branch,omitempty"`
-	CopyFiles  []string `yaml:"copy_files,omitempty"`  // Files/dirs to copy from repo to worktree
-	PostSetup  string   `yaml:"post_setup,omitempty"`  // Command to run after worktree setup
+	URL          string   `yaml:"url"`
+	BaseBranch   string   `yaml:"base_branch,omitempty"`
+	CopyFiles    []string `yaml:"copy_files,omitempty"`    // Files/dirs to copy from repo to worktree
+	PostSetup    string   `yaml:"post_setup,omitempty"`    // Command to run after worktree setup
+	BuildCommand string   `yaml:"build_command,omitempty"` // Command to verify build (for merge gates)
+}
+
+// MultiConfig holds multi-agent orchestration settings.
+type MultiConfig struct {
+	DefaultModel      string  `yaml:"default_model,omitempty"`             // Default model for builders (e.g. "sonnet")
+	CaptainModel      string  `yaml:"captain_model,omitempty"`             // Model for captain (e.g. "opus")
+	MaxAgents         int     `yaml:"max_agents,omitempty"`                // Maximum concurrent agents
+	MaxBudgetPerAgent float64 `yaml:"max_budget_per_agent_usd,omitempty"`  // Default budget cap per agent
+	MaxTotalBudget    float64 `yaml:"max_total_budget_usd,omitempty"`      // Total budget cap
+	DefaultMaxTurns   int     `yaml:"default_max_turns,omitempty"`         // Default max turns per agent
 }
 
 // Defaults holds default settings.
@@ -31,6 +42,7 @@ type Config struct {
 	DashboardPort    int                    `yaml:"dashboard_port,omitempty"`
 	SlackWebhookURL  string                 `yaml:"slack_webhook_url,omitempty"`
 	FeedbackPassword string                 `yaml:"feedback_password,omitempty"`
+	Multi            MultiConfig            `yaml:"multi,omitempty"`
 	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
 }
 
@@ -121,6 +133,7 @@ func EnsureDirs(oxHome string) error {
 		filepath.Join(oxHome, "skills"),
 		filepath.Join(oxHome, "personas"),
 		filepath.Join(oxHome, "hooks"),
+		filepath.Join(oxHome, "agents"),
 	}
 
 	for _, dir := range dirs {
