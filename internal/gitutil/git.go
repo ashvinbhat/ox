@@ -72,6 +72,40 @@ func Push(repoPath, branch string) error {
 	return Run(repoPath, "push", "-u", "origin", branch)
 }
 
+// MergeNoFF merges a branch with --no-ff (creates a merge commit).
+func MergeNoFF(repoPath, branch, message string) error {
+	return Run(repoPath, "merge", "--no-ff", "-m", message, branch)
+}
+
+// MergeAbort aborts an in-progress merge.
+func MergeAbort(repoPath string) error {
+	return Run(repoPath, "merge", "--abort")
+}
+
+// HasUncommittedChanges checks if the working tree has uncommitted changes.
+func HasUncommittedChanges(repoPath string) bool {
+	output, err := RunOutput(repoPath, "status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(output) != ""
+}
+
+// LogOneline returns the last N commit messages in oneline format.
+func LogOneline(repoPath string, n int) (string, error) {
+	return RunOutput(repoPath, "log", "--oneline", fmt.Sprintf("-n%d", n))
+}
+
+// DiffStat returns the diff stat between two refs.
+func DiffStat(repoPath, from, to string) (string, error) {
+	return RunOutput(repoPath, "diff", "--stat", from+".."+to)
+}
+
+// Checkout switches to a branch in a worktree.
+func Checkout(repoPath, branch string) error {
+	return Run(repoPath, "checkout", branch)
+}
+
 // Run executes a git command.
 func Run(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
