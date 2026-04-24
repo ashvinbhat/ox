@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	multiRepos  []string
-	multiDryRun bool
-	multiNoTui  bool
+	multiRepos    []string
+	multiDryRun   bool
+	multiNoTui    bool
+	multiNoReview bool
 )
 
 var multiCmd = &cobra.Command{
@@ -27,9 +28,11 @@ var multiCmd = &cobra.Command{
 
 Flow:
 1. Captain analyzes the task and codebase, produces a plan
-2. Plan is shown to you for approval
-3. On approval, builder agents are spawned in tmux sessions
-4. Use 'ox agents' to monitor, 'ox peek/msg/attach/kill' to interact
+2. Review panel (architect, guardian, pragmatist) critiques the plan in parallel
+3. Captain revises the plan and produces a decision log
+4. You review the plan + decisions and approve
+5. Builder agents are spawned in tmux sessions
+6. Use 'ox agents' to monitor, 'ox peek/msg/attach/kill' to interact
 
 Examples:
   ox multi 18 --repos backend              # Plan and execute
@@ -122,6 +125,47 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parse plan: %w", err)
 	}
 
+	// Display initial plan
+	agent.DisplayPlan(plan)
+
+	// Step 4: Review panel (unless --no-review)
+	if !multiNoReview {
+		reviewModel := cfg.Multi.DefaultModel
+		if reviewModel == "" {
+			reviewModel = "sonnet"
+		}
+
+		fmt.Println("Step 2: Review panel (3 reviewers in parallel)...")
+		reviewResults, err := agent.RunReviewPanel(agentsDir, planPath, multiRepos, cfg.Home, reviewModel)
+		if err != nil {
+			fmt.Printf("Warning: review panel error: %v\n", err)
+		} else {
+			agent.DisplayReviewSummary(reviewResults)
+		}
+
+		// Step 5: Captain revision
+		fmt.Println("\nStep 3: Captain revising plan based on reviews...")
+		if err := agent.RunCaptainRevision(agentsDir, multiRepos, cfg.Home, captainModel); err != nil {
+			fmt.Printf("Warning: captain revision error: %v\n", err)
+		}
+
+		// Re-parse revised plan
+		plan, err = agent.ParsePlan(planPath)
+		if err != nil {
+			return fmt.Errorf("parse revised plan: %w", err)
+		}
+
+		// Show decision log if it exists
+		decisionsPath := filepath.Join(agentsDir, "decisions.md")
+		if data, err := os.ReadFile(decisionsPath); err == nil {
+			fmt.Printf("\n📓 Decision Log:\n%s\n", string(data))
+		}
+
+		// Display revised plan
+		fmt.Println("\n--- Revised Plan ---")
+		agent.DisplayPlan(plan)
+	}
+
 	// Validate
 	issues := agent.ValidatePlan(plan, multiRepos)
 	if len(issues) > 0 {
@@ -131,9 +175,6 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println()
 	}
-
-	// Display plan
-	agent.DisplayPlan(plan)
 
 	if multiDryRun {
 		fmt.Println("Dry run — plan saved but no agents spawned.")
@@ -159,7 +200,13 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Step 5: Spawn builders
+	// Step 5: Create integration worktrees
+	fmt.Println("\nCreating integration branch...")
+	if err := mgr.CreateIntegrationWorktrees(t.ID, t.Seq, t.Title, multiRepos); err != nil {
+		return fmt.Errorf("create integration worktrees: %w", err)
+	}
+
+	// Step 6: Spawn builders
 	if err := spawnFromPlan(mgr, cfg, t.ID, t.Seq, plan, agentsDir); err != nil {
 		return err
 	}
@@ -247,6 +294,7 @@ func init() {
 	multiCmd.Flags().StringSliceVar(&multiRepos, "repos", nil, "Repos to include (required)")
 	multiCmd.Flags().BoolVar(&multiDryRun, "dry-run", false, "Plan only, don't spawn agents")
 	multiCmd.Flags().BoolVar(&multiNoTui, "no-tui", false, "Skip TUI after spawning")
+	multiCmd.Flags().BoolVar(&multiNoReview, "no-review", false, "Skip review panel")
 	multiCmd.MarkFlagRequired("repos")
 
 	rootCmd.AddCommand(multiCmd)

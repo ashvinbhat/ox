@@ -47,12 +47,14 @@ type Agent struct {
 
 // AgentRegistry tracks all agents for a given task.
 type AgentRegistry struct {
-	TaskID    string    `json:"task_id"`
-	TaskTitle string    `json:"task_title"`
-	TaskSeq   int       `json:"task_seq"`
-	CreatedAt time.Time `json:"created_at"`
-	Agents    []*Agent  `json:"agents"`
-	Captain   string    `json:"captain,omitempty"`
+	TaskID              string            `json:"task_id"`
+	TaskTitle           string            `json:"task_title"`
+	TaskSeq             int               `json:"task_seq"`
+	CreatedAt           time.Time         `json:"created_at"`
+	Agents              []*Agent          `json:"agents"`
+	Captain             string            `json:"captain,omitempty"`
+	IntegrationBranches map[string]string `json:"integration_branches,omitempty"` // repo → worktree path
+	IntegrationBranch   string            `json:"integration_branch,omitempty"`   // branch name (e.g., ox/18-jwt-auth)
 }
 
 // Manager manages agent lifecycle.
@@ -242,6 +244,77 @@ func (m *Manager) ReconcileStatus(taskID string) error {
 		return m.SaveRegistry(taskID, reg)
 	}
 	return nil
+}
+
+// CreateIntegrationWorktrees creates worktrees for the integration branch in each repo.
+// This is the branch that agent work gets merged into, and ultimately becomes the PR branch.
+func (m *Manager) CreateIntegrationWorktrees(taskID string, taskSeq int, taskTitle string, repos []string) error {
+	reg, err := m.LoadRegistry(taskID)
+	if err != nil {
+		return err
+	}
+
+	if reg.IntegrationBranches == nil {
+		reg.IntegrationBranches = make(map[string]string)
+	}
+
+	slug := slugify(taskTitle)
+	branchName := fmt.Sprintf("ox/%d-%s", taskSeq, slug)
+	reg.IntegrationBranch = branchName
+
+	for _, repoName := range repos {
+		rc, exists := m.cfg.Repos[repoName]
+		if !exists {
+			continue
+		}
+		repoPath := filepath.Join(m.oxHome, "repos", repoName)
+
+		// Fetch latest
+		if err := gitutil.Fetch(repoPath); err != nil {
+			return fmt.Errorf("fetch %s: %w", repoName, err)
+		}
+
+		// Create integration worktree
+		worktreeDir := filepath.Join(m.oxHome, "worktrees", repoName, fmt.Sprintf("%d-integration", taskSeq))
+		os.MkdirAll(filepath.Dir(worktreeDir), 0o755)
+
+		baseBranch := rc.BaseBranch
+		if baseBranch == "" {
+			baseBranch = "origin/main"
+		}
+		if !strings.HasPrefix(baseBranch, "origin/") && !strings.Contains(baseBranch, "/") {
+			baseBranch = "origin/" + baseBranch
+		}
+
+		if err := gitutil.CreateWorktreeFromRef(repoPath, worktreeDir, branchName, baseBranch); err != nil {
+			return fmt.Errorf("create integration worktree for %s: %w", repoName, err)
+		}
+
+		reg.IntegrationBranches[repoName] = worktreeDir
+		fmt.Printf("  Integration worktree: %s → %s\n", repoName, branchName)
+	}
+
+	return m.SaveRegistry(taskID, reg)
+}
+
+// slugify converts a title to a short kebab-case slug.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	s = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '-'
+	}, s)
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if len(s) > 30 {
+		s = s[:30]
+		s = strings.TrimRight(s, "-")
+	}
+	return s
 }
 
 // SpawnAgent creates a worktree, generates context, starts a tmux session, and registers the agent.

@@ -12,29 +12,34 @@ import (
 
 // MergeResult tracks the outcome of merging one agent's work.
 type MergeResult struct {
-	AgentID   string
-	Status    string // "merged", "skipped", "conflict", "build_failed"
-	Error     string
-	FileStat  string // git diff --stat output
-	Duration  time.Duration
+	AgentID  string
+	Status   string // "merged", "skipped", "conflict", "build_failed"
+	Error    string
+	FileStat string // git diff --stat output
+	Duration time.Duration
 }
 
 // MergeReport is the full merge pipeline summary.
 type MergeReport struct {
-	TaskID      string
-	TaskSeq     int
-	Results     []MergeResult
-	TotalMerged int
-	TotalFailed int
-	TotalSkipped int
+	TaskID            string
+	TaskSeq           int
+	IntegrationBranch string
+	Results           []MergeResult
+	TotalMerged       int
+	TotalFailed       int
+	TotalSkipped      int
 }
 
 // MergePipeline runs the sequential merge pipeline for a task.
-// It merges each done agent's branch into the integration branch, running build gates between merges.
+// It merges each done agent's branch into the integration worktree, running build gates between merges.
 func MergePipeline(mgr *Manager, cfg *config.Config, taskID string, skipAgents map[string]bool) (*MergeReport, error) {
 	reg, err := mgr.LoadRegistry(taskID)
 	if err != nil {
 		return nil, fmt.Errorf("load registry: %w", err)
+	}
+
+	if len(reg.IntegrationBranches) == 0 {
+		return nil, fmt.Errorf("no integration worktrees found — was this task started with 'ox multi'?")
 	}
 
 	// Load plan for dependency ordering
@@ -50,14 +55,14 @@ func MergePipeline(mgr *Manager, cfg *config.Config, taskID string, skipAgents m
 	}
 
 	report := &MergeReport{
-		TaskID:  taskID,
-		TaskSeq: reg.TaskSeq,
+		TaskID:            taskID,
+		TaskSeq:           reg.TaskSeq,
+		IntegrationBranch: reg.IntegrationBranch,
 	}
 
 	for _, a := range orderedAgents {
 		// Skip non-done agents
 		if a.Status != StatusDone && a.Status != StatusKilled {
-			// Check if agent is still running — it hasn't finished yet
 			if a.Status == StatusRunning || a.Status == StatusPending {
 				report.Results = append(report.Results, MergeResult{
 					AgentID: a.ID,
@@ -85,8 +90,20 @@ func MergePipeline(mgr *Manager, cfg *config.Config, taskID string, skipAgents m
 			continue
 		}
 
+		// Find integration worktree for this agent's repo
+		integrationPath, exists := reg.IntegrationBranches[a.Repo]
+		if !exists {
+			report.Results = append(report.Results, MergeResult{
+				AgentID: a.ID,
+				Status:  "skipped",
+				Error:   fmt.Sprintf("no integration worktree for repo %q", a.Repo),
+			})
+			report.TotalSkipped++
+			continue
+		}
+
 		start := time.Now()
-		result := mergeAgent(cfg, a)
+		result := mergeAgentInto(cfg, a, integrationPath)
 		result.Duration = time.Since(start)
 		report.Results = append(report.Results, result)
 
@@ -95,7 +112,6 @@ func MergePipeline(mgr *Manager, cfg *config.Config, taskID string, skipAgents m
 			report.TotalMerged++
 		case "conflict", "build_failed":
 			report.TotalFailed++
-			// Stop on first failure — don't merge more on top of a broken state
 			return report, fmt.Errorf("merge stopped: %s failed (%s)", a.ID, result.Status)
 		default:
 			report.TotalSkipped++
@@ -105,80 +121,36 @@ func MergePipeline(mgr *Manager, cfg *config.Config, taskID string, skipAgents m
 	return report, nil
 }
 
-func mergeAgent(cfg *config.Config, a *Agent) MergeResult {
+func mergeAgentInto(cfg *config.Config, a *Agent, integrationPath string) MergeResult {
 	result := MergeResult{AgentID: a.ID}
 
-	// Find the integration worktree (the main task worktree)
-	// Agent worktrees are at: ~/.ox/worktrees/<repo>/<taskseq>-<agentid>/
-	// The integration branch should be checked out in the base repo
-	// We need to find a worktree for the same repo that's the integration target
+	rc := cfg.Repos[a.Repo]
 
-	// For now, merge into the repo's main worktree
-	// The agent's worktree path tells us the repo path
-	repoName := a.Repo
-	rc, exists := cfg.Repos[repoName]
-	if !exists {
-		result.Status = "skipped"
-		result.Error = fmt.Sprintf("repo %q not in config", repoName)
-		return result
-	}
-
-	// Find repo base path from worktree path
-	// Worktree: ~/.ox/worktrees/<repo>/<taskseq>-<agentid>/
-	// Repo: ~/.ox/repos/<repo>/
-	worktreePath := a.WorktreePath
-	// We merge in the agent's own worktree's repo context
-	// First, get the diff stat
-	stat, _ := gitutil.DiffStat(worktreePath, "HEAD~1", "HEAD")
+	// Get diff stat from agent's branch
+	stat, _ := gitutil.DiffStat(a.WorktreePath, "HEAD~1", "HEAD")
 	result.FileStat = stat
 
-	// The integration target: we merge agent branch into the base branch
-	// Find the base repo path
-	parts := strings.Split(worktreePath, "/worktrees/")
-	if len(parts) < 2 {
-		result.Status = "skipped"
-		result.Error = "cannot determine repo path"
-		return result
-	}
-	basePath := parts[0] + "/repos/" + repoName
-
-	// Get base branch
-	baseBranch := "main"
-	if rc.BaseBranch != "" {
-		baseBranch = rc.BaseBranch
-	}
-
-	// Create integration branch if it doesn't exist
-	integrationBranch := fmt.Sprintf("ox/%d-integration", a.TaskSeq)
-	// Try to checkout or create integration branch in base repo
-	_ = gitutil.Run(basePath, "checkout", "-B", integrationBranch, "origin/"+baseBranch)
-
-	// Merge agent's branch
+	// Merge agent's branch into the integration worktree
 	mergeMsg := fmt.Sprintf("Merge agent: %s — %s", a.ID, truncate(a.SubtaskDesc, 60))
-	if err := gitutil.MergeNoFF(basePath, a.BranchName, mergeMsg); err != nil {
-		// Check if it's a merge conflict
-		if gitutil.HasUncommittedChanges(basePath) {
-			gitutil.MergeAbort(basePath)
-			result.Status = "conflict"
-			result.Error = err.Error()
-		} else {
-			result.Status = "conflict"
-			result.Error = err.Error()
+	if err := gitutil.MergeNoFF(integrationPath, a.BranchName, mergeMsg); err != nil {
+		if gitutil.HasUncommittedChanges(integrationPath) {
+			gitutil.MergeAbort(integrationPath)
 		}
+		result.Status = "conflict"
+		result.Error = err.Error()
 		return result
 	}
 
 	// Run build gate if configured
-	if rc.BuildCommand != "" {
+	if rc != nil && rc.BuildCommand != "" {
 		cmd := exec.Command("sh", "-c", rc.BuildCommand)
-		cmd.Dir = basePath
+		cmd.Dir = integrationPath
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			// Build failed — abort the merge
-			// Reset to before the merge
-			gitutil.Run(basePath, "reset", "--hard", "HEAD~1")
+			// Build failed — undo the merge
+			gitutil.Run(integrationPath, "reset", "--hard", "HEAD~1")
 			result.Status = "build_failed"
-			result.Error = fmt.Sprintf("build command failed: %s\n%s", err, lastLines(string(output), 10))
+			result.Error = fmt.Sprintf("build failed: %s\n%s", err, lastLines(string(output), 10))
 			return result
 		}
 	}
@@ -189,7 +161,11 @@ func mergeAgent(cfg *config.Config, a *Agent) MergeResult {
 
 // DisplayReport prints the merge report.
 func DisplayReport(report *MergeReport) {
-	fmt.Printf("\n📊 Merge Report — Task #%d\n\n", report.TaskSeq)
+	fmt.Printf("\n📊 Merge Report — Task #%d\n", report.TaskSeq)
+	if report.IntegrationBranch != "" {
+		fmt.Printf("   Branch: %s\n", report.IntegrationBranch)
+	}
+	fmt.Println()
 
 	for _, r := range report.Results {
 		icon := "?"
@@ -198,9 +174,7 @@ func DisplayReport(report *MergeReport) {
 			icon = "✓"
 		case "skipped":
 			icon = "○"
-		case "conflict":
-			icon = "✗"
-		case "build_failed":
+		case "conflict", "build_failed":
 			icon = "✗"
 		}
 
@@ -224,17 +198,20 @@ func DisplayReport(report *MergeReport) {
 
 	fmt.Printf("\nTotal: %d merged, %d failed, %d skipped\n",
 		report.TotalMerged, report.TotalFailed, report.TotalSkipped)
+
+	if report.IntegrationBranch != "" && report.TotalMerged > 0 {
+		fmt.Printf("\nAll merged into branch: %s\n", report.IntegrationBranch)
+		fmt.Println("Push this branch and create a PR to main.")
+	}
 }
 
 // topologicalSort orders agents by dependencies (agents with no deps first).
 func topologicalSort(agents []*Agent, plan *Plan) []*Agent {
-	// Build dependency map from plan
 	depMap := make(map[string][]string)
 	for _, pa := range plan.Agents {
 		depMap[pa.ID] = pa.DependsOn
 	}
 
-	// Map agent IDs to agent objects
 	agentMap := make(map[string]*Agent)
 	for _, a := range agents {
 		agentMap[a.ID] = a
@@ -257,12 +234,10 @@ func topologicalSort(agents []*Agent, plan *Plan) []*Agent {
 		}
 	}
 
-	// Visit all agents from the plan order
 	for _, pa := range plan.Agents {
 		visit(pa.ID)
 	}
 
-	// Add any agents not in the plan
 	for _, a := range agents {
 		if !visited[a.ID] {
 			sorted = append(sorted, a)

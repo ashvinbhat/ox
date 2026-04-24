@@ -68,7 +68,11 @@ func runMerge(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("🔀 Merging agents for task #%d: %s\n\n", reg.TaskSeq, reg.TaskTitle)
+	fmt.Printf("🔀 Merging agents for task #%d: %s\n", reg.TaskSeq, reg.TaskTitle)
+	if reg.IntegrationBranch != "" {
+		fmt.Printf("   Into branch: %s\n", reg.IntegrationBranch)
+	}
+	fmt.Println()
 
 	// Show what we're about to merge
 	doneCount := 0
