@@ -160,7 +160,15 @@ func runMulti(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 5: Spawn builders
-	return spawnFromPlan(mgr, cfg, t.ID, t.Seq, plan, agentsDir)
+	if err := spawnFromPlan(mgr, cfg, t.ID, t.Seq, plan, agentsDir); err != nil {
+		return err
+	}
+
+	// Step 6: Launch TUI unless --no-tui
+	if !multiNoTui {
+		return LaunchTUI(mgr, t.ID)
+	}
+	return nil
 }
 
 func spawnFromPlan(mgr *agent.Manager, cfg *config.Config, taskID string, taskSeq int, plan *agent.Plan, agentsDir string) error {
