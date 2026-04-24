@@ -263,6 +263,12 @@ func (m *Manager) CreateIntegrationWorktrees(taskID string, taskSeq int, taskTit
 	reg.IntegrationBranch = branchName
 
 	for _, repoName := range repos {
+		// Skip repos that already have integration branches (from existing workspace)
+		if _, exists := reg.IntegrationBranches[repoName]; exists {
+			fmt.Printf("  Integration worktree: %s → %s (existing)\n", repoName, reg.IntegrationBranch)
+			continue
+		}
+
 		rc, exists := m.cfg.Repos[repoName]
 		if !exists {
 			continue
@@ -291,7 +297,7 @@ func (m *Manager) CreateIntegrationWorktrees(taskID string, taskSeq int, taskTit
 		}
 
 		reg.IntegrationBranches[repoName] = worktreeDir
-		fmt.Printf("  Integration worktree: %s → %s\n", repoName, branchName)
+		fmt.Printf("  Integration worktree: %s → %s (new)\n", repoName, branchName)
 	}
 
 	return m.SaveRegistry(taskID, reg)

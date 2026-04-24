@@ -10,6 +10,8 @@ import (
 	"github.com/ashvinbhat/ox/internal/agent"
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/filelock"
+	"github.com/ashvinbhat/ox/internal/gitutil"
+	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
@@ -75,14 +77,74 @@ func runMulti(cmd *cobra.Command, args []string) error {
 	agentsDir := mgr.AgentsDir(t.ID)
 	os.MkdirAll(agentsDir, 0o755)
 
-	// Initialize registry
-	reg, err := mgr.InitSession(t.ID, t.Title, t.Seq)
-	if err != nil {
-		return fmt.Errorf("init agent session: %w", err)
-	}
-	_ = reg
+	// Check for existing workspace (from ox pickup)
+	existingWs, wsErr := workspace.Open(cfg.Home, taskRef)
 
-	fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n\n", t.Seq, t.Title)
+	// Initialize or load registry
+	reg, regErr := mgr.LoadRegistry(t.ID)
+	if regErr != nil {
+		reg, err = mgr.InitSession(t.ID, t.Title, t.Seq)
+		if err != nil {
+			return fmt.Errorf("init agent session: %w", err)
+		}
+	}
+
+	// If existing workspace found, adopt its worktrees as integration branches
+	if wsErr == nil && existingWs != nil {
+		fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n", t.Seq, t.Title)
+		fmt.Printf("   Found existing workspace: %s\n", existingWs.Slug)
+
+		if reg.IntegrationBranches == nil {
+			reg.IntegrationBranches = make(map[string]string)
+		}
+
+		for _, repoName := range existingWs.Repos {
+			// Resolve symlink to get the actual worktree path
+			linkPath := filepath.Join(existingWs.Path, repoName)
+			worktreePath, err := os.Readlink(linkPath)
+			if err != nil {
+				// Not a symlink, might be a real directory
+				worktreePath = linkPath
+			}
+			// Make absolute if relative
+			if !filepath.IsAbs(worktreePath) {
+				worktreePath = filepath.Join(existingWs.Path, worktreePath)
+			}
+
+			// Get the branch name from the worktree
+			branchName, err := gitutil.CurrentBranch(worktreePath)
+			if err != nil {
+				fmt.Printf("   Warning: could not detect branch for %s: %v\n", repoName, err)
+				continue
+			}
+
+			reg.IntegrationBranches[repoName] = worktreePath
+			if reg.IntegrationBranch == "" {
+				reg.IntegrationBranch = branchName
+			}
+
+			fmt.Printf("   Using %s → %s (branch: %s)\n", repoName, worktreePath, branchName)
+		}
+
+		// Add any repos from --repos that aren't in the workspace
+		for _, r := range multiRepos {
+			found := false
+			for _, wr := range existingWs.Repos {
+				if wr == r {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("   Note: repo %q not in existing workspace, will create new worktree\n", r)
+			}
+		}
+
+		mgr.SaveRegistry(t.ID, reg)
+		fmt.Println()
+	} else {
+		fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n\n", t.Seq, t.Title)
+	}
 
 	// Step 1: Generate captain context
 	fmt.Println("Step 1: Captain planning...")
