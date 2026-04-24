@@ -1,0 +1,245 @@
+package cli
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/ashvinbhat/ox/internal/agent"
+	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/filelock"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/spf13/cobra"
+)
+
+var (
+	multiRepos  []string
+	multiDryRun bool
+	multiNoTui  bool
+)
+
+var multiCmd = &cobra.Command{
+	Use:   "multi <task-id>",
+	Short: "Launch multi-agent orchestration for a task",
+	Long: `Runs a captain agent to plan the work, then spawns builder agents to execute in parallel.
+
+Flow:
+1. Captain analyzes the task and codebase, produces a plan
+2. Plan is shown to you for approval
+3. On approval, builder agents are spawned in tmux sessions
+4. Use 'ox agents' to monitor, 'ox peek/msg/attach/kill' to interact
+
+Examples:
+  ox multi 18 --repos backend              # Plan and execute
+  ox multi 18 --repos backend,frontend     # Multi-repo task
+  ox multi 18 --repos backend --dry-run    # Plan only, don't spawn`,
+	Args: cobra.ExactArgs(1),
+	RunE: runMulti,
+}
+
+func runMulti(cmd *cobra.Command, args []string) error {
+	cfg := requireConfig()
+	taskRef := args[0]
+
+	if len(multiRepos) == 0 {
+		return fmt.Errorf("at least one repo required (use --repos)")
+	}
+
+	// Validate repos
+	for _, r := range multiRepos {
+		if _, exists := cfg.Repos[r]; !exists {
+			return fmt.Errorf("repo %q not registered (run 'ox repo list')", r)
+		}
+	}
+
+	// Load task
+	yokeClient, err := yokehelper.NewClient()
+	if err != nil {
+		return fmt.Errorf("open yoke: %w", err)
+	}
+	defer yokeClient.Close()
+
+	t, err := yokeClient.Get(taskRef)
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+
+	mgr := agent.NewManager(cfg.Home, cfg)
+
+	// Create agents directory
+	agentsDir := mgr.AgentsDir(t.ID)
+	os.MkdirAll(agentsDir, 0o755)
+
+	// Initialize registry
+	reg, err := mgr.InitSession(t.ID, t.Title, t.Seq)
+	if err != nil {
+		return fmt.Errorf("init agent session: %w", err)
+	}
+	_ = reg
+
+	fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n\n", t.Seq, t.Title)
+
+	// Step 1: Generate captain context
+	fmt.Println("Step 1: Captain planning...")
+	captainCtx := mgr.GenerateCaptainContext(t.Seq, t.Title, t.Body, multiRepos, agentsDir)
+	agentsmdPath := filepath.Join(agentsDir, "AGENTS.md")
+	if err := os.WriteFile(agentsmdPath, []byte(captainCtx), 0o644); err != nil {
+		return fmt.Errorf("write captain AGENTS.md: %w", err)
+	}
+	// Symlink CLAUDE.md
+	claudePath := filepath.Join(agentsDir, "CLAUDE.md")
+	os.Remove(claudePath)
+	os.Symlink("AGENTS.md", claudePath)
+
+	// Step 2: Run captain to produce plan
+	captainModel := cfg.Multi.CaptainModel
+	if captainModel == "" {
+		captainModel = "opus"
+	}
+	maxTurns := 25
+	maxBudget := 10.0
+	if cfg.Multi.MaxBudgetPerAgent > 0 {
+		maxBudget = cfg.Multi.MaxBudgetPerAgent * 2 // Captain gets more budget
+	}
+
+	fmt.Printf("Running captain (model: %s, max-turns: %d)...\n\n", captainModel, maxTurns)
+
+	if err := mgr.RunCaptainPlanning(agentsDir, multiRepos, captainModel, maxTurns, maxBudget); err != nil {
+		fmt.Printf("\nWarning: captain exited with error: %v\n", err)
+		// Continue anyway — plan.md might still have been written
+	}
+
+	// Step 3: Parse plan
+	planPath := filepath.Join(agentsDir, "plan.md")
+	if _, err := os.Stat(planPath); os.IsNotExist(err) {
+		return fmt.Errorf("captain did not produce a plan at %s", planPath)
+	}
+
+	plan, err := agent.ParsePlan(planPath)
+	if err != nil {
+		return fmt.Errorf("parse plan: %w", err)
+	}
+
+	// Validate
+	issues := agent.ValidatePlan(plan, multiRepos)
+	if len(issues) > 0 {
+		fmt.Println("\n⚠️  Plan issues:")
+		for _, issue := range issues {
+			fmt.Printf("  - %s\n", issue)
+		}
+		fmt.Println()
+	}
+
+	// Display plan
+	agent.DisplayPlan(plan)
+
+	if multiDryRun {
+		fmt.Println("Dry run — plan saved but no agents spawned.")
+		fmt.Printf("Plan: %s\n", planPath)
+		return nil
+	}
+
+	// Step 4: Ask for approval
+	fmt.Print("Proceed with spawning agents? [y/n/edit] ")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	switch input {
+	case "y", "yes":
+		// Continue
+	case "edit":
+		fmt.Printf("\nEdit the plan at: %s\n", planPath)
+		fmt.Println("Then run: ox multi", taskRef, "--repos", strings.Join(multiRepos, ","), "--from-plan")
+		return nil
+	default:
+		fmt.Println("Aborted.")
+		return nil
+	}
+
+	// Step 5: Spawn builders
+	return spawnFromPlan(mgr, cfg, t.ID, t.Seq, plan, agentsDir)
+}
+
+func spawnFromPlan(mgr *agent.Manager, cfg *config.Config, taskID string, taskSeq int, plan *agent.Plan, agentsDir string) error {
+	lockMgr := filelock.NewManager(agentsDir)
+
+	fmt.Printf("\nSpawning %d agents...\n\n", len(plan.Agents))
+
+	// Determine which agents can start immediately (no dependencies)
+	for _, pa := range plan.Agents {
+		// Check if dependencies are met (for now, skip agents with deps on unfinished agents)
+		canStart := true
+		for _, dep := range pa.DependsOn {
+			// Check if dependency agent is done
+			depAgent, _ := mgr.GetAgent(taskID, dep)
+			if depAgent == nil || depAgent.Status != agent.StatusDone {
+				canStart = false
+				break
+			}
+		}
+
+		a := &agent.Agent{
+			ID:          pa.ID,
+			TaskID:      taskID,
+			TaskSeq:     taskSeq,
+			SubtaskDesc: pa.Description,
+			Persona:     pa.Persona,
+			Model:       pa.Model,
+			Repo:        pa.Repo,
+			FileLocks:   pa.Files,
+		}
+
+		// Apply config defaults
+		if a.Model == "" && cfg.Multi.DefaultModel != "" {
+			a.Model = cfg.Multi.DefaultModel
+		}
+		if cfg.Multi.DefaultMaxTurns > 0 {
+			a.MaxTurns = cfg.Multi.DefaultMaxTurns
+		}
+		if cfg.Multi.MaxBudgetPerAgent > 0 {
+			a.MaxBudget = cfg.Multi.MaxBudgetPerAgent
+		}
+
+		// Acquire file locks
+		if len(pa.Files) > 0 {
+			if err := lockMgr.Acquire(pa.ID, pa.Files); err != nil {
+				fmt.Printf("  ⚠️  %s: lock conflict: %v (skipped)\n", pa.ID, err)
+				continue
+			}
+		}
+
+		if !canStart {
+			a.Status = agent.StatusPending
+			mgr.RegisterAgent(taskID, a)
+			fmt.Printf("  ○ %s: queued (waiting for %s)\n", pa.ID, strings.Join(pa.DependsOn, ", "))
+			continue
+		}
+
+		if err := mgr.SpawnAgent(taskID, taskSeq, a); err != nil {
+			fmt.Printf("  ✗ %s: spawn failed: %v\n", pa.ID, err)
+			continue
+		}
+		fmt.Printf("  ● %s: spawned (%s in %s)\n", pa.ID, a.Persona, a.Repo)
+	}
+
+	fmt.Println("\nAgents running. Use these commands to manage:")
+	fmt.Println("  ox agents       # list all agents")
+	fmt.Println("  ox peek <id>    # view agent output")
+	fmt.Println("  ox msg <id> ..  # send message")
+	fmt.Println("  ox attach <id>  # take over session")
+	fmt.Println("  ox kill <id>    # terminate agent")
+
+	return nil
+}
+
+func init() {
+	multiCmd.Flags().StringSliceVar(&multiRepos, "repos", nil, "Repos to include (required)")
+	multiCmd.Flags().BoolVar(&multiDryRun, "dry-run", false, "Plan only, don't spawn agents")
+	multiCmd.Flags().BoolVar(&multiNoTui, "no-tui", false, "Skip TUI after spawning")
+	multiCmd.MarkFlagRequired("repos")
+
+	rootCmd.AddCommand(multiCmd)
+}
