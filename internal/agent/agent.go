@@ -221,6 +221,8 @@ func (m *Manager) ListAllRegistries() ([]*AgentRegistry, error) {
 }
 
 // ReconcileStatus checks tmux sessions and updates agent statuses.
+// An agent is considered done if its tmux session is gone OR if Claude
+// is no longer running inside the session (shell prompt visible).
 func (m *Manager) ReconcileStatus(taskID string) error {
 	reg, err := m.LoadRegistry(taskID)
 	if err != nil {
@@ -232,7 +234,20 @@ func (m *Manager) ReconcileStatus(taskID string) error {
 		if a.Status != StatusRunning {
 			continue
 		}
+
+		isDone := false
 		if !tmuxutil.HasSession(a.TmuxSession) {
+			isDone = true
+		} else {
+			// Session exists — check if Claude is still running
+			// If the pane shows a shell prompt (➜ or $) at the bottom, Claude has exited
+			output, err := tmuxutil.CapturePane(a.TmuxSession, 5)
+			if err == nil && isClaudeDone(output) {
+				isDone = true
+			}
+		}
+
+		if isDone {
 			now := time.Now()
 			a.Status = StatusDone
 			a.FinishedAt = &now
@@ -244,6 +259,37 @@ func (m *Manager) ReconcileStatus(taskID string) error {
 		return m.SaveRegistry(taskID, reg)
 	}
 	return nil
+}
+
+// isClaudeDone checks if Claude has exited by looking for shell prompt patterns
+// at the bottom of the captured pane output.
+func isClaudeDone(output string) bool {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		return false
+	}
+	// Check last few non-empty lines for shell prompt indicators
+	for i := len(lines) - 1; i >= 0 && i >= len(lines)-3; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		// If line contains Claude Code UI elements, it's still running
+		if strings.Contains(line, "bypass permissions") || strings.Contains(line, "Claude Code") ||
+			strings.Contains(line, "shift+tab to cycle") {
+			return false
+		}
+		// Shell prompt patterns (zsh/bash): ends with ➜, $, %, or contains them as prompts
+		if strings.HasSuffix(line, "➜") || strings.HasSuffix(line, "$ ") ||
+			strings.HasSuffix(line, "% ") || strings.HasSuffix(line, "#") {
+			return true
+		}
+		// zsh prompt like "dirname ➜" or with git branch
+		if strings.Contains(line, "➜") && !strings.Contains(line, "claude") {
+			return true
+		}
+	}
+	return false
 }
 
 // CreateIntegrationWorktrees creates worktrees for the integration branch in each repo.
@@ -407,7 +453,7 @@ func (m *Manager) SpawnAgent(taskID string, taskSeq int, agent *Agent) error {
 
 	// Wait for Claude to be ready, then send initial instruction
 	go func() {
-		kickMsg := fmt.Sprintf("You are agent '%s'. Read AGENTS.md for your full subtask. BEGIN WORKING IMMEDIATELY. Implement your subtask, commit your changes, write your output summary, then exit. Do not ask for confirmation.", agent.ID)
+		kickMsg := fmt.Sprintf("You are agent '%s'. Read AGENTS.md for your full subtask. BEGIN WORKING IMMEDIATELY. Implement your subtask, commit your changes, write your output summary. When completely done, run /exit to close this session. Do not ask for confirmation.", agent.ID)
 		waitAndSendKick(agent.TmuxSession, kickMsg)
 	}()
 
@@ -461,7 +507,7 @@ func (m *Manager) RespawnAgent(taskID string, agent *Agent) error {
 
 	// Wait for Claude to be ready, then send instruction
 	go func() {
-		kickMsg := fmt.Sprintf("You are agent '%s'. Read AGENTS.md for your subtask. Check git log — some work may already be done. Continue from where the previous session left off. BEGIN IMMEDIATELY.", agent.ID)
+		kickMsg := fmt.Sprintf("You are agent '%s'. Read AGENTS.md for your subtask. Check git log — some work may already be done. Continue from where the previous session left off. When completely done, run /exit to close this session. BEGIN IMMEDIATELY.", agent.ID)
 		waitAndSendKick(agent.TmuxSession, kickMsg)
 	}()
 
