@@ -151,7 +151,7 @@ func (m Model) inputBarView() string {
 		return inputStyle.Width(w).Render(m.textInput.View())
 	}
 
-	prompt := statusBarStyle.Render("  Press [Enter] to message · [Tab] switch · [a] attach · [x] kill · [?] help · [q] quit")
+	prompt := statusBarStyle.Render("  [Enter] message · [Tab] switch · [a] attach · [r] respawn · [x] kill · [?] help · [q] quit")
 	return lipgloss.NewStyle().Width(w).Render(prompt)
 }
 
@@ -188,7 +188,7 @@ func (m Model) helpView() string {
   Enter / i       Start typing a message
   a               Attach to agent (tmux)
   x               Kill selected agent
-  r               Refresh
+  r               Respawn dead agent / refresh
   ?               Toggle this help
   q / Ctrl+C      Quit (agents keep running)
 

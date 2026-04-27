@@ -44,6 +44,20 @@ Examples:
 	RunE: runKill,
 }
 
+var respawnCmd = &cobra.Command{
+	Use:   "respawn <agent-id>",
+	Short: "Restart a dead agent in its existing worktree",
+	Long: `Recreates the tmux session and launches Claude Code for an agent whose
+session died. The worktree, branch, and all commits are preserved —
+Claude will see the existing work and continue from where it left off.
+
+Examples:
+  ox respawn auth-api
+  ox respawn backend-data-model`,
+	Args: cobra.ExactArgs(1),
+	RunE: runRespawn,
+}
+
 var msgCmd = &cobra.Command{
 	Use:   "msg <agent-id> <message>",
 	Short: "Send a message to an agent",
@@ -126,6 +140,35 @@ func runKill(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runRespawn(cmd *cobra.Command, args []string) error {
+	cfg := requireConfig()
+	mgr := agent.NewManager(cfg.Home, cfg)
+
+	a, taskID, err := mgr.FindAgent(args[0])
+	if err != nil {
+		return err
+	}
+
+	if tmuxutil.HasSession(a.TmuxSession) {
+		return fmt.Errorf("agent %q is already running — use 'ox attach %s' instead", a.ID, a.ID)
+	}
+
+	fmt.Printf("Respawning agent %q in existing worktree...\n", a.ID)
+	fmt.Printf("  Worktree: %s\n", a.WorktreePath)
+	fmt.Printf("  Branch: %s\n", a.BranchName)
+
+	if err := mgr.RespawnAgent(taskID, a); err != nil {
+		return fmt.Errorf("respawn: %w", err)
+	}
+
+	fmt.Printf("\nAgent respawned: %s\n", a.TmuxSession)
+	fmt.Println("Claude will see existing commits and continue from where it left off.")
+	fmt.Printf("\n  ox peek %s      # view output\n", a.ID)
+	fmt.Printf("  ox attach %s    # take over session\n", a.ID)
+
+	return nil
+}
+
 func runMsg(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 	mgr := agent.NewManager(cfg.Home, cfg)
@@ -155,4 +198,5 @@ func init() {
 	rootCmd.AddCommand(peekCmd)
 	rootCmd.AddCommand(killCmd)
 	rootCmd.AddCommand(msgCmd)
+	rootCmd.AddCommand(respawnCmd)
 }

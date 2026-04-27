@@ -417,6 +417,61 @@ func (m *Manager) SpawnAgent(taskID string, taskSeq int, agent *Agent) error {
 	return m.RegisterAgent(taskID, agent)
 }
 
+// RespawnAgent restarts a dead agent in its existing worktree.
+// The worktree, branch, and any commits are preserved — only the tmux session and Claude are recreated.
+func (m *Manager) RespawnAgent(taskID string, agent *Agent) error {
+	if !tmuxutil.IsAvailable() {
+		return fmt.Errorf("tmux is not installed or not in PATH")
+	}
+
+	if agent.WorktreePath == "" {
+		return fmt.Errorf("agent %q has no worktree path", agent.ID)
+	}
+
+	// Verify worktree still exists
+	if _, err := os.Stat(agent.WorktreePath); os.IsNotExist(err) {
+		return fmt.Errorf("worktree no longer exists at %s", agent.WorktreePath)
+	}
+
+	// Kill existing session if somehow still around
+	if tmuxutil.HasSession(agent.TmuxSession) {
+		tmuxutil.KillSession(agent.TmuxSession)
+	}
+
+	// Create new tmux session in the existing worktree
+	if err := tmuxutil.NewSession(agent.TmuxSession, agent.WorktreePath); err != nil {
+		return fmt.Errorf("create tmux session: %w", err)
+	}
+
+	// Set environment variables
+	tmuxutil.SetEnv(agent.TmuxSession, "OX_AGENT_ID", agent.ID)
+	tmuxutil.SetEnv(agent.TmuxSession, "OX_TASK_ID", taskID)
+
+	// Build and send claude command
+	claudeCmd := m.buildClaudeCmd(agent)
+	if err := tmuxutil.SendKeys(agent.TmuxSession, claudeCmd); err != nil {
+		tmuxutil.KillSession(agent.TmuxSession)
+		return fmt.Errorf("launch claude: %w", err)
+	}
+
+	// Update agent status
+	m.UpdateAgent(taskID, agent.ID, func(a *Agent) {
+		a.Status = StatusRunning
+		a.SpawnedAt = time.Now()
+		a.FinishedAt = nil
+	})
+
+	// Send kick message after delay
+	go func() {
+		time.Sleep(15 * time.Second)
+		if tmuxutil.HasSession(agent.TmuxSession) {
+			tmuxutil.SendKeys(agent.TmuxSession, "Read AGENTS.md. Continue working on your subtask — some work may already be done (check git log). Pick up where the previous session left off. Begin immediately.")
+		}
+	}()
+
+	return nil
+}
+
 func (m *Manager) buildClaudeCmd(agent *Agent) string {
 	parts := []string{"claude"}
 	parts = append(parts, "--dangerously-skip-permissions")

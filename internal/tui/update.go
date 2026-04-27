@@ -135,6 +135,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showHelp = !m.showHelp
 
 	case "r":
+		// Respawn dead agent, or refresh if alive
+		if len(m.agents) > 0 && m.selected < len(m.agents) {
+			a := m.agents[m.selected]
+			if !tmuxutil.HasSession(a.TmuxSession) && a.WorktreePath != "" {
+				m.manager.RespawnAgent(m.taskID, a)
+				return m, tea.Batch(m.refreshRegistry(), m.capturePane())
+			}
+		}
 		return m, tea.Batch(m.refreshRegistry(), m.capturePane())
 	}
 
