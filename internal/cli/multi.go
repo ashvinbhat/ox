@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -143,7 +144,76 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		mgr.SaveRegistry(t.ID, reg)
 		fmt.Println()
 	} else {
-		fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n\n", t.Seq, t.Title)
+		fmt.Printf("🐂 Multi-agent orchestration for task #%d: %s\n", t.Seq, t.Title)
+		fmt.Println("   Creating workspace...")
+
+		// Create workspace (same as ox pickup)
+		ws, err := workspace.Create(cfg.Home, t.ID, t.Seq, t.Title)
+		if err != nil {
+			return fmt.Errorf("create workspace: %w", err)
+		}
+
+		if reg.IntegrationBranches == nil {
+			reg.IntegrationBranches = make(map[string]string)
+		}
+
+		for _, repoName := range multiRepos {
+			rc := cfg.Repos[repoName]
+			repoPath := filepath.Join(cfg.Home, "repos", repoName)
+
+			fmt.Printf("   Fetching %s...\n", repoName)
+			if err := gitutil.Fetch(repoPath); err != nil {
+				return fmt.Errorf("fetch %s failed: %w", repoName, err)
+			}
+
+			branchName := fmt.Sprintf("ox/%d-%s", t.Seq, slugifyAgent(t.Title))
+			worktreePath := filepath.Join(cfg.Home, "worktrees", repoName, fmt.Sprintf("%d", t.Seq))
+			os.MkdirAll(filepath.Dir(worktreePath), 0o755)
+
+			baseBranch := rc.BaseBranch
+			if baseBranch == "" {
+				baseBranch = "origin/main"
+			}
+			if !strings.HasPrefix(baseBranch, "origin/") && !strings.Contains(baseBranch, "/") {
+				baseBranch = "origin/" + baseBranch
+			}
+
+			fmt.Printf("   Creating worktree %s from %s...\n", branchName, baseBranch)
+			if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
+				os.RemoveAll(ws.Path)
+				return fmt.Errorf("create worktree for %s: %w", repoName, err)
+			}
+
+			// Copy files if configured
+			for _, file := range rc.CopyFiles {
+				src := filepath.Join(repoPath, file)
+				dst := filepath.Join(worktreePath, file)
+				copyPath(src, dst)
+			}
+
+			// Run post-setup if configured
+			if rc.PostSetup != "" {
+				fmt.Printf("   Running post-setup for %s...\n", repoName)
+				postCmd := exec.Command("sh", "-c", rc.PostSetup)
+				postCmd.Dir = worktreePath
+				postCmd.Stdout = os.Stdout
+				postCmd.Stderr = os.Stderr
+				postCmd.Run()
+			}
+
+			// Symlink into workspace
+			ws.AddRepoLink(repoName, worktreePath)
+
+			reg.IntegrationBranches[repoName] = worktreePath
+			if reg.IntegrationBranch == "" {
+				reg.IntegrationBranch = branchName
+			}
+
+			fmt.Printf("   %s → %s (branch: %s)\n", repoName, worktreePath, branchName)
+		}
+
+		mgr.SaveRegistry(t.ID, reg)
+		fmt.Printf("   Workspace: %s\n\n", ws.Path)
 	}
 
 	// Step 1: Generate captain context
@@ -171,7 +241,17 @@ func runMulti(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Running captain (model: %s, max-turns: %d)...\n\n", captainModel, maxTurns)
 
-	if err := mgr.RunCaptainPlanning(agentsDir, multiRepos, captainModel, maxTurns, maxBudget); err != nil {
+	// Build repo dirs map (worktree paths if available, base repos as fallback)
+	// Re-read registry to get latest integration branches
+	reg, _ = mgr.LoadRegistry(t.ID)
+	repoDirs := make(map[string]string)
+	if reg != nil && reg.IntegrationBranches != nil {
+		for repo, path := range reg.IntegrationBranches {
+			repoDirs[repo] = path
+		}
+	}
+
+	if err := mgr.RunCaptainPlanning(agentsDir, multiRepos, repoDirs, captainModel, maxTurns, maxBudget); err != nil {
 		fmt.Printf("\nWarning: captain exited with error: %v\n", err)
 		// Continue anyway — plan.md might still have been written
 	}
@@ -198,7 +278,7 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Println("Step 2: Review panel (3 reviewers in parallel)...")
-		reviewResults, err := agent.RunReviewPanel(agentsDir, planPath, multiRepos, cfg.Home, reviewModel)
+		reviewResults, err := agent.RunReviewPanel(agentsDir, planPath, multiRepos, repoDirs, cfg.Home, reviewModel)
 		if err != nil {
 			fmt.Printf("Warning: review panel error: %v\n", err)
 		} else {
@@ -207,7 +287,7 @@ func runMulti(cmd *cobra.Command, args []string) error {
 
 		// Step 5: Captain revision
 		fmt.Println("\nStep 3: Captain revising plan based on reviews...")
-		if err := agent.RunCaptainRevision(agentsDir, multiRepos, cfg.Home, captainModel); err != nil {
+		if err := agent.RunCaptainRevision(agentsDir, multiRepos, repoDirs, cfg.Home, captainModel); err != nil {
 			fmt.Printf("Warning: captain revision error: %v\n", err)
 		}
 

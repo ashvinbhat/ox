@@ -79,7 +79,7 @@ Be direct. If the plan is over-complicated, say so.`,
 }
 
 // RunReviewPanel runs all reviewers in parallel against a plan.
-func RunReviewPanel(agentsDir string, planPath string, repos []string, oxHome string, model string) ([]ReviewResult, error) {
+func RunReviewPanel(agentsDir string, planPath string, repos []string, repoDirs map[string]string, oxHome string, model string) ([]ReviewResult, error) {
 	planContent, err := os.ReadFile(planPath)
 	if err != nil {
 		return nil, fmt.Errorf("read plan: %w", err)
@@ -108,7 +108,7 @@ func RunReviewPanel(agentsDir string, planPath string, repos []string, oxHome st
 
 Write your review. Be specific and actionable.`, r.Prompt, string(agentsMd), string(planContent))
 
-			content, err := runClaudeReview(agentsDir, prompt, repos, oxHome, model)
+			content, err := runClaudeReview(agentsDir, prompt, repos, repoDirs, oxHome, model)
 			results[idx] = ReviewResult{
 				Role:    r,
 				Content: content,
@@ -132,7 +132,7 @@ Write your review. Be specific and actionable.`, r.Prompt, string(agentsMd), str
 }
 
 // RunCaptainRevision has the captain revise the plan based on reviews.
-func RunCaptainRevision(agentsDir string, repos []string, oxHome string, model string) error {
+func RunCaptainRevision(agentsDir string, repos []string, repoDirs map[string]string, oxHome string, model string) error {
 	planPath := filepath.Join(agentsDir, "plan.md")
 	planContent, err := os.ReadFile(planPath)
 	if err != nil {
@@ -192,6 +192,7 @@ Be concise. Only change what the reviews justify changing.`,
 	args := []string{
 		"-p", prompt,
 		"--dangerously-skip-permissions",
+		"--verbose",
 	}
 	if model != "" {
 		args = append(args, "--model", model)
@@ -199,8 +200,11 @@ Be concise. Only change what the reviews justify changing.`,
 	args = append(args, "--max-turns", "20")
 
 	for _, repo := range repos {
-		repoPath := filepath.Join(oxHome, "repos", repo)
-		args = append(args, "--add-dir", repoPath)
+		dir, ok := repoDirs[repo]
+		if !ok {
+			dir = filepath.Join(oxHome, "repos", repo)
+		}
+		args = append(args, "--add-dir", dir)
 	}
 
 	cmd := exec.Command("claude", args...)
@@ -255,7 +259,7 @@ func DisplayReviewSummary(results []ReviewResult) {
 	}
 }
 
-func runClaudeReview(dir, prompt string, repos []string, oxHome, model string) (string, error) {
+func runClaudeReview(dir, prompt string, repos []string, repoDirs map[string]string, oxHome, model string) (string, error) {
 	args := []string{
 		"-p", prompt,
 		"--dangerously-skip-permissions",
@@ -267,8 +271,11 @@ func runClaudeReview(dir, prompt string, repos []string, oxHome, model string) (
 	args = append(args, "--max-turns", "10")
 
 	for _, repo := range repos {
-		repoPath := filepath.Join(oxHome, "repos", repo)
-		args = append(args, "--add-dir", repoPath)
+		repoDir, ok := repoDirs[repo]
+		if !ok {
+			repoDir = filepath.Join(oxHome, "repos", repo)
+		}
+		args = append(args, "--add-dir", repoDir)
 	}
 
 	cmd := exec.Command("claude", args...)

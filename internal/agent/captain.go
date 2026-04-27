@@ -82,7 +82,8 @@ func (m *Manager) GenerateCaptainContext(taskSeq int, taskTitle, taskBody string
 }
 
 // RunCaptainPlanning runs the captain agent non-interactively to produce a plan.
-func (m *Manager) RunCaptainPlanning(agentsDir string, repos []string, model string, maxTurns int, maxBudget float64) error {
+// repoDirs maps repo names to worktree paths (or base repo paths as fallback).
+func (m *Manager) RunCaptainPlanning(agentsDir string, repos []string, repoDirs map[string]string, model string, maxTurns int, maxBudget float64) error {
 	planPath := filepath.Join(agentsDir, "plan.md")
 
 	// Build claude command
@@ -91,6 +92,7 @@ func (m *Manager) RunCaptainPlanning(agentsDir string, repos []string, model str
 	args := []string{
 		"-p", prompt,
 		"--dangerously-skip-permissions",
+		"--verbose",
 	}
 
 	if model != "" {
@@ -105,8 +107,12 @@ func (m *Manager) RunCaptainPlanning(agentsDir string, repos []string, model str
 
 	// Add repo directories for the captain to explore
 	for _, repo := range repos {
-		repoPath := filepath.Join(m.oxHome, "repos", repo)
-		args = append(args, "--add-dir", repoPath)
+		// Prefer worktree path if available, fall back to base repo
+		dir, ok := repoDirs[repo]
+		if !ok {
+			dir = filepath.Join(m.oxHome, "repos", repo)
+		}
+		args = append(args, "--add-dir", dir)
 	}
 
 	cmd := exec.Command("claude", args...)
