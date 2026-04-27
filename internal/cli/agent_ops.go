@@ -193,10 +193,52 @@ func runMsg(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var btwCmd = &cobra.Command{
+	Use:   "btw <agent-id> <message>",
+	Short: "Send background context to an agent without using a turn",
+	Long: `Sends a /btw message to an agent's Claude Code session. This adds context
+to the conversation without triggering a response or consuming a turn.
+
+Use this to give agents information they should know without interrupting
+their current work.
+
+Examples:
+  ox btw auth-api "the auth table uses uuid not int for user_id"
+  ox btw backend-data-model "use Lombok @Data instead of manual getters"`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: runBtw,
+}
+
+func runBtw(cmd *cobra.Command, args []string) error {
+	cfg := requireConfig()
+	mgr := agent.NewManager(cfg.Home, cfg)
+
+	agentID := args[0]
+	message := strings.Join(args[1:], " ")
+
+	a, _, err := mgr.FindAgent(agentID)
+	if err != nil {
+		return err
+	}
+
+	if !tmuxutil.HasSession(a.TmuxSession) {
+		return fmt.Errorf("agent %q session is not running", a.ID)
+	}
+
+	btwMsg := "/btw " + message
+	if err := tmuxutil.SendKeys(a.TmuxSession, btwMsg); err != nil {
+		return fmt.Errorf("send btw: %w", err)
+	}
+
+	fmt.Printf("Sent /btw to %s: %s\n", a.ID, message)
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(peekCmd)
 	rootCmd.AddCommand(killCmd)
 	rootCmd.AddCommand(msgCmd)
 	rootCmd.AddCommand(respawnCmd)
+	rootCmd.AddCommand(btwCmd)
 }

@@ -62,14 +62,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			text := m.textInput.Value()
 			if text != "" && len(m.agents) > 0 && m.selected < len(m.agents) {
 				a := m.agents[m.selected]
+				if m.btwMode {
+					text = "/btw " + text
+				}
 				tmuxutil.SendKeys(a.TmuxSession, text)
 			}
 			m.textInput.Reset()
 			m.inputMode = false
+			m.btwMode = false
 			m.textInput.Blur()
 			return m, nil
 		case "esc":
 			m.inputMode = false
+			m.btwMode = false
 			m.textInput.Reset()
 			m.textInput.Blur()
 			return m, nil
@@ -101,6 +106,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter", "i":
 		m.inputMode = true
+		m.btwMode = false
+		m.textInput.Placeholder = "type message to agent..."
+		m.textInput.Focus()
+		return m, textinput.Blink
+
+	case "b":
+		m.inputMode = true
+		m.btwMode = true
+		m.textInput.Placeholder = "/btw context (no turn used)..."
 		m.textInput.Focus()
 		return m, textinput.Blink
 

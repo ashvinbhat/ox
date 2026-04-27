@@ -30,6 +30,7 @@ type Model struct {
 
 	textInput textinput.Model
 	inputMode bool
+	btwMode   bool // when true, input is prefixed with /btw
 
 	width  int
 	height int

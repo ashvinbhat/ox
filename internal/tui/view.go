@@ -148,10 +148,14 @@ func (m Model) inputBarView() string {
 
 	if m.inputMode {
 		m.textInput.Width = w - 4
-		return inputStyle.Width(w).Render(m.textInput.View())
+		prefix := ""
+		if m.btwMode {
+			prefix = lipgloss.NewStyle().Foreground(colorPurple).Render("/btw ") + " "
+		}
+		return inputStyle.Width(w).Render(prefix + m.textInput.View())
 	}
 
-	prompt := statusBarStyle.Render("  [Enter] message · [Tab] switch · [a] attach · [r] respawn · [x] kill · [?] help · [q] quit")
+	prompt := statusBarStyle.Render("  [Enter] message · [b] /btw · [Tab] switch · [a] attach · [r] respawn · [x] kill · [?] help · [q] quit")
 	return lipgloss.NewStyle().Width(w).Render(prompt)
 }
 
@@ -185,7 +189,8 @@ func (m Model) helpView() string {
 
   Tab / j / ↓     Select next agent
   Shift+Tab / k / ↑  Select previous agent
-  Enter / i       Start typing a message
+  Enter / i       Start typing a message (uses a turn)
+  b               Send /btw context (no turn used)
   a               Attach to agent (tmux)
   x               Kill selected agent
   r               Respawn dead agent / refresh
