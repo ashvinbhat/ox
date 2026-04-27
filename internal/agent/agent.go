@@ -405,6 +405,14 @@ func (m *Manager) SpawnAgent(taskID string, taskSeq int, agent *Agent) error {
 		return fmt.Errorf("launch claude: %w", err)
 	}
 
+	// Send initial kick message after a delay (Claude needs time to start)
+	go func() {
+		time.Sleep(15 * time.Second)
+		if tmuxutil.HasSession(agent.TmuxSession) {
+			tmuxutil.SendKeys(agent.TmuxSession, "Read AGENTS.md and begin working on your subtask immediately. Do not ask for confirmation.")
+		}
+	}()
+
 	// Register in agents.json
 	return m.RegisterAgent(taskID, agent)
 }
@@ -412,6 +420,10 @@ func (m *Manager) SpawnAgent(taskID string, taskSeq int, agent *Agent) error {
 func (m *Manager) buildClaudeCmd(agent *Agent) string {
 	parts := []string{"claude"}
 	parts = append(parts, "--dangerously-skip-permissions")
+
+	// Add system prompt telling the agent to begin immediately
+	kickPrompt := fmt.Sprintf("You are agent '%s'. Read AGENTS.md for your subtask. BEGIN WORKING IMMEDIATELY — do not ask for permission or confirmation. Implement your subtask, commit your changes, write output.md, then exit.", agent.ID)
+	parts = append(parts, "--append-system-prompt", fmt.Sprintf("'%s'", kickPrompt))
 
 	if agent.Model != "" {
 		parts = append(parts, "--model", agent.Model)

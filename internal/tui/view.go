@@ -61,10 +61,14 @@ func (m Model) sidebarView(height int) string {
 		icon := agentStatusIcon(a)
 		status := string(a.Status)
 
-		// Duration
-		dur := time.Since(a.SpawnedAt).Truncate(time.Second)
-		if a.FinishedAt != nil {
-			dur = a.FinishedAt.Sub(a.SpawnedAt).Truncate(time.Second)
+		// Duration — handle zero time (pending agents that haven't spawned yet)
+		durStr := ""
+		if !a.SpawnedAt.IsZero() {
+			dur := time.Since(a.SpawnedAt).Truncate(time.Second)
+			if a.FinishedAt != nil {
+				dur = a.FinishedAt.Sub(a.SpawnedAt).Truncate(time.Second)
+			}
+			durStr = formatDuration(dur)
 		}
 
 		name := a.ID
@@ -72,7 +76,7 @@ func (m Model) sidebarView(height int) string {
 			name = name[:17] + "…"
 		}
 
-		line := fmt.Sprintf(" %s %-18s %s", icon, name, formatDuration(dur))
+		line := fmt.Sprintf(" %s %-18s %s", icon, name, durStr)
 
 		if i == m.selected {
 			line = agentSelectedStyle.Width(w - 2).Render(line)

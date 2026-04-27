@@ -68,9 +68,12 @@ func runAgents(cmd *cobra.Command, args []string) error {
 				live = " (live)"
 			}
 
-			duration := time.Since(a.SpawnedAt).Truncate(time.Second)
-			if a.FinishedAt != nil {
-				duration = a.FinishedAt.Sub(a.SpawnedAt).Truncate(time.Second)
+			var duration time.Duration
+			if !a.SpawnedAt.IsZero() {
+				duration = time.Since(a.SpawnedAt).Truncate(time.Second)
+				if a.FinishedAt != nil {
+					duration = a.FinishedAt.Sub(a.SpawnedAt).Truncate(time.Second)
+				}
 			}
 
 			model := a.Model
