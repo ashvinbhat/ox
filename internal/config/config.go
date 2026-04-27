@@ -53,6 +53,14 @@ func DefaultConfig() *Config {
 		IDE:      "windsurf",
 		Repos:    make(map[string]*RepoConfig),
 		Defaults: Defaults{Persona: "builder"},
+		Multi: MultiConfig{
+			DefaultModel:      "sonnet",
+			CaptainModel:      "opus",
+			MaxAgents:         5,
+			MaxBudgetPerAgent: 10.0,
+			MaxTotalBudget:    80.0,
+			DefaultMaxTurns:   100,
+		},
 	}
 }
 

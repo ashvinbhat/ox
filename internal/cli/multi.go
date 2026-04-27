@@ -163,8 +163,8 @@ func runMulti(cmd *cobra.Command, args []string) error {
 	if captainModel == "" {
 		captainModel = "opus"
 	}
-	maxTurns := 25
-	maxBudget := 10.0
+	maxTurns := 40
+	maxBudget := 20.0
 	if cfg.Multi.MaxBudgetPerAgent > 0 {
 		maxBudget = cfg.Multi.MaxBudgetPerAgent * 2 // Captain gets more budget
 	}
