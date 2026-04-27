@@ -214,27 +214,28 @@ func DisplayPlan(plan *Plan) {
 	if plan.Overview != "" {
 		fmt.Printf("\n%s\n", plan.Overview)
 	}
-	fmt.Printf("\n%d agent(s):\n\n", len(plan.Agents))
+	fmt.Printf("\n%d agent(s):\n", len(plan.Agents))
 
 	for i, a := range plan.Agents {
-		fmt.Printf("  %d. %s\n", i+1, a.ID)
-		fmt.Printf("     Repo: %s | Persona: %s | Model: %s\n", a.Repo, a.Persona, a.Model)
-		if len(a.Files) > 0 {
-			fmt.Printf("     Files: %s\n", strings.Join(a.Files, ", "))
-		}
+		fmt.Printf("\n━━━ %d. %s ━━━\n", i+1, a.ID)
+		fmt.Printf("  Repo: %s | Persona: %s | Model: %s\n", a.Repo, a.Persona, a.Model)
 		if len(a.DependsOn) > 0 {
-			fmt.Printf("     Depends on: %s\n", strings.Join(a.DependsOn, ", "))
+			fmt.Printf("  Depends on: %s\n", strings.Join(a.DependsOn, ", "))
+		}
+		if len(a.Files) > 0 {
+			fmt.Println("  Files:")
+			for _, f := range a.Files {
+				fmt.Printf("    - %s\n", f)
+			}
 		}
 		if a.Description != "" {
-			// Truncate for display
-			desc := a.Description
-			if len(desc) > 120 {
-				desc = desc[:117] + "..."
+			fmt.Println("  Description:")
+			for _, line := range strings.Split(a.Description, "\n") {
+				fmt.Printf("    %s\n", line)
 			}
-			fmt.Printf("     %s\n", desc)
 		}
-		fmt.Println()
 	}
+	fmt.Println()
 }
 
 func parseValue(line, prefix string) string {

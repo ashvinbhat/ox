@@ -325,7 +325,11 @@ func runMulti(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 4: Ask for approval
-	fmt.Print("Proceed with spawning agents? [y/n/edit] ")
+	fmt.Printf("Full plan: %s\n", planPath)
+	if _, err := os.Stat(filepath.Join(agentsDir, "decisions.md")); err == nil {
+		fmt.Printf("Decisions: %s\n", filepath.Join(agentsDir, "decisions.md"))
+	}
+	fmt.Print("\nProceed with spawning agents? [y/n/edit] ")
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
