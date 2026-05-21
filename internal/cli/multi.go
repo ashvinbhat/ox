@@ -216,6 +216,12 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   Workspace: %s\n\n", ws.Path)
 	}
 
+	if t.Status != "in_progress" {
+		if err := yokeClient.UpdateStatus(t.ID, "in_progress"); err != nil {
+			fmt.Printf("Warning: failed to update task status: %v\n", err)
+		}
+	}
+
 	// Step 1: Generate captain context
 	fmt.Println("Step 1: Captain planning...")
 	captainCtx := mgr.GenerateCaptainContext(t.Seq, t.Title, t.Body, multiRepos, agentsDir)
