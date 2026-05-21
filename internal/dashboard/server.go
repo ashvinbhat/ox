@@ -305,7 +305,7 @@ func (s *Server) apiTasks(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `
 		<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 priority-%d hover:border-gray-500 transition">
 			<div class="flex items-center justify-between">
-				<a href="/task/%s" class="flex items-center space-x-3 hover:text-blue-400">
+				<a href="/task/%d" class="flex items-center space-x-3 hover:text-blue-400">
 					<span class="status-%s text-lg">%s</span>
 					<span class="text-gray-400 text-sm">#%d</span>
 					<span class="font-medium">%s</span>
@@ -315,7 +315,7 @@ func (s *Server) apiTasks(w http.ResponseWriter, r *http.Request) {
 					%s
 				</div>
 			</div>
-		</div>`, task.Priority, task.ID, task.Status, statusIcon, task.Seq, task.Title, tags, buttons)
+		</div>`, task.Priority, task.Seq, task.Status, statusIcon, task.Seq, task.Title, tags, buttons)
 	}
 }
 

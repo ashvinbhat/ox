@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ashvinbhat/yoke/task"
 )
@@ -118,6 +119,50 @@ func (c *Client) GetBlockers(t *task.Task) ([]*task.Task, error) {
 // AddNote adds a note to a task.
 func (c *Client) AddNote(taskID string, content string) error {
 	return c.store.AddNote(taskID, content)
+}
+
+// ListTasksThisWeek returns tasks that were active or completed during the current ISO week.
+func (c *Client) ListTasksThisWeek() ([]*task.Task, error) {
+	// Get the start of the current ISO week (Monday)
+	now := time.Now()
+	year, week := now.ISOWeek()
+	// Find Monday of this ISO week
+	// time.ISOWeek: week 1 is the week with the year's first Thursday
+	// Jan 4 is always in week 1
+	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, now.Location())
+	weekday := jan4.Weekday()
+	if weekday == 0 {
+		weekday = 7 // Sunday = 7
+	}
+	weekStart := jan4.AddDate(0, 0, (week-1)*7-int(weekday)+1)
+	weekStart = time.Date(weekStart.Year(), weekStart.Month(), weekStart.Day(), 0, 0, 0, 0, now.Location())
+
+	// Fetch all tasks (including done)
+	allTasks, err := c.store.List(task.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*task.Task
+	for _, t := range allTasks {
+		// Include tasks that are currently in progress
+		if t.Status == task.StatusInProgress {
+			result = append(result, t)
+			continue
+		}
+		// Include tasks completed this week
+		if t.Status == task.StatusDone && t.DoneAt != nil && !t.DoneAt.Before(weekStart) {
+			result = append(result, t)
+			continue
+		}
+		// Include tasks started this week (even if now blocked, etc.)
+		if t.StartedAt != nil && !t.StartedAt.Before(weekStart) && t.Status != task.StatusDropped {
+			result = append(result, t)
+			continue
+		}
+	}
+
+	return result, nil
 }
 
 // findYokeDB locates the yoke database file.

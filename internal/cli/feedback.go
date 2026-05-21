@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ashvinbhat/ox/internal/feedback"
+	"github.com/ashvinbhat/ox/internal/yokehelper"
 	"github.com/spf13/cobra"
 )
 
@@ -52,9 +53,20 @@ func runFeedbackReminder(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get pending weeks: %w", err)
 	}
 
-	// Get tasks this week (from yoke)
-	// For now, use empty list - can be enhanced later
+	// Get tasks this week from yoke
 	var tasks []feedback.TaskInfo
+	if yokeClient, err := yokehelper.NewClient(); err == nil {
+		defer yokeClient.Close()
+		if yokeTasks, err := yokeClient.ListTasksThisWeek(); err == nil {
+			for _, t := range yokeTasks {
+				tasks = append(tasks, feedback.TaskInfo{
+					ID:    t.ID,
+					Seq:   t.Seq,
+					Title: t.Title,
+				})
+			}
+		}
+	}
 
 	// Get dashboard URL
 	port := cfg.DashboardPort
