@@ -22,8 +22,8 @@ var openCmd = &cobra.Command{
 Opens the repo folder(s) directly, not the workspace root.
 If multiple repos exist, opens all of them (or use --repo to specify one).
 
-Uses the 'ide' setting from ox.yaml (default: windsurf).
-Supported: windsurf, cursor, code/vscode, zed, idea, goland
+Uses the 'ide' setting from ox.yaml (default: zed).
+Supported: zed, windsurf, cursor, code/vscode, idea, goland
 
 Examples:
   ox open              # Open current workspace repos
@@ -63,7 +63,7 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	// Determine IDE command
 	ide := cfg.IDE
 	if ide == "" {
-		ide = "windsurf"
+		ide = "zed"
 	}
 
 	ideCmd := getIDECommand(ide)

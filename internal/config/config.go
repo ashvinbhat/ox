@@ -50,7 +50,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Agent:    "claude",
-		IDE:      "windsurf",
+		IDE:      "zed",
 		Repos:    make(map[string]*RepoConfig),
 		Defaults: Defaults{Persona: "builder"},
 		Multi: MultiConfig{
