@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ashvinbhat/ox/internal/checkpoint"
 	"github.com/ashvinbhat/ox/internal/gitutil"
@@ -46,35 +47,37 @@ Examples:
 func runDone(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 
-	// Find workspace
+	// Find workspace (optional when a task ID is supplied — parent tasks
+	// and externally-tracked work may have no ox workspace).
 	var ws *workspace.TaskWorkspace
-	var err error
+	var taskRef string
 
 	if len(args) > 0 {
-		ws, err = workspace.Open(cfg.Home, args[0])
+		taskRef = args[0]
+		ws, _ = workspace.Open(cfg.Home, args[0])
 	} else {
-		// Try to find single active workspace
 		workspaces, listErr := workspace.List(cfg.Home)
 		if listErr != nil {
 			return fmt.Errorf("list workspaces: %w", listErr)
 		}
 		if len(workspaces) == 0 {
-			return fmt.Errorf("no active workspaces")
+			return fmt.Errorf("no active workspaces (pass a task ID to mark a workspace-less task done)")
 		}
 		if len(workspaces) > 1 {
 			return fmt.Errorf("multiple workspaces active, specify task ID")
 		}
 		ws = workspaces[0]
+		taskRef = fmt.Sprintf("%d", ws.TaskSeq)
 	}
 
-	if err != nil {
-		return fmt.Errorf("workspace not found: %w", err)
+	if ws != nil {
+		fmt.Printf("Completing task #%d...\n", ws.TaskSeq)
+	} else {
+		fmt.Printf("Completing task %s (no workspace — yoke-only)...\n", taskRef)
 	}
 
-	fmt.Printf("Completing task #%d...\n", ws.TaskSeq)
-
-	// Auto-checkpoint before cleanup (unless --no-checkpoint)
-	if !doneNoCheckpoint {
+	// Auto-checkpoint before cleanup (workspace-only, unless --no-checkpoint)
+	if ws != nil && !doneNoCheckpoint {
 		mgr := checkpoint.NewManager(ws.Path, fmt.Sprintf("%d", ws.TaskSeq))
 		doneMsg := "Task completed"
 		if doneReason != "" {
@@ -88,30 +91,13 @@ func runDone(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Capture learning if provided
-	if doneLearn != "" {
-		store, err := learning.NewStore(cfg.Home)
-		if err != nil {
-			fmt.Printf("Warning: failed to save learning: %v\n", err)
-		} else {
-			defer store.Close()
-			taskSeq := ws.TaskSeq
-			l, err := store.Add(doneLearn, learning.CategoryGeneral, ws.Repos, &taskSeq)
-			if err != nil {
-				fmt.Printf("Warning: failed to save learning: %v\n", err)
-			} else {
-				fmt.Printf("Learning captured (#%d)\n", l.ID)
-			}
-		}
-	}
-
 	// Mark task as done in yoke
 	yokeClient, err := yokehelper.NewClient()
 	if err != nil {
 		fmt.Printf("Warning: could not open yoke: %v\n", err)
 	} else {
 		defer yokeClient.Close()
-		t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq))
+		t, err := yokeClient.Get(taskRef)
 		if err != nil {
 			fmt.Printf("Warning: task not found in yoke: %v\n", err)
 		} else {
@@ -125,7 +111,33 @@ func runDone(cmd *cobra.Command, args []string) error {
 					fmt.Printf("Warning: failed to update outcome: %v\n", err)
 				}
 			}
+
+			// Capture learning if provided (uses yoke seq even when no workspace)
+			if doneLearn != "" {
+				store, lerr := learning.NewStore(cfg.Home)
+				if lerr != nil {
+					fmt.Printf("Warning: failed to save learning: %v\n", lerr)
+				} else {
+					defer store.Close()
+					var repos []string
+					if ws != nil {
+						repos = ws.Repos
+					}
+					taskSeq := t.Seq
+					l, lerr := store.Add(doneLearn, learning.CategoryGeneral, repos, &taskSeq)
+					if lerr != nil {
+						fmt.Printf("Warning: failed to save learning: %v\n", lerr)
+					} else {
+						fmt.Printf("Learning captured (#%d)\n", l.ID)
+					}
+				}
+			}
 		}
+	}
+
+	if ws == nil {
+		fmt.Println("Done!")
+		return nil
 	}
 
 	if doneKeep {
@@ -133,16 +145,34 @@ func runDone(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Remove worktrees
+	// Remove worktrees. Multi-agent runs create extra worktrees alongside the
+	// plain "<seq>" path: "<seq>-integration" and "<seq>-<agent-id>". Match
+	// "<seq>" exactly OR "<seq>-*" so all of them get cleaned up.
 	for _, repoName := range ws.Repos {
-		worktreePath := filepath.Join(cfg.Home, "worktrees", repoName, fmt.Sprintf("%d", ws.TaskSeq))
 		repoPath := filepath.Join(cfg.Home, "repos", repoName)
+		repoWorktreesDir := filepath.Join(cfg.Home, "worktrees", repoName)
+		seqStr := fmt.Sprintf("%d", ws.TaskSeq)
 
-		fmt.Printf("Removing worktree %s...\n", repoName)
-		if err := gitutil.RemoveWorktree(repoPath, worktreePath); err != nil {
-			fmt.Printf("Warning: failed to remove worktree: %v\n", err)
-			// Try to remove directory anyway
-			os.RemoveAll(worktreePath)
+		entries, _ := os.ReadDir(repoWorktreesDir)
+		matched := []string{}
+		for _, e := range entries {
+			name := e.Name()
+			if name == seqStr || strings.HasPrefix(name, seqStr+"-") {
+				matched = append(matched, filepath.Join(repoWorktreesDir, name))
+			}
+		}
+		// Fallback: even if directory entry is gone, still try the canonical path
+		// so git's worktree metadata gets cleaned up.
+		if len(matched) == 0 {
+			matched = append(matched, filepath.Join(repoWorktreesDir, seqStr))
+		}
+
+		for _, worktreePath := range matched {
+			fmt.Printf("Removing worktree %s (%s)...\n", repoName, filepath.Base(worktreePath))
+			if err := gitutil.RemoveWorktree(repoPath, worktreePath); err != nil {
+				fmt.Printf("Warning: failed to remove worktree: %v\n", err)
+				os.RemoveAll(worktreePath)
+			}
 		}
 	}
 
