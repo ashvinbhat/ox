@@ -110,9 +110,10 @@ func anchorOf(f Finding) string {
 	return fmt.Sprintf("%s:%d", f.File, f.Line)
 }
 
-// RenderSummary prints one line per finding: severity-coloured header bands,
-// numbered titles, with metadata (anchor · category · agent) dimmed.
-// Built for scanning — the user picks numbers to expand or post.
+// RenderSummary prints each finding with severity-coloured header bands,
+// numbered titles, dimmed metadata, AND a short body excerpt so the
+// reasoning is visible inline without needing to expand.
+// The user can still `expand <n>` for the full body.
 func RenderSummary(w io.Writer, findings []Finding) {
 	if len(findings) == 0 {
 		fmt.Fprintln(w, colorize(ansiDim, "No findings. ✓"))
@@ -121,6 +122,7 @@ func RenderSummary(w io.Writer, findings []Finding) {
 
 	sorted := sortFindings(findings)
 	counts := countBySeverity(sorted)
+	width := TermWidth()
 
 	header := strings.Join([]string{
 		colorize(severityColor(SeverityBlocker), fmt.Sprintf("%d blocker", counts[SeverityBlocker])),
@@ -140,8 +142,27 @@ func RenderSummary(w io.Writer, findings []Finding) {
 		idx := colorize(ansiDim, fmt.Sprintf("[%d]", i+1))
 		meta := colorize(ansiDim, fmt.Sprintf("(%s · %s · %s)", anchorOf(f), f.Category, f.Agent))
 		fmt.Fprintf(w, "  %s %s\n      %s\n", idx, f.Title, meta)
+
+		// Body excerpt — first ~3 lines of reasoning, wrapped. Lets the
+		// reviewer scan substance, not just titles, without expanding each.
+		for _, line := range bodyExcerpt(f.Body, 3, width-6) {
+			fmt.Fprintf(w, "      %s\n", colorize(ansiDim, line))
+		}
+		fmt.Fprintln(w)
 	}
-	fmt.Fprintln(w)
+}
+
+// bodyExcerpt returns up to maxLines wrapped lines of body. If the body
+// extends past that, the last visible line is suffixed with "  …(expand N for more)".
+func bodyExcerpt(body string, maxLines, width int) []string {
+	wrapped := wrapText(strings.TrimSpace(body), width)
+	if len(wrapped) <= maxLines {
+		return wrapped
+	}
+	out := append([]string(nil), wrapped[:maxLines]...)
+	// Mark truncation on the last visible line.
+	out[len(out)-1] = out[len(out)-1] + "  …"
+	return out
 }
 
 // RenderOne prints a single finding's expanded body with severity-coloured

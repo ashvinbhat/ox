@@ -90,7 +90,8 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	var picks []int
 	for {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> expand | edit <n> | help]")
+		fmt.Fprintln(out, "Each finding shows a 3-line excerpt above. Type `e <n>` to read the full reasoning.")
+		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> | edit <n> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()

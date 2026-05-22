@@ -190,11 +190,10 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Render output. Interactive flow uses the summary view (titles only)
-	// inside RunInteractive itself, so we only do a full Render here when
-	// the user asked for non-interactive mode (or the post path will exit
-	// before showing the prompt). For full bodies we route through the
-	// pager so 10+ findings don't bury the terminal.
+	// Render output. Interactive flow renders the summary inside
+	// RunInteractive, so don't double-print here. Non-interactive mode
+	// gets a full all-bodies dump piped through $PAGER when stdout is a
+	// TTY and the suite has 5+ findings.
 	if reviewPRNonInter {
 		w, closePager := review.MaybePager(os.Stdout, len(findings))
 		review.Render(w, findings)
@@ -202,13 +201,10 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 			renderAddressingSummary(w, addressing, priorByRef)
 		}
 		_ = closePager()
-	} else {
-		// Interactive: show a one-line-per-finding summary now; the loop in
-		// RunInteractive lets the user `expand <n>` to read bodies.
-		review.RenderSummary(os.Stdout, findings)
-		if len(addressing) > 0 {
-			renderAddressingSummary(os.Stdout, addressing, priorByRef)
-		}
+	} else if len(addressing) > 0 {
+		// Addressing block goes here so it shows before the (interactive)
+		// findings summary, framing the follow-up context first.
+		renderAddressingSummary(os.Stdout, addressing, priorByRef)
 	}
 
 	if reviewPRKeep {
