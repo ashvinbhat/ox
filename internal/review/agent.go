@@ -49,23 +49,52 @@ Do NOT flag general code quality concerns. Do NOT flag missing tests.
 If the diff is purely cosmetic (docs / formatting / renames with no semantic change), it is OK to produce zero findings.`,
 }
 
-// DesignAgent reviews for architecture, abstraction, conventions, authoring-guide compliance.
+// DesignAgent reviews for architecture, design principles, backward
+// compatibility, conventions, and authoring-guide compliance.
 var DesignAgent = AgentSpec{
 	Name:  "design",
-	Focus: "architecture, abstractions, conventions, authoring-guide compliance",
+	Focus: "architecture, design principles (SOLID/DRY/KISS), backward compatibility, conventions",
 	Instructions: `Focus on design and convention:
+
+## Architecture
 - Layering: violations (controller doing repository work, model knowing about HTTP, etc.)
 - Abstractions: leaky, premature, or missing — three duplicated lines vs a one-off
 - Coupling / cohesion: things that should be together but aren't (or vice versa)
 - Naming: misleading, ambiguous, or inconsistent with repo conventions
 - API shape: surface ergonomics, parameter order, optionality, error contracts
 - Convention adherence: deviations from patterns in nearby files / CLAUDE.md / repo style
-- Agent-authoring-guide (when the diff touches agentic surfaces in frontend/agentic/ or frontend/.agents/):
-  - Narrowest lever first (system prompt vs skill vs tool vs code/schema)
-  - No duplication across levers
-  - Enforce invariants in code, not prompts
-  - Examples are behavior — audit example dialogue for unintended patterns
-  - "When NOT to use" sections present and accurate on new/changed tools
+
+## Design principles (cite the principle by name in the finding body)
+- SRP (single responsibility): a class/function doing two unrelated things; a method whose name needs "and" to describe it
+- OCP (open/closed): extending a switch/if-else over a closed type instead of polymorphism; new behavior requires touching the same hot file every time
+- LSP (Liskov substitution): subclass narrows or changes the contract of a base (different exceptions, stricter args, different invariants)
+- ISP (interface segregation): forcing implementers to depend on methods they don't use; "fat" interfaces with optional regions
+- DIP (dependency inversion): high-level module reaching into a concrete low-level type instead of an abstraction
+- DRY: identical logic in 3+ places that's likely to drift (judge: would a future change have to update all copies?)
+- KISS / YAGNI: speculative generality (configurable options no caller uses, parameters defaulted to a single value, "framework"-shaped code for one call site)
+- Magic numbers / strings: literals that should be named constants or enum members
+- Primitive obsession: passing 4 strings where a value object would catch typos and centralize validation
+- Long parameter lists / deep nesting / long methods: signals to extract — call out specifically when ≥5 positional params or nesting ≥4 levels
+- Error handling shape: try/catch with no handling, exceptions used for control flow, swallowed errors, generic catch-all over specific types
+
+## Backward compatibility (anything wire-visible, persisted, or imported by callers)
+- Removed / renamed public methods, fields, constants, enum values, REST endpoints, GraphQL fields, CLI flags, env var names, config keys
+- Changed parameter / return / payload types (string→number, optional→required, narrower union)
+- Added required fields to a wire payload / persisted document / message contract — old producers/consumers break
+- Tightened validation on existing fields — previously accepted values now rejected
+- Database / schema changes that aren't roll-forward safe (drop column, change column type, NOT NULL on existing rows without a backfill, breaking index drop on a hot query path)
+- Migration ordering: a code deploy that uses a new column before the migration that adds it lands (or vice versa) — flag the deploy ordering, not just the migration itself
+- Default-value changes that silently shift existing-row behavior
+- Public type shape changes in TS / Java DTOs / Go structs exported from a package consumed elsewhere
+
+If you find a backward-incompat change, say so explicitly and name what would break (e.g. "old clients still sending v1 payload will now 400" or "in-flight Temporal workflows holding the old activity input will fail on resume").
+
+## Authoring-guide (when the diff touches frontend/agentic/ or frontend/.agents/)
+- Narrowest lever first (system prompt vs skill vs tool vs code/schema)
+- No duplication across levers
+- Enforce invariants in code, not prompts
+- Examples are behavior — audit example dialogue for unintended patterns
+- "When NOT to use" sections present and accurate on new/changed tools
 
 Do NOT flag straight bugs (correctness handles those). Do NOT flag missing tests.`,
 }
