@@ -50,9 +50,19 @@ type PostResult struct {
 // assigned — those refs are NOT sent to GitHub but are kept in the local
 // state file so a follow-up review can correlate prior findings to the
 // comment_ids returned by the GH API.
+//
+// A bare review (no inline findings, just an event + body) is allowed —
+// useful for "approve cleanly" or "request changes with a high-level
+// explanation but no line-by-line comments."
 func Post(pr *PRInfo, sel *Selection) (*PostResult, error) {
-	if sel == nil || len(sel.Findings) == 0 {
-		return nil, fmt.Errorf("nothing to post: no findings selected")
+	if sel == nil {
+		return nil, fmt.Errorf("nothing to post: nil selection")
+	}
+	if sel.Event == "" {
+		return nil, fmt.Errorf("nothing to post: no review event set")
+	}
+	if len(sel.Findings) == 0 && strings.TrimSpace(sel.GlobalComment) == "" && sel.Event != EventApprove {
+		return nil, fmt.Errorf("nothing to post: %s requires either inline findings or a body", sel.Event)
 	}
 
 	comments := make([]reviewComment, 0, len(sel.Findings))

@@ -235,7 +235,10 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("interactive selection: %w", err)
 	}
-	if sel == nil || (len(sel.Findings) == 0 && len(sel.Addressing) == 0) {
+	// "Nothing to post" = no findings AND no addressing replies AND no
+	// bare-review event. A bare-review event (approve / request-changes /
+	// comment with no inline findings) is a valid post path.
+	if sel == nil || (len(sel.Findings) == 0 && len(sel.Addressing) == 0 && sel.Event == "") {
 		fmt.Println("\nNothing posted.")
 		return saveStateOrWarn(cfg.Home, state, pr, record)
 	}
@@ -247,7 +250,9 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %d inline finding(s), %d addressing reply/replies, event=%s\n", len(sel.Findings), len(sel.Addressing), sel.Event)
 		return saveStateOrWarn(cfg.Home, state, pr, record)
 	}
-	if len(sel.Findings) > 0 {
+	// Post the review when we have either inline findings OR a bare-review
+	// event with no inline findings. The Post() call handles both shapes.
+	if len(sel.Findings) > 0 || sel.Event != "" {
 		fmt.Printf("\n🐂 Posting review to %s ...\n", pr.URL)
 		result, err := review.Post(pr, sel)
 		if err != nil {

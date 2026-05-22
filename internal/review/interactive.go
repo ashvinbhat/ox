@@ -95,7 +95,7 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	for {
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Each finding shows a 3-line excerpt. Type `e <n>` for full reasoning, `chat <n>` to discuss, `ask <n> <q>` for one-shot Q&A.")
-		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> | chat <n> | ask <n> <q> | edit <n> | help]")
+		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | approve | request-changes | comment | e <n> | chat <n> | ask <n> <q> | edit <n> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()
@@ -105,8 +105,28 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 		switch {
 		case input == "" || strings.EqualFold(input, "none"):
 			return &Selection{}, nil
+		case strings.EqualFold(input, "approve"),
+			strings.EqualFold(input, "request-changes"), strings.EqualFold(input, "request_changes"),
+			strings.EqualFold(input, "comment"):
+			// Bare-review path: post a review with the given event and NO
+			// inline comments. Useful when you've read all the findings and
+			// just want to approve / comment / request changes without picking
+			// any of them to send as inline comments.
+			var event Event
+			switch lower {
+			case "approve":
+				event = EventApprove
+			case "request-changes", "request_changes":
+				event = EventRequestChanges
+			case "comment":
+				event = EventComment
+			}
+			return runBareReview(event, scanner, out)
 		case strings.EqualFold(input, "help") || input == "?":
 			fmt.Fprintln(out, "  1,3,5-7 / all / none      select findings to post")
+			fmt.Fprintln(out, "  approve                   post a bare APPROVE review (no inline comments)")
+			fmt.Fprintln(out, "  request-changes           post a bare REQUEST_CHANGES review (no inline comments)")
+			fmt.Fprintln(out, "  comment                   post a bare COMMENT review (no inline comments)")
 			fmt.Fprintln(out, "  e 2 / expand 2 / view 2   show finding [2] in full")
 			fmt.Fprintln(out, "  chat 2                    interactive chat about finding [2] (claude session)")
 			fmt.Fprintln(out, "  ask 2 <question>          one-shot Q&A about finding [2]")
@@ -286,6 +306,35 @@ func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, sc
 			chosen = append(chosen, a)
 		}
 		return chosen, nil
+	}
+}
+
+// runBareReview drives the bare-review flow: the user wanted to
+// approve / comment / request-changes WITHOUT picking any findings to
+// post as inline comments. APPROVE allows an empty body; COMMENT and
+// REQUEST_CHANGES require non-empty bodies per GitHub's API, so we
+// re-prompt if the user skips.
+func runBareReview(event Event, scanner *bufio.Scanner, out io.Writer) (*Selection, error) {
+	switch event {
+	case EventApprove:
+		fmt.Fprintln(out, "\nBare APPROVE — no inline comments, optional approval comment.")
+	case EventRequestChanges:
+		fmt.Fprintln(out, "\nBare REQUEST_CHANGES — no inline comments. GitHub requires a comment explaining what to change.")
+	case EventComment:
+		fmt.Fprintln(out, "\nBare COMMENT — no inline comments. GitHub requires a body.")
+	}
+
+	for {
+		global := promptGlobalComment(scanner, out)
+		if event != EventApprove && strings.TrimSpace(global) == "" {
+			fmt.Fprintln(out, "  GitHub rejects an empty body on this event — please write a short message.")
+			continue
+		}
+		sel := &Selection{Event: event, GlobalComment: global}
+		if !confirmPost(sel, scanner, out) {
+			return &Selection{}, nil
+		}
+		return sel, nil
 	}
 }
 
