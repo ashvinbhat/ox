@@ -73,7 +73,9 @@ func Post(pr *PRInfo, sel *Selection) (*PostResult, error) {
 
 	body := strings.TrimSpace(sel.GlobalComment)
 	if body == "" {
-		body = "Posted by ox review."
+		// GitHub requires body to be non-empty for COMMENT / REQUEST_CHANGES.
+		// Use a single neutral character so the post succeeds without any attribution line.
+		body = "—"
 	}
 
 	payload := reviewPayload{
@@ -90,13 +92,23 @@ func Post(pr *PRInfo, sel *Selection) (*PostResult, error) {
 	endpoint := fmt.Sprintf("repos/%s/pulls/%d/reviews", pr.OwnerRepo, pr.Number)
 	cmd := exec.Command("gh", "api", "-X", "POST", endpoint, "--input", "-")
 	cmd.Stdin = bytes.NewReader(j)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh api: %w", asGhErr(err))
+	// Capture stdout and stderr separately. On HTTP errors, gh writes the
+	// API response body (which contains GitHub's real explanation) to stdout
+	// and "gh: Unprocessable Entity (HTTP 422)" to stderr. We want both.
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		body := strings.TrimSpace(stdout.String())
+		ghMsg := strings.TrimSpace(stderr.String())
+		// Pretty-print the error from GitHub's response if it's parseable JSON.
+		hint := suggestForGhPostError(body, sel)
+		return nil, fmt.Errorf("gh api review post failed (%s)\n%s\n\nPayload sent: %d inline comments, event=%s\n%s",
+			ghMsg, indent(body, "  "), len(sel.Findings), sel.Event, hint)
 	}
 
 	var resp reviewResponse
-	if err := json.Unmarshal(out, &resp); err != nil {
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
 		return nil, fmt.Errorf("parse gh api response: %w", err)
 	}
 
@@ -166,6 +178,40 @@ func PostReply(ownerRepo string, pr int, inReplyTo int64, body string) error {
 	return nil
 }
 
+// suggestForGhPostError returns a one-line hint based on the GitHub error
+// body so the user knows what to do next.
+func suggestForGhPostError(body string, _ *Selection) string {
+	lower := strings.ToLower(body)
+	switch {
+	case strings.Contains(lower, "pull_request_review_thread.line") ||
+		strings.Contains(lower, "pull_request_review_thread.path") ||
+		strings.Contains(lower, "must be part of the diff") ||
+		strings.Contains(lower, "not part of the diff"):
+		return "Hint: at least one inline comment is anchored to a line that is not within a diff hunk.\n" +
+			"      Re-run with --keep, inspect .ox/review/findings/*.json,\n" +
+			"      and either drop the offending finding or re-run after pushing changes."
+	case strings.Contains(lower, "can not approve") || strings.Contains(lower, "cannot approve"):
+		return "Hint: GitHub does not let you APPROVE your own PR. Choose 'comment' instead."
+	case strings.Contains(lower, "can not request changes") || strings.Contains(lower, "cannot request changes"):
+		return "Hint: GitHub does not let you request changes on your own PR. Choose 'comment' instead."
+	case strings.Contains(lower, "commit") && strings.Contains(lower, "not found"):
+		return "Hint: the head SHA may have moved (a new push landed). Re-run the review to pick up the latest commit."
+	}
+	return "(no specific hint — see the response body above)"
+}
+
+// indent prefixes every line of s with prefix.
+func indent(s, prefix string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // AddressingReply formats an Addressing verdict as a short reply body.
 func AddressingReply(a Addressing) string {
 	icon := map[AddressingStatus]string{
@@ -173,16 +219,15 @@ func AddressingReply(a Addressing) string {
 		AddressingPartial:   "⚠",
 		AddressingIgnored:   "✗",
 	}[a.Status]
-	return fmt.Sprintf("%s **%s** (per follow-up %s review): %s\n\n_via ox review_", icon, a.Status, a.Agent, strings.TrimSpace(a.Note))
+	return fmt.Sprintf("%s **%s** (per follow-up %s review): %s", icon, a.Status, a.Agent, strings.TrimSpace(a.Note))
 }
 
 // renderCommentBody produces the inline-comment text for a single finding,
-// prefixing severity + agent so GitHub readers can triage at a glance.
+// prefixing severity + category so GitHub readers can triage at a glance.
 func renderCommentBody(f Finding) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "**[%s · %s]** %s\n\n", f.Severity, f.Category, f.Title)
 	sb.WriteString(f.Body)
-	sb.WriteString("\n\n_via ox review (agent: " + f.Agent + ")_")
 	return sb.String()
 }
 

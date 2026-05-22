@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -21,8 +22,10 @@ var (
 )
 
 var reviewPRCmd = &cobra.Command{
-	Use:   "pr <pr-ref>",
-	Short: "Review a GitHub pull request",
+	Use:           "pr <pr-ref>",
+	Short:         "Review a GitHub pull request",
+	SilenceUsage:  true, // runtime errors should not dump cobra's --help
+	SilenceErrors: false,
 	Long: `Reviews a GitHub pull request in an ephemeral worktree.
 
 Creates a review worktree at ~/.ox/worktrees/<repo>/review-<pr>, builds a
@@ -99,14 +102,22 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create review worktree: %w", err)
 	}
-	if !reviewPRKeep {
-		defer func() {
-			fmt.Println("🐂 Cleaning up review worktree...")
-			if rerr := wt.Remove(cfg.Home); rerr != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to remove review worktree: %v\n", rerr)
-			}
-		}()
-	}
+	// Worktree cleanup is deferred but gated on `cleanupWorktree`. We flip
+	// this to false if anything fails after the worktree exists, so the
+	// reviewer can inspect REVIEW.md / findings / logs without rerunning.
+	cleanupWorktree := !reviewPRKeep
+	defer func() {
+		if !cleanupWorktree {
+			fmt.Printf("\nWorktree kept for debugging: %s\n", wt.Path)
+			fmt.Printf("Findings:  %s/.ox/review/findings/\n", wt.Path)
+			fmt.Printf("Agent logs: %s/.ox/review/logs/\n", wt.Path)
+			return
+		}
+		fmt.Println("🐂 Cleaning up review worktree...")
+		if rerr := wt.Remove(cfg.Home); rerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to remove review worktree: %v\n", rerr)
+		}
+	}()
 
 	fmt.Println("🐂 Fetching diff...")
 	diff, err := review.Diff(pr)
@@ -179,9 +190,25 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	review.Render(os.Stdout, findings)
-	if len(addressing) > 0 {
-		renderAddressingSummary(addressing, priorByRef)
+	// Render output. Interactive flow uses the summary view (titles only)
+	// inside RunInteractive itself, so we only do a full Render here when
+	// the user asked for non-interactive mode (or the post path will exit
+	// before showing the prompt). For full bodies we route through the
+	// pager so 10+ findings don't bury the terminal.
+	if reviewPRNonInter {
+		w, closePager := review.MaybePager(os.Stdout, len(findings))
+		review.Render(w, findings)
+		if len(addressing) > 0 {
+			renderAddressingSummary(w, addressing, priorByRef)
+		}
+		_ = closePager()
+	} else {
+		// Interactive: show a one-line-per-finding summary now; the loop in
+		// RunInteractive lets the user `expand <n>` to read bodies.
+		review.RenderSummary(os.Stdout, findings)
+		if len(addressing) > 0 {
+			renderAddressingSummary(os.Stdout, addressing, priorByRef)
+		}
 	}
 
 	if reviewPRKeep {
@@ -228,6 +255,9 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		fmt.Printf("\n🐂 Posting review to %s ...\n", pr.URL)
 		result, err := review.Post(pr, sel)
 		if err != nil {
+			cleanupWorktree = false
+			// Save state anyway — the local review still happened even if posting failed.
+			_ = saveStateOrWarn(cfg.Home, state, pr, record)
 			return fmt.Errorf("post review: %w", err)
 		}
 		fmt.Printf("✓ Review posted: %s\n", result.HTMLURL)
@@ -293,8 +323,8 @@ func saveStateOrWarn(oxHome string, state *review.State, pr *review.PRInfo, reco
 
 // renderAddressingSummary prints a quick read of the per-prior-finding
 // verdicts. Used after the main Render() call when this is a follow-up.
-func renderAddressingSummary(addressing []review.Addressing, priorByRef map[string]review.Finding) {
-	fmt.Println("\n── Addressing of prior findings ──")
+func renderAddressingSummary(w io.Writer, addressing []review.Addressing, priorByRef map[string]review.Finding) {
+	fmt.Fprintln(w, "\n── Addressing of prior findings ──")
 	byRef := map[string][]review.Addressing{}
 	order := []string{}
 	for _, a := range addressing {
@@ -309,17 +339,17 @@ func renderAddressingSummary(addressing []review.Addressing, priorByRef map[stri
 		if hasPrior {
 			anchor = fmt.Sprintf(" %s:%d — %s", prior.File, prior.Line, prior.Title)
 		}
-		fmt.Printf("%s%s\n", ref, anchor)
+		fmt.Fprintf(w, "%s%s\n", ref, anchor)
 		for _, a := range byRef[ref] {
 			icon := map[review.AddressingStatus]string{
 				review.AddressingAddressed: "✓",
 				review.AddressingPartial:   "⚠",
 				review.AddressingIgnored:   "✗",
 			}[a.Status]
-			fmt.Printf("  %s %s (agent: %s) — %s\n", icon, a.Status, a.Agent, a.Note)
+			fmt.Fprintf(w, "  %s %s (agent: %s) — %s\n", icon, a.Status, a.Agent, a.Note)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 }
 
 // isSelfPR returns true when the authenticated gh user authored the PR.

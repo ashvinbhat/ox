@@ -83,22 +83,39 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	// Step 2: new-findings selection.
 	working := append([]Finding(nil), findings...)
 
+	// Show the summary view up front so the user sees titles + anchors and
+	// can drill into bodies on demand with `e <n>` / `expand <n>` / `view <n>`.
+	RenderSummary(out, working)
+
 	var picks []int
 	for {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Post which to GitHub? [comma-separated, ranges, 'all', 'none', 'edit <n>', 'help']")
+		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> expand | edit <n> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()
 		}
 		input := strings.TrimSpace(scanner.Text())
+		lower := strings.ToLower(input)
 		switch {
 		case input == "" || strings.EqualFold(input, "none"):
 			return &Selection{}, nil
 		case strings.EqualFold(input, "help") || input == "?":
-			fmt.Fprintln(out, "  Examples: 1,3,5-7   all   none   edit 2   help")
+			fmt.Fprintln(out, "  Examples: 1,3,5-7  ·  all  ·  none")
+			fmt.Fprintln(out, "  e 2 / expand 2 / view 2   show finding [2] in full")
+			fmt.Fprintln(out, "  edit 2                    edit finding [2]'s body in $EDITOR")
 			continue
-		case strings.HasPrefix(strings.ToLower(input), "edit "):
+		case strings.HasPrefix(lower, "e ") || strings.HasPrefix(lower, "expand ") || strings.HasPrefix(lower, "view "):
+			arg := strings.TrimSpace(input[strings.IndexByte(input, ' ')+1:])
+			n, err := strconv.Atoi(arg)
+			if err != nil || n < 1 || n > len(working) {
+				fmt.Fprintf(out, "  invalid finding index: %q (expected 1..%d)\n", arg, len(working))
+				continue
+			}
+			fmt.Fprintln(out)
+			RenderOne(out, sortFindings(working)[n-1], n)
+			continue
+		case strings.HasPrefix(lower, "edit "):
 			arg := strings.TrimSpace(input[len("edit "):])
 			n, err := strconv.Atoi(arg)
 			if err != nil || n < 1 || n > len(working) {
