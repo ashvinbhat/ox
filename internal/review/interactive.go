@@ -47,8 +47,12 @@ type Selection struct {
 // priorByRef maps a prior finding's Ref to the prior Finding (so its
 // CommentID can be used as in_reply_to when posting the reply).
 //
+// worktree is needed so `chat <n>` / `ask <n>` can launch claude with the
+// PR head checkout as cwd. May be nil if the caller has already torn down
+// the worktree — chat/ask will surface an error in that case.
+//
 // Returns a Selection with empty fields if the user cancels at any prompt.
-func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[string]Finding, in io.Reader, out io.Writer) (*Selection, error) {
+func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[string]Finding, worktree *ReviewWorktree, in io.Reader, out io.Writer) (*Selection, error) {
 	if len(findings) == 0 && len(addressing) == 0 {
 		return &Selection{}, nil
 	}
@@ -90,8 +94,8 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	var picks []int
 	for {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Each finding shows a 3-line excerpt above. Type `e <n>` to read the full reasoning.")
-		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> | edit <n> | help]")
+		fmt.Fprintln(out, "Each finding shows a 3-line excerpt. Type `e <n>` for full reasoning, `chat <n>` to discuss, `ask <n> <q>` for one-shot Q&A.")
+		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | e <n> | chat <n> | ask <n> <q> | edit <n> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()
@@ -102,8 +106,10 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 		case input == "" || strings.EqualFold(input, "none"):
 			return &Selection{}, nil
 		case strings.EqualFold(input, "help") || input == "?":
-			fmt.Fprintln(out, "  Examples: 1,3,5-7  ·  all  ·  none")
+			fmt.Fprintln(out, "  1,3,5-7 / all / none      select findings to post")
 			fmt.Fprintln(out, "  e 2 / expand 2 / view 2   show finding [2] in full")
+			fmt.Fprintln(out, "  chat 2                    interactive chat about finding [2] (claude session)")
+			fmt.Fprintln(out, "  ask 2 <question>          one-shot Q&A about finding [2]")
 			fmt.Fprintln(out, "  edit 2                    edit finding [2]'s body in $EDITOR")
 			continue
 		case strings.HasPrefix(lower, "e ") || strings.HasPrefix(lower, "expand ") || strings.HasPrefix(lower, "view "):
@@ -115,6 +121,40 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			}
 			fmt.Fprintln(out)
 			RenderOne(out, sortFindings(working)[n-1], n)
+			continue
+		case strings.HasPrefix(lower, "chat ") || strings.HasPrefix(lower, "ask "):
+			if worktree == nil {
+				fmt.Fprintln(out, "  chat/ask unavailable: review worktree has been torn down")
+				continue
+			}
+			isAsk := strings.HasPrefix(lower, "ask ")
+			rest := strings.TrimSpace(input[strings.IndexByte(input, ' ')+1:])
+			// Parse the index off the front of `rest`.
+			parts := strings.SplitN(rest, " ", 2)
+			n, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil || n < 1 || n > len(working) {
+				fmt.Fprintf(out, "  invalid finding index: %q (expected 1..%d)\n", parts[0], len(working))
+				continue
+			}
+			question := ""
+			if isAsk {
+				if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
+					fmt.Fprintln(out, "  ask requires a question: `ask <n> what does this mean?`")
+					continue
+				}
+				question = strings.TrimSpace(parts[1])
+			}
+			finding := sortFindings(working)[n-1]
+			fmt.Fprintln(out)
+			if isAsk {
+				fmt.Fprintf(out, "── asking about finding [%d] (%s) ──\n\n", n, finding.Agent)
+			} else {
+				fmt.Fprintf(out, "── chat about finding [%d] (%s) — type /exit or Ctrl-D when done ──\n\n", n, finding.Agent)
+			}
+			if cerr := ChatAboutFinding(worktree, finding, question); cerr != nil {
+				fmt.Fprintf(out, "  chat/ask failed: %v\n", cerr)
+			}
+			fmt.Fprintln(out, "\n── back to selection ──")
 			continue
 		case strings.HasPrefix(lower, "edit "):
 			arg := strings.TrimSpace(input[len("edit "):])

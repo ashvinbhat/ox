@@ -231,7 +231,7 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		return saveStateOrWarn(cfg.Home, state, pr, record)
 	}
 
-	sel, err := review.RunInteractive(findings, addressing, priorByRef, os.Stdin, os.Stdout)
+	sel, err := review.RunInteractive(findings, addressing, priorByRef, wt, os.Stdin, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("interactive selection: %w", err)
 	}
