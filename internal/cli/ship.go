@@ -65,8 +65,10 @@ func runShip(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 
-	// Get task info for PR title/body
-	var taskTitle string
+	// Get task info for PR title/body and for linking PRs back to the
+	// yoke task as notes (one task can have multiple PRs, one per repo
+	// or revision — each becomes a separate note).
+	var taskTitle, taskID string
 	var taskSeq int
 	yokeClient, err := yokehelper.NewClient()
 	if err == nil {
@@ -74,6 +76,7 @@ func runShip(cmd *cobra.Command, args []string) error {
 		if t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {
 			taskTitle = t.Title
 			taskSeq = t.Seq
+			taskID = t.ID
 		}
 	}
 	if taskTitle == "" {
@@ -140,6 +143,14 @@ func runShip(cmd *cobra.Command, args []string) error {
 
 		fmt.Printf("  PR: %s\n\n", prURL)
 		prs = append(prs, fmt.Sprintf("%s: %s", repoName, prURL))
+
+		// Link the PR back to the yoke task as a note. Multiple PRs per task
+		// are supported (one note per PR, repo-tagged so they're scannable).
+		if linkErr := linkPRToTask(taskID, repoName, prURL); linkErr != nil {
+			fmt.Printf("  Warning: failed to link PR to yoke task: %v\n", linkErr)
+		} else {
+			fmt.Printf("  Linked PR to task #%d in yoke\n\n", taskSeq)
+		}
 	}
 
 	if len(prs) > 0 && !shipDryRun {
@@ -150,6 +161,33 @@ func runShip(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// linkPRToTask attaches a "PR (<repo>): <url>" note to the yoke task so
+// future runs of `ox status`, the dashboard, etc. can surface every PR
+// associated with the task. One task can carry multiple PRs (one per repo,
+// or revisions / fork-rebuilds).
+func linkPRToTask(taskID, repoName, prURL string) error {
+	if taskID == "" || prURL == "" {
+		return nil
+	}
+	client, err := yokehelper.NewClient()
+	if err != nil {
+		return fmt.Errorf("open yoke: %w", err)
+	}
+	defer client.Close()
+
+	// De-dupe: if a note already records this exact URL, skip.
+	notes, err := client.GetNotes(taskID)
+	if err == nil {
+		for _, n := range notes {
+			if strings.Contains(n.Content, prURL) {
+				return nil
+			}
+		}
+	}
+	note := fmt.Sprintf("PR (%s): %s", repoName, prURL)
+	return client.AddNote(taskID, note)
 }
 
 // findReposInWorkspace returns repo names that have symlinks in the workspace.
