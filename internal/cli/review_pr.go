@@ -124,6 +124,7 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetch diff: %w", err)
 	}
+	diffMap := review.ParseDiff(diff)
 
 	// Load prior review state, if any, and build follow-up context.
 	state, err := review.LoadState(cfg.Home, pr.OwnerRepo, pr.Number)
@@ -190,6 +191,20 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Partition findings into postable (anchored to a real diff hunk) vs
+	// unanchored. Unanchored ones almost always mean the LLM hallucinated
+	// a line number — they would have crashed `gh api` with a 422 mid-post.
+	// We keep the substance by folding them into the global review body at
+	// post time instead of dropping them.
+	postable, unanchored := diffMap.FilterFindings(findings)
+	if len(unanchored) > 0 {
+		fmt.Printf("\n⚠ %d finding(s) anchored outside the PR diff — folded into the global review body so the substance isn't lost.\n", len(unanchored))
+		for _, f := range unanchored {
+			fmt.Fprintf(os.Stderr, "    %s:%d (%s) — %s\n", f.File, f.Line, f.Agent, f.Title)
+		}
+	}
+	findings = postable
+
 	// Render output. Interactive flow renders the summary inside
 	// RunInteractive, so don't double-print here. Non-interactive mode
 	// gets a full all-bodies dump piped through $PAGER when stdout is a
@@ -250,6 +265,13 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %d inline finding(s), %d addressing reply/replies, event=%s\n", len(sel.Findings), len(sel.Addressing), sel.Event)
 		return saveStateOrWarn(cfg.Home, state, pr, record)
 	}
+	// Auto-fold unanchored findings into the global comment if the user
+	// is posting. Concise rendering — title + anchor + agent + body —
+	// prepended (or used as a stub when no global was provided).
+	if len(unanchored) > 0 && (len(sel.Findings) > 0 || sel.Event != "") {
+		sel.GlobalComment = foldUnanchored(sel.GlobalComment, unanchored)
+	}
+
 	// Post the review when we have either inline findings OR a bare-review
 	// event with no inline findings. The Post() call handles both shapes.
 	if len(sel.Findings) > 0 || sel.Event != "" {
@@ -320,6 +342,27 @@ func saveStateOrWarn(oxHome string, state *review.State, pr *review.PRInfo, reco
 		fmt.Fprintf(os.Stderr, "warning: failed to save review state: %v\n", err)
 	}
 	return nil
+}
+
+// foldUnanchored formats the unanchored findings as a markdown section
+// and prepends it to the user's global comment so the substance lands on
+// GitHub even when the line anchor was hallucinated by the agent.
+func foldUnanchored(existing string, unanchored []review.Finding) string {
+	var sb strings.Builder
+	sb.WriteString("Some findings could not be posted as inline comments because their line anchors fell outside the PR diff. They're included here so the substance isn't lost:\n\n")
+	for _, f := range unanchored {
+		anchor := fmt.Sprintf("%s:%d", f.File, f.Line)
+		if f.EndLine > f.Line {
+			anchor = fmt.Sprintf("%s:%d-%d", f.File, f.Line, f.EndLine)
+		}
+		fmt.Fprintf(&sb, "**[%s · %s] %s** (`%s`)\n\n%s\n\n---\n\n",
+			f.Severity, f.Category, f.Title, anchor, f.Body)
+	}
+	if strings.TrimSpace(existing) != "" {
+		sb.WriteString(strings.TrimSpace(existing))
+		sb.WriteString("\n")
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 // renderAddressingSummary prints a quick read of the per-prior-finding
