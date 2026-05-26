@@ -21,12 +21,13 @@ var severityOrder = map[Severity]int{
 
 // ANSI escape building blocks. No external deps.
 const (
-	ansiReset      = "\x1b[0m"
-	ansiBold       = "\x1b[1m"
-	ansiDim        = "\x1b[2m"
-	ansiRed        = "\x1b[31m"
-	ansiYellow     = "\x1b[33m"
-	ansiBrightRed  = "\x1b[91m"
+	ansiReset     = "\x1b[0m"
+	ansiBold      = "\x1b[1m"
+	ansiDim       = "\x1b[2m"
+	ansiRed       = "\x1b[31m"
+	ansiGreen     = "\x1b[32m"
+	ansiYellow    = "\x1b[33m"
+	ansiBrightRed = "\x1b[91m"
 )
 
 // colorize wraps s with the given ANSI sequence iff color output is enabled.
@@ -234,6 +235,126 @@ func wrapText(s string, width int) []string {
 		}
 	}
 	return out
+}
+
+// RenderAddressing renders the per-prior-finding addressing verdicts as a
+// pretty, severity-coloured block. Refs are grouped together (so a single
+// prior finding's multiple agent verdicts sit under one header). Within
+// each ref, verdicts are ordered ignored → partial → addressed so the
+// items that need attention show first.
+//
+// When withIndices is true, each verdict gets a "[N]" prefix matching its
+// position in the returned flat list — used by the interactive selector
+// to map user input back to entries.
+//
+// Returns the flat ordered slice (regardless of withIndices).
+func RenderAddressing(w io.Writer, addressing []Addressing, priorByRef map[string]Finding, withIndices bool) []Addressing {
+	if len(addressing) == 0 {
+		return nil
+	}
+
+	width := TermWidth()
+	rule := strings.Repeat("─", min(width, 78))
+
+	// Group by ref, preserve first-seen order then sort F1 < F2 < ... < F10.
+	byRef := map[string][]Addressing{}
+	order := []string{}
+	for _, a := range addressing {
+		if _, ok := byRef[a.Ref]; !ok {
+			order = append(order, a.Ref)
+		}
+		byRef[a.Ref] = append(byRef[a.Ref], a)
+	}
+	sort.SliceStable(order, func(i, j int) bool { return refNum(order[i]) < refNum(order[j]) })
+
+	// Counts (across all refs).
+	counts := map[AddressingStatus]int{}
+	for _, a := range addressing {
+		counts[a.Status]++
+	}
+
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, colorize(ansiDim, rule))
+	fmt.Fprintf(w, "Addressing of prior findings: %s · %s · %s\n",
+		colorize(ansiGreen, fmt.Sprintf("%d addressed", counts[AddressingAddressed])),
+		colorize(ansiYellow, fmt.Sprintf("%d partial", counts[AddressingPartial])),
+		colorize(ansiBrightRed, fmt.Sprintf("%d ignored", counts[AddressingIgnored])),
+	)
+	fmt.Fprintln(w, colorize(ansiDim, rule))
+	fmt.Fprintln(w)
+
+	statusRank := map[AddressingStatus]int{
+		AddressingIgnored:   0,
+		AddressingPartial:   1,
+		AddressingAddressed: 2,
+	}
+
+	flat := []Addressing{}
+	idx := 0
+	for _, ref := range order {
+		verdicts := byRef[ref]
+		sort.SliceStable(verdicts, func(i, j int) bool {
+			return statusRank[verdicts[i].Status] < statusRank[verdicts[j].Status]
+		})
+
+		// Header line for this ref.
+		if prior, ok := priorByRef[ref]; ok {
+			fmt.Fprintf(w, "%s  %s\n      %s\n",
+				colorize(ansiBold, ref),
+				prior.Title,
+				colorize(ansiDim, fmt.Sprintf("%s · %s · %s", anchorOf(prior), prior.Category, prior.Agent)),
+			)
+		} else {
+			fmt.Fprintf(w, "%s  (prior finding not found in state)\n", colorize(ansiBold, ref))
+		}
+
+		for _, a := range verdicts {
+			idx++
+			icon, statusColor := addressingDecor(a.Status)
+			prefix := ""
+			if withIndices {
+				prefix = colorize(ansiDim, fmt.Sprintf("[%d] ", idx))
+			}
+			fmt.Fprintf(w, "      %s%s %s %s\n",
+				prefix,
+				colorize(statusColor+ansiBold, icon),
+				colorize(statusColor, string(a.Status)),
+				colorize(ansiDim, fmt.Sprintf("(agent: %s)", a.Agent)),
+			)
+			for _, line := range bodyExcerpt(a.Note, 2, width-10) {
+				fmt.Fprintf(w, "          %s\n", colorize(ansiDim, line))
+			}
+			flat = append(flat, a)
+		}
+		fmt.Fprintln(w)
+	}
+	return flat
+}
+
+// addressingDecor returns the icon + color for a status. Centralized so the
+// summary and the selection prompt stay visually consistent.
+func addressingDecor(s AddressingStatus) (icon, color string) {
+	switch s {
+	case AddressingAddressed:
+		return "✓", ansiGreen
+	case AddressingPartial:
+		return "⚠", ansiYellow
+	case AddressingIgnored:
+		return "✗", ansiBrightRed
+	}
+	return "?", ""
+}
+
+// refNum extracts the integer suffix from a ref label like "F12". Returns 0
+// for malformed refs so they sort to the top (and are visible).
+func refNum(ref string) int {
+	if len(ref) > 1 && (ref[0] == 'F' || ref[0] == 'f') {
+		n, err := strconv.Atoi(ref[1:])
+		if err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 // MaybePager pipes w through $PAGER (or `less`) when w is a terminal and

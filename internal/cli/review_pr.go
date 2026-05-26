@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -205,21 +204,15 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 	}
 	findings = postable
 
-	// Render output. Interactive flow renders the summary inside
-	// RunInteractive, so don't double-print here. Non-interactive mode
-	// gets a full all-bodies dump piped through $PAGER when stdout is a
-	// TTY and the suite has 5+ findings.
+	// Render output. Interactive flow renders BOTH summaries (findings +
+	// addressing) inside RunInteractive, so don't double-print here.
+	// Non-interactive mode gets a full all-bodies dump piped through
+	// $PAGER when stdout is a TTY and the suite has 5+ findings.
 	if reviewPRNonInter {
 		w, closePager := review.MaybePager(os.Stdout, len(findings))
 		review.Render(w, findings)
-		if len(addressing) > 0 {
-			renderAddressingSummary(w, addressing, priorByRef)
-		}
+		review.RenderAddressing(w, addressing, priorByRef, false /* withIndices */)
 		_ = closePager()
-	} else if len(addressing) > 0 {
-		// Addressing block goes here so it shows before the (interactive)
-		// findings summary, framing the follow-up context first.
-		renderAddressingSummary(os.Stdout, addressing, priorByRef)
 	}
 
 	if reviewPRKeep {
@@ -363,37 +356,6 @@ func foldUnanchored(existing string, unanchored []review.Finding) string {
 		sb.WriteString("\n")
 	}
 	return strings.TrimRight(sb.String(), "\n")
-}
-
-// renderAddressingSummary prints a quick read of the per-prior-finding
-// verdicts. Used after the main Render() call when this is a follow-up.
-func renderAddressingSummary(w io.Writer, addressing []review.Addressing, priorByRef map[string]review.Finding) {
-	fmt.Fprintln(w, "\n── Addressing of prior findings ──")
-	byRef := map[string][]review.Addressing{}
-	order := []string{}
-	for _, a := range addressing {
-		if _, seen := byRef[a.Ref]; !seen {
-			order = append(order, a.Ref)
-		}
-		byRef[a.Ref] = append(byRef[a.Ref], a)
-	}
-	for _, ref := range order {
-		prior, hasPrior := priorByRef[ref]
-		anchor := ""
-		if hasPrior {
-			anchor = fmt.Sprintf(" %s:%d — %s", prior.File, prior.Line, prior.Title)
-		}
-		fmt.Fprintf(w, "%s%s\n", ref, anchor)
-		for _, a := range byRef[ref] {
-			icon := map[review.AddressingStatus]string{
-				review.AddressingAddressed: "✓",
-				review.AddressingPartial:   "⚠",
-				review.AddressingIgnored:   "✗",
-			}[a.Status]
-			fmt.Fprintf(w, "  %s %s (agent: %s) — %s\n", icon, a.Status, a.Agent, a.Note)
-		}
-	}
-	fmt.Fprintln(w)
 }
 
 // isSelfPR returns true when the authenticated gh user authored the PR.

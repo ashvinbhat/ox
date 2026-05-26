@@ -237,42 +237,16 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 // finding may have multiple agent verdicts) and asks the user to pick
 // which to post as replies. Each selected entry produces one reply on the
 // prior finding's comment thread.
+//
+// Rendering is delegated to RenderAddressing so the look matches the
+// non-interactive summary exactly (and so the [N] indices the prompt
+// expects line up with what the user sees).
 func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, scanner *bufio.Scanner, out io.Writer) ([]Addressing, error) {
 	if len(addressing) == 0 {
 		return nil, nil
 	}
 
-	// Sort/group by ref for stable rendering.
-	byRef := map[string][]Addressing{}
-	refOrder := []string{}
-	for _, a := range addressing {
-		if _, seen := byRef[a.Ref]; !seen {
-			refOrder = append(refOrder, a.Ref)
-		}
-		byRef[a.Ref] = append(byRef[a.Ref], a)
-	}
-
-	fmt.Fprintln(out, "\n── Addressing of prior findings ──")
-	flat := []Addressing{}
-	idx := 0
-	for _, ref := range refOrder {
-		prior, hasPrior := priorByRef[ref]
-		anchor := ""
-		if hasPrior {
-			anchor = fmt.Sprintf(" %s:%d — %s", prior.File, prior.Line, prior.Title)
-		}
-		fmt.Fprintf(out, "%s%s\n", ref, anchor)
-		for _, a := range byRef[ref] {
-			idx++
-			icon := map[AddressingStatus]string{
-				AddressingAddressed: "✓",
-				AddressingPartial:   "⚠",
-				AddressingIgnored:   "✗",
-			}[a.Status]
-			fmt.Fprintf(out, "  [%d] %s %s (agent: %s) — %s\n", idx, icon, a.Status, a.Agent, a.Note)
-			flat = append(flat, a)
-		}
-	}
+	flat := RenderAddressing(out, addressing, priorByRef, true /* withIndices */)
 
 	for {
 		fmt.Fprintln(out, "\nPost which addressing verdicts as replies on the prior comments?")
