@@ -61,7 +61,7 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	// Step 1: addressing replies (follow-up only).
-	chosenAddressing, err := selectAddressing(addressing, priorByRef, scanner, out)
+	chosenAddressing, err := selectAddressing(addressing, priorByRef, worktree, scanner, out)
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	var picks []int
 	for {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Each finding shows a 3-line excerpt. Type `e <n>` for full reasoning, `chat <n>` to discuss, `ask <n> <q>` for one-shot Q&A.")
-		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | approve | request-changes | comment | e <n> | chat <n> | ask <n> <q> | edit <n> | help]")
+		fmt.Fprintln(out, "Each finding shows a 3-line excerpt. Drill in with `e <n>`, talk to a reviewer with `chat <n>` (finding) or `chat` (review-wide).")
+		fmt.Fprintln(out, "Post which to GitHub? [1,3,5-7 | all | none | approve | request-changes | comment | e <n> | chat [<n>] | ask [<n>] <q> | edit <n> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()
@@ -128,8 +128,10 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			fmt.Fprintln(out, "  request-changes           post a bare REQUEST_CHANGES review (no inline comments)")
 			fmt.Fprintln(out, "  comment                   post a bare COMMENT review (no inline comments)")
 			fmt.Fprintln(out, "  e 2 / expand 2 / view 2   show finding [2] in full")
-			fmt.Fprintln(out, "  chat 2                    interactive chat about finding [2] (claude session)")
-			fmt.Fprintln(out, "  ask 2 <question>          one-shot Q&A about finding [2]")
+			fmt.Fprintln(out, "  chat                      chat with the lead reviewer about the WHOLE review")
+			fmt.Fprintln(out, "  chat 2                    chat about finding [2] specifically")
+			fmt.Fprintln(out, "  ask <question>            one-shot Q&A with the lead reviewer (review-wide)")
+			fmt.Fprintln(out, "  ask 2 <question>          one-shot Q&A about finding [2] specifically")
 			fmt.Fprintln(out, "  edit 2                    edit finding [2]'s body in $EDITOR")
 			continue
 		case strings.HasPrefix(lower, "e ") || strings.HasPrefix(lower, "expand ") || strings.HasPrefix(lower, "view "):
@@ -142,27 +144,60 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			fmt.Fprintln(out)
 			RenderOne(out, sortFindings(working)[n-1], n)
 			continue
-		case strings.HasPrefix(lower, "chat ") || strings.HasPrefix(lower, "ask "):
+		case lower == "chat" || strings.HasPrefix(lower, "chat ") ||
+			lower == "ask" || strings.HasPrefix(lower, "ask "):
 			if worktree == nil {
 				fmt.Fprintln(out, "  chat/ask unavailable: review worktree has been torn down")
 				continue
 			}
-			isAsk := strings.HasPrefix(lower, "ask ")
-			rest := strings.TrimSpace(input[strings.IndexByte(input, ' ')+1:])
-			// Parse the index off the front of `rest`.
-			parts := strings.SplitN(rest, " ", 2)
-			n, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-			if err != nil || n < 1 || n > len(working) {
-				fmt.Fprintf(out, "  invalid finding index: %q (expected 1..%d)\n", parts[0], len(working))
+			isAsk := lower == "ask" || strings.HasPrefix(lower, "ask ")
+
+			// Parse `chat` / `chat <n>` / `ask <q>` / `ask <n> <q>`. The
+			// distinction between finding-specific and review-wide is
+			// whether the first token after `chat`/`ask` is a number.
+			var rest string
+			if sp := strings.IndexByte(input, ' '); sp >= 0 {
+				rest = strings.TrimSpace(input[sp+1:])
+			}
+			firstTok, remainder, _ := strings.Cut(rest, " ")
+			n, indexErr := strconv.Atoi(strings.TrimSpace(firstTok))
+
+			if rest == "" || indexErr != nil {
+				// Review-wide (no index given).
+				question := ""
+				if isAsk {
+					if strings.TrimSpace(rest) == "" {
+						fmt.Fprintln(out, "  ask requires a question: `ask what's the highest-priority finding?`")
+						continue
+					}
+					question = rest
+				}
+				fmt.Fprintln(out)
+				if isAsk {
+					fmt.Fprintln(out, "── asking the lead reviewer (review-wide) ──")
+				} else {
+					fmt.Fprintln(out, "── chat with the lead reviewer (review-wide) — type /exit or Ctrl-D when done ──")
+				}
+				fmt.Fprintln(out)
+				if cerr := ChatAboutReview(worktree, question); cerr != nil {
+					fmt.Fprintf(out, "  chat/ask failed: %v\n", cerr)
+				}
+				fmt.Fprintln(out, "\n── back to selection ──")
+				continue
+			}
+
+			// Finding-specific: `chat <n>` / `ask <n> <q>`.
+			if n < 1 || n > len(working) {
+				fmt.Fprintf(out, "  invalid finding index: %q (expected 1..%d)\n", firstTok, len(working))
 				continue
 			}
 			question := ""
 			if isAsk {
-				if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
+				if strings.TrimSpace(remainder) == "" {
 					fmt.Fprintln(out, "  ask requires a question: `ask <n> what does this mean?`")
 					continue
 				}
-				question = strings.TrimSpace(parts[1])
+				question = strings.TrimSpace(remainder)
 			}
 			finding := sortFindings(working)[n-1]
 			fmt.Fprintln(out)
@@ -241,7 +276,11 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 // Rendering is delegated to RenderAddressing so the look matches the
 // non-interactive summary exactly (and so the [N] indices the prompt
 // expects line up with what the user sees).
-func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, scanner *bufio.Scanner, out io.Writer) ([]Addressing, error) {
+//
+// worktree is needed so `chat` / `ask <q>` can launch claude with the PR
+// head checkout as cwd. nil disables those commands.
+func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, worktree *ReviewWorktree, scanner *bufio.Scanner, out io.Writer) ([]Addressing, error) {
+	addressingWorktree := worktree
 	if len(addressing) == 0 {
 		return nil, nil
 	}
@@ -250,17 +289,35 @@ func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, sc
 
 	for {
 		fmt.Fprintln(out, "\nPost which addressing verdicts as replies on the prior comments?")
-		fmt.Fprintln(out, "[comma-separated, ranges, 'all', 'none', 'help']")
+		fmt.Fprintln(out, "[1,3,5-7 | all | none | chat | ask <q> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
 			return nil, scanner.Err()
 		}
 		input := strings.TrimSpace(scanner.Text())
+		lower := strings.ToLower(input)
 		switch {
 		case input == "" || strings.EqualFold(input, "none"):
 			return nil, nil
 		case strings.EqualFold(input, "help") || input == "?":
-			fmt.Fprintln(out, "  Examples: 1,3,5-7   all   none")
+			fmt.Fprintln(out, "  1,3,5-7 / all / none   select addressing verdicts to post as replies")
+			fmt.Fprintln(out, "  chat                   chat with the lead reviewer (review-wide)")
+			fmt.Fprintln(out, "  ask <question>         one-shot Q&A with the lead reviewer (review-wide)")
+			continue
+		case lower == "chat":
+			// We need a worktree to launch claude; the caller threaded it in
+			// via the closure on selectAddressing's parent. Access via a
+			// package-level helper isn't worth the wiring — selectAddressing
+			// captures worktree from its caller (RunInteractive).
+			runReviewChat(addressingWorktree, "", out)
+			continue
+		case strings.HasPrefix(lower, "ask "):
+			q := strings.TrimSpace(input[4:])
+			if q == "" {
+				fmt.Fprintln(out, "  ask requires a question: `ask what's the highest-priority?`")
+				continue
+			}
+			runReviewChat(addressingWorktree, q, out)
 			continue
 		}
 		picks, err := ParseSelection(input, len(flat))
@@ -281,6 +338,27 @@ func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, sc
 		}
 		return chosen, nil
 	}
+}
+
+// runReviewChat is a small wrapper around ChatAboutReview shared by both
+// the addressing-selection prompt and the main findings-selection prompt.
+// Empty question = interactive REPL; non-empty = one-shot.
+func runReviewChat(worktree *ReviewWorktree, question string, out io.Writer) {
+	if worktree == nil {
+		fmt.Fprintln(out, "  chat/ask unavailable: review worktree has been torn down")
+		return
+	}
+	fmt.Fprintln(out)
+	if question == "" {
+		fmt.Fprintln(out, "── chat with the lead reviewer (review-wide) — type /exit or Ctrl-D when done ──")
+	} else {
+		fmt.Fprintln(out, "── asking the lead reviewer (review-wide) ──")
+	}
+	fmt.Fprintln(out)
+	if err := ChatAboutReview(worktree, question); err != nil {
+		fmt.Fprintf(out, "  chat/ask failed: %v\n", err)
+	}
+	fmt.Fprintln(out, "\n── back to selection ──")
 }
 
 // runBareReview drives the bare-review flow: the user wanted to
