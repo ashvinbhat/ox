@@ -61,9 +61,15 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	// Step 1: addressing replies (follow-up only).
-	chosenAddressing, err := selectAddressing(addressing, priorByRef, worktree, scanner, out)
+	chosenAddressing, bareReviewFromAddressing, err := selectAddressing(addressing, priorByRef, worktree, scanner, out)
 	if err != nil {
 		return nil, err
+	}
+	// User shortcut "approve" / "request-changes" / "comment" at the
+	// addressing prompt → skip the findings prompt entirely and use the
+	// bare-review Selection as-is.
+	if bareReviewFromAddressing != nil {
+		return bareReviewFromAddressing, nil
 	}
 
 	if len(findings) == 0 {
@@ -112,6 +118,11 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			// inline comments. Useful when you've read all the findings and
 			// just want to approve / comment / request changes without picking
 			// any of them to send as inline comments.
+			//
+			// Preserve any addressing entries already picked at the addressing
+			// prompt — bare-review at the findings prompt should still post
+			// those replies. (Otherwise the user has to choose between
+			// addressing-replies and approve.)
 			var event Event
 			switch lower {
 			case "approve":
@@ -121,7 +132,15 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			case "comment":
 				event = EventComment
 			}
-			return runBareReview(event, scanner, out)
+			sel, err := runBareReview(event, scanner, out)
+			if err != nil || sel == nil {
+				return sel, err
+			}
+			if len(chosenAddressing) > 0 {
+				sel.Addressing = chosenAddressing
+				sel.PriorByRef = priorByRef
+			}
+			return sel, nil
 		case strings.EqualFold(input, "help") || input == "?":
 			fmt.Fprintln(out, "  1,3,5-7 / all / none      select findings to post")
 			fmt.Fprintln(out, "  approve                   post a bare APPROVE review (no inline comments)")
@@ -273,42 +292,68 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 // which to post as replies. Each selected entry produces one reply on the
 // prior finding's comment thread.
 //
+// Returns (chosen, bareReview, error):
+//   - chosen != nil and bareReview == nil: user picked addressing entries,
+//     caller should continue to findings selection.
+//   - chosen == nil and bareReview == nil: user typed "none" / cancelled,
+//     caller should continue to findings selection.
+//   - bareReview != nil: user shortcut to a bare-review event (approve /
+//     comment / request-changes) at the addressing prompt; caller should
+//     finalize the review with bareReview as the Selection and skip the
+//     findings prompt entirely.
+//
 // Rendering is delegated to RenderAddressing so the look matches the
 // non-interactive summary exactly (and so the [N] indices the prompt
 // expects line up with what the user sees).
 //
 // worktree is needed so `chat` / `ask <q>` can launch claude with the PR
 // head checkout as cwd. nil disables those commands.
-func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, worktree *ReviewWorktree, scanner *bufio.Scanner, out io.Writer) ([]Addressing, error) {
+func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, worktree *ReviewWorktree, scanner *bufio.Scanner, out io.Writer) ([]Addressing, *Selection, error) {
 	addressingWorktree := worktree
 	if len(addressing) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	flat := RenderAddressing(out, addressing, priorByRef, true /* withIndices */)
 
 	for {
 		fmt.Fprintln(out, "\nPost which addressing verdicts as replies on the prior comments?")
-		fmt.Fprintln(out, "[1,3,5-7 | all | none | chat | ask <q> | help]")
+		fmt.Fprintln(out, "[1,3,5-7 | all | none | approve | request-changes | comment | chat | ask <q> | help]")
 		fmt.Fprint(out, "> ")
 		if !scanner.Scan() {
-			return nil, scanner.Err()
+			return nil, nil, scanner.Err()
 		}
 		input := strings.TrimSpace(scanner.Text())
 		lower := strings.ToLower(input)
 		switch {
 		case input == "" || strings.EqualFold(input, "none"):
-			return nil, nil
+			return nil, nil, nil
 		case strings.EqualFold(input, "help") || input == "?":
-			fmt.Fprintln(out, "  1,3,5-7 / all / none   select addressing verdicts to post as replies")
-			fmt.Fprintln(out, "  chat                   chat with the lead reviewer (review-wide)")
-			fmt.Fprintln(out, "  ask <question>         one-shot Q&A with the lead reviewer (review-wide)")
+			fmt.Fprintln(out, "  1,3,5-7 / all / none     select addressing verdicts to post as replies")
+			fmt.Fprintln(out, "  approve                  shortcut: post a bare APPROVE review (no addressing replies, no inline findings)")
+			fmt.Fprintln(out, "  request-changes          shortcut: post a bare REQUEST_CHANGES review")
+			fmt.Fprintln(out, "  comment                  shortcut: post a bare COMMENT review")
+			fmt.Fprintln(out, "  chat                     chat with the lead reviewer (review-wide)")
+			fmt.Fprintln(out, "  ask <question>           one-shot Q&A with the lead reviewer (review-wide)")
 			continue
+		case lower == "approve",
+			lower == "request-changes", lower == "request_changes",
+			lower == "comment":
+			// Bare-review shortcut from the addressing prompt — skip both
+			// the rest of the addressing selection AND the findings prompt
+			// entirely. No addressing replies, no inline findings.
+			var event Event
+			switch lower {
+			case "approve":
+				event = EventApprove
+			case "request-changes", "request_changes":
+				event = EventRequestChanges
+			case "comment":
+				event = EventComment
+			}
+			sel, err := runBareReview(event, scanner, out)
+			return nil, sel, err
 		case lower == "chat":
-			// We need a worktree to launch claude; the caller threaded it in
-			// via the closure on selectAddressing's parent. Access via a
-			// package-level helper isn't worth the wiring — selectAddressing
-			// captures worktree from its caller (RunInteractive).
 			runReviewChat(addressingWorktree, "", out)
 			continue
 		case strings.HasPrefix(lower, "ask "):
@@ -336,7 +381,7 @@ func selectAddressing(addressing []Addressing, priorByRef map[string]Finding, wo
 			}
 			chosen = append(chosen, a)
 		}
-		return chosen, nil
+		return chosen, nil, nil
 	}
 }
 
