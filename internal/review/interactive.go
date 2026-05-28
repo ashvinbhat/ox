@@ -91,7 +91,13 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	}
 
 	// Step 2: new-findings selection.
-	working := append([]Finding(nil), findings...)
+	//
+	// IMPORTANT: sort `working` ONCE here so the display indices (which
+	// RenderSummary emits in severity order) align with how this function
+	// indexes back into `working[idx-1]` for selection / expand / edit /
+	// chat. Without this, the user selects "2" but gets unsorted[1],
+	// which is a completely different finding from sorted[1].
+	working := sortFindings(findings)
 
 	// Show the summary view up front so the user sees titles + anchors and
 	// can drill into bodies on demand with `e <n>` / `expand <n>` / `view <n>`.
@@ -161,7 +167,7 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 				continue
 			}
 			fmt.Fprintln(out)
-			RenderOne(out, sortFindings(working)[n-1], n)
+			RenderOne(out, working[n-1], n)
 			continue
 		case lower == "chat" || strings.HasPrefix(lower, "chat ") ||
 			lower == "ask" || strings.HasPrefix(lower, "ask "):
@@ -218,7 +224,7 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 				}
 				question = strings.TrimSpace(remainder)
 			}
-			finding := sortFindings(working)[n-1]
+			finding := working[n-1]
 			fmt.Fprintln(out)
 			if isAsk {
 				fmt.Fprintf(out, "── asking about finding [%d] (%s) ──\n\n", n, finding.Agent)
