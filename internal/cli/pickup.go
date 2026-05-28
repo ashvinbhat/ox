@@ -109,11 +109,24 @@ func runPickup(cmd *cobra.Command, args []string) error {
 			baseBranch = "origin/" + baseBranch
 		}
 
-		fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
-		if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
-			// Cleanup workspace on failure
-			os.RemoveAll(ws.Path)
-			return fmt.Errorf("create worktree for %s: %w", repoName, err)
+		// Re-pickup case: the local branch still exists from a prior run
+		// (e.g. the task was dropped/done but ox kept the branch so WIP
+		// would survive). Attach the worktree to that branch instead of
+		// trying to create a new one — `git worktree add -b` would fail
+		// on the branch collision, and a fresh branch would silently
+		// orphan any preserved work.
+		if gitutil.BranchExists(repoPath, branchName) {
+			fmt.Printf("Re-attaching worktree to existing branch %s...\n", branchName)
+			if err := gitutil.CreateWorktree(repoPath, worktreePath, branchName); err != nil {
+				os.RemoveAll(ws.Path)
+				return fmt.Errorf("attach worktree for %s: %w", repoName, err)
+			}
+		} else {
+			fmt.Printf("Creating worktree %s from %s...\n", branchName, baseBranch)
+			if err := gitutil.CreateWorktreeFromRef(repoPath, worktreePath, branchName, baseBranch); err != nil {
+				os.RemoveAll(ws.Path)
+				return fmt.Errorf("create worktree for %s: %w", repoName, err)
+			}
 		}
 
 		// Copy files from repo to worktree (e.g., .env, .vscode/)

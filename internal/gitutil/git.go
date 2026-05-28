@@ -106,6 +106,16 @@ func Checkout(repoPath, branch string) error {
 	return Run(repoPath, "checkout", branch)
 }
 
+// BranchExists reports whether `branch` is a local branch in repoPath.
+// Useful for re-pickup paths that want to attach a worktree to an
+// already-existing branch (preserving prior WIP) rather than failing on
+// the `git worktree add -b` collision.
+func BranchExists(repoPath, branch string) bool {
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	cmd.Dir = repoPath
+	return cmd.Run() == nil
+}
+
 // Run executes a git command.
 func Run(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
