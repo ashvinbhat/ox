@@ -185,13 +185,16 @@ func buildAgentPrompt(spec AgentSpec, findingsPath, reviewDir string, priorRefs 
 		followUpSection = fmt.Sprintf(`
 
 # Follow-up review mode
-This is a FOLLOW-UP review. Your prior review of this PR produced findings
-labeled %s. They are listed in REVIEW.md under "Prior review findings (this agent)".
-The "Diff since last review" section in REVIEW.md shows what the author has changed
-since you last reviewed.
+This is a FOLLOW-UP review. The prior review's findings are listed in
+REVIEW.md under "Prior review findings", each labeled with a stable ref
+(%s). The "Diff since last review" section shows what the author has
+changed between the prior review and the current head.
 
-For each prior finding, output an entry in the addressing[] array with:
-- ref:    the prior finding label (e.g. "F1")
+For prior findings where you have a confident verdict (most often your own
+%q findings, but feel free to grade others if you have a strong informed
+take based on the addressing diff), output an entry in the addressing[]
+array with:
+- ref:    the prior finding label (e.g. "F1") — must be one of: %s
 - status: one of "addressed", "partial", "ignored"
 - note:   1-2 sentences explaining your verdict, referencing the addressing diff
 - agent:  must be exactly %q
@@ -201,10 +204,18 @@ Status guide:
 - partial:   the area was touched but the concern is not fully fixed
 - ignored:   no relevant change to the file/line the prior finding pointed at
 
+It's fine to skip a prior finding if you don't have a confident view —
+better one solid verdict than five hand-wavy ones. Other agents are
+running the same pass in parallel and will cover the rest.
+
 When producing new findings[], DO NOT re-raise findings that are still
-present from your prior review unless their status was "addressed" (the author
-fixed the original spot and re-introduced the issue elsewhere). Focus new
-findings on the diff since last review.`, strings.Join(priorRefs, ", "), spec.Name)
+present from your prior review unless their status was "addressed" (the
+author fixed the original spot and re-introduced the issue elsewhere).
+Focus new findings on the diff since last review.`,
+			strings.Join(priorRefs, ", "),
+			spec.Name,
+			strings.Join(priorRefs, ", "),
+			spec.Name)
 	}
 
 	return fmt.Sprintf(`You are a code reviewer running as the %q pass.
@@ -301,8 +312,14 @@ func readAgentOutput(path, agentName string, priorRefs []string) (AgentOutput, e
 	}
 	output.Findings = validFindings
 
-	// Enforce that addressing entries only reference known prior refs and have
-	// valid statuses. Drop anything malformed with a warning.
+	// Enforce that addressing entries reference a known prior ref AND carry
+	// a valid status. Refs are now accepted from any agent (an agent may
+	// validly grade a prior finding from another category if it has an
+	// informed take after looking at the addressing diff). Unknown refs
+	// most likely come from an LLM hallucination, so silently drop them —
+	// previous behavior was a noisy stderr warning per dropped entry,
+	// which became overwhelming on follow-up reviews where every agent
+	// graded all refs and most got rejected.
 	validRefs := map[string]bool{}
 	for _, r := range priorRefs {
 		validRefs[r] = true
@@ -310,13 +327,11 @@ func readAgentOutput(path, agentName string, priorRefs []string) (AgentOutput, e
 	validAddressing := output.Addressing[:0]
 	for _, a := range output.Addressing {
 		if !validRefs[a.Ref] {
-			fmt.Fprintf(os.Stderr, "warning: dropping addressing with unknown ref %q from %s agent\n", a.Ref, agentName)
 			continue
 		}
 		switch a.Status {
 		case AddressingAddressed, AddressingPartial, AddressingIgnored:
 		default:
-			fmt.Fprintf(os.Stderr, "warning: dropping addressing %s with invalid status %q from %s agent\n", a.Ref, a.Status, agentName)
 			continue
 		}
 		if a.Agent == "" {

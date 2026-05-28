@@ -146,9 +146,18 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 				PriorFindings:  last.Findings,
 				AddressingDiff: addressingDiff,
 			}
+			// All agents see the full ref set so any agent may grade any
+			// prior finding. We used to partition by originating agent,
+			// which produced noisy "dropping unknown ref" warnings whenever
+			// an agent graded a finding outside its own bucket. Allowing
+			// cross-category addressing preserves more useful signal.
+			allRefs := make([]string, 0, len(last.Findings))
 			for _, f := range last.Findings {
 				priorByRef[f.Ref] = f
-				priorRefsByAgent[f.Agent] = append(priorRefsByAgent[f.Agent], f.Ref)
+				allRefs = append(allRefs, f.Ref)
+			}
+			for _, spec := range review.AllAgents {
+				priorRefsByAgent[spec.Name] = allRefs
 			}
 		}
 	} else if last := state.LastReview(); last != nil {
