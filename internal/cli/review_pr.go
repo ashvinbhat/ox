@@ -205,23 +205,32 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 	// We keep the substance by folding them into the global review body at
 	// post time instead of dropping them.
 	postable, unanchored := diffMap.FilterFindings(findings)
-	if len(unanchored) > 0 {
-		fmt.Printf("\n⚠ %d finding(s) anchored outside the PR diff — folded into the global review body so the substance isn't lost.\n", len(unanchored))
-		for _, f := range unanchored {
-			fmt.Fprintf(os.Stderr, "    %s:%d (%s) — %s\n", f.File, f.Line, f.Agent, f.Title)
-		}
-	}
 	findings = postable
 
-	// Render output. Interactive flow renders BOTH summaries (findings +
-	// addressing) inside RunInteractive, so don't double-print here.
-	// Non-interactive mode gets a full all-bodies dump piped through
-	// $PAGER when stdout is a TTY and the suite has 5+ findings.
+	// Render output. Interactive flow renders the findings summary inside
+	// RunInteractive, so don't double-print the postable set here. We DO
+	// render the unanchored set here in both modes — it's the only place
+	// the user sees their content (RunInteractive's selection summary only
+	// shows postable findings since unanchored ones aren't selectable).
 	if reviewPRNonInter {
 		w, closePager := review.MaybePager(os.Stdout, len(findings))
 		review.Render(w, findings)
+		if len(unanchored) > 0 {
+			fmt.Fprintln(w)
+			fmt.Fprintf(w, "── Unanchored findings (%d) — will fold into global review body if you post ──\n", len(unanchored))
+			review.RenderSummary(w, unanchored)
+		}
 		review.RenderAddressing(w, addressing, priorByRef, false /* withIndices */)
 		_ = closePager()
+	} else if len(unanchored) > 0 {
+		// Interactive: show unanchored findings here, BEFORE RunInteractive
+		// kicks in. They're not selectable (no inline post for these), so
+		// they don't need [N] indices — just be visible so the user can read
+		// the substance and decide whether to keep or refine them via the
+		// global comment / chat path.
+		fmt.Printf("\n── Unanchored findings (%d) — line anchors fell outside the PR diff ──\n", len(unanchored))
+		fmt.Println("These can't be posted as inline comments but will be folded into the global review body if you post.")
+		review.RenderSummary(os.Stdout, unanchored)
 	}
 
 	if reviewPRKeep {
