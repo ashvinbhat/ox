@@ -82,8 +82,18 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 			return &Selection{}, nil
 		}
 		// Still ask for event + global since the user may want to record an overall verdict.
-		sel.Event = promptEvent(scanner, out)
-		sel.GlobalComment = promptGlobalComment(scanner, out)
+		// Body is required for COMMENT and REQUEST_CHANGES when there are no inline findings
+		// to satisfy GitHub's non-empty-review constraint; APPROVE accepts an empty body.
+		for {
+			sel.Event = promptEvent(scanner, out)
+			required := sel.Event != EventApprove
+			sel.GlobalComment = promptGlobalComment(scanner, out, required)
+			if required && strings.TrimSpace(sel.GlobalComment) == "" {
+				fmt.Fprintln(out, "  GitHub rejects an empty body on this event — please write a short message.")
+				continue
+			}
+			break
+		}
 		if !confirmPost(sel, scanner, out) {
 			return &Selection{}, nil
 		}
@@ -274,8 +284,10 @@ func RunInteractive(findings []Finding, addressing []Addressing, priorByRef map[
 	// Ask for review event.
 	event := promptEvent(scanner, out)
 
-	// Ask for optional global comment.
-	global := promptGlobalComment(scanner, out)
+	// Ask for global comment. With inline findings present, the body is
+	// optional — GitHub accepts an empty stub when at least one inline
+	// comment satisfies the non-empty-review constraint.
+	global := promptGlobalComment(scanner, out, false)
 
 	sel := &Selection{
 		Findings:      chosen,
@@ -427,9 +439,10 @@ func runBareReview(event Event, scanner *bufio.Scanner, out io.Writer) (*Selecti
 		fmt.Fprintln(out, "\nBare COMMENT — no inline comments. GitHub requires a body.")
 	}
 
+	required := event != EventApprove
 	for {
-		global := promptGlobalComment(scanner, out)
-		if event != EventApprove && strings.TrimSpace(global) == "" {
+		global := promptGlobalComment(scanner, out, required)
+		if required && strings.TrimSpace(global) == "" {
 			fmt.Fprintln(out, "  GitHub rejects an empty body on this event — please write a short message.")
 			continue
 		}
@@ -602,16 +615,34 @@ func promptEvent(scanner *bufio.Scanner, out io.Writer) Event {
 	}
 }
 
-func promptGlobalComment(scanner *bufio.Scanner, out io.Writer) string {
-	fmt.Fprintln(out, "Optional global comment (cross-cutting commentary that can't be anchored).")
-	fmt.Fprintln(out, "Enter lines; finish with a single '.' on its own line, or empty line to skip.")
+// promptGlobalComment reads a multi-line comment from the user. When
+// required is true, the wording reflects that GitHub will reject an
+// empty body for this review (e.g. bare COMMENT / REQUEST_CHANGES) and
+// the "empty line to skip" affordance is removed — the caller still
+// handles the empty-input case by re-prompting.
+func promptGlobalComment(scanner *bufio.Scanner, out io.Writer, required bool) string {
+	if required {
+		fmt.Fprintln(out, "GitHub requires a body for this review.")
+		fmt.Fprintln(out, "Enter lines; finish with a single '.' on its own line.")
+	} else {
+		fmt.Fprintln(out, "Optional global comment (cross-cutting commentary that can't be anchored).")
+		fmt.Fprintln(out, "Enter lines; finish with a single '.' on its own line, or empty line to skip.")
+	}
 	var lines []string
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "." {
 			break
 		}
-		if line == "" && len(lines) == 0 {
+		if line == "" && len(lines) == 0 && !required {
+			return ""
+		}
+		// When required, an empty first line still returns to the caller —
+		// the caller's re-prompt loop surfaces the constraint and asks again.
+		// (Treating empty-first-line as a hard error here would force the
+		// user to type SOMETHING before they can re-enter the prompt; cleaner
+		// to let them out and back in.)
+		if line == "" && len(lines) == 0 && required {
 			return ""
 		}
 		lines = append(lines, line)
