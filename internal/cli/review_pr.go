@@ -217,20 +217,20 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		review.Render(w, findings)
 		if len(unanchored) > 0 {
 			fmt.Fprintln(w)
-			fmt.Fprintf(w, "── Unanchored findings (%d) — will fold into global review body if you post ──\n", len(unanchored))
-			review.RenderSummary(w, unanchored)
+			fmt.Fprintf(w, "── Unanchored findings (%d) — will fold into global review body if you post (not individually selectable) ──\n", len(unanchored))
+			review.RenderSummaryUnselectable(w, unanchored)
 		}
 		review.RenderAddressing(w, addressing, priorByRef, false /* withIndices */)
 		_ = closePager()
 	} else if len(unanchored) > 0 {
 		// Interactive: show unanchored findings here, BEFORE RunInteractive
 		// kicks in. They're not selectable (no inline post for these), so
-		// they don't need [N] indices — just be visible so the user can read
-		// the substance and decide whether to keep or refine them via the
-		// global comment / chat path.
+		// they're rendered with bullets — never numbers — so the user
+		// doesn't try to pick "1" expecting an unanchored finding.
 		fmt.Printf("\n── Unanchored findings (%d) — line anchors fell outside the PR diff ──\n", len(unanchored))
-		fmt.Println("These can't be posted as inline comments but will be folded into the global review body if you post.")
-		review.RenderSummary(os.Stdout, unanchored)
+		fmt.Println("Not individually selectable. They auto-fold into the global review body if you post,")
+		fmt.Println("or you can read them here and refine via the global comment / `chat` path.")
+		review.RenderSummaryUnselectable(os.Stdout, unanchored)
 	}
 
 	if reviewPRKeep {

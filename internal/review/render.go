@@ -112,10 +112,28 @@ func anchorOf(f Finding) string {
 }
 
 // RenderSummary prints each finding with severity-coloured header bands,
-// numbered titles, dimmed metadata, AND a short body excerpt so the
-// reasoning is visible inline without needing to expand.
-// The user can still `expand <n>` for the full body.
+// titles, dimmed metadata, AND a short body excerpt so the reasoning is
+// visible inline without needing to expand.
+//
+// When withIndices is true (the default), findings get a `[N]` prefix so
+// the user can pick them by number at the selection prompt. When false,
+// the same content is rendered with a bullet prefix — used for unanchored
+// findings, which are auto-folded into the global body and aren't
+// selectable, so giving them numbers that look pickable would be
+// misleading.
 func RenderSummary(w io.Writer, findings []Finding) {
+	renderSummaryWithIndices(w, findings, true)
+}
+
+// RenderSummaryUnselectable is RenderSummary's bullet variant — used for
+// the unanchored-findings block in the report so users can read the
+// substance but don't get a (misleading) numbered handle on entries they
+// can't pick.
+func RenderSummaryUnselectable(w io.Writer, findings []Finding) {
+	renderSummaryWithIndices(w, findings, false)
+}
+
+func renderSummaryWithIndices(w io.Writer, findings []Finding, withIndices bool) {
 	if len(findings) == 0 {
 		fmt.Fprintln(w, colorize(ansiDim, "No findings. ✓"))
 		return
@@ -140,9 +158,14 @@ func RenderSummary(w io.Writer, findings []Finding) {
 			band := strings.ToUpper(string(f.Severity))
 			fmt.Fprintf(w, "%s\n", colorize(severityColor(f.Severity)+ansiBold, band))
 		}
-		idx := colorize(ansiDim, fmt.Sprintf("[%d]", i+1))
+		var prefix string
+		if withIndices {
+			prefix = colorize(ansiDim, fmt.Sprintf("[%d]", i+1))
+		} else {
+			prefix = colorize(ansiDim, "  •")
+		}
 		meta := colorize(ansiDim, fmt.Sprintf("(%s · %s · %s)", anchorOf(f), f.Category, f.Agent))
-		fmt.Fprintf(w, "  %s %s\n      %s\n", idx, f.Title, meta)
+		fmt.Fprintf(w, "  %s %s\n      %s\n", prefix, f.Title, meta)
 
 		// Body excerpt — first ~3 lines of reasoning, wrapped. Lets the
 		// reviewer scan substance, not just titles, without expanding each.
