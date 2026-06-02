@@ -276,10 +276,15 @@ func runReviewPR(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %d inline finding(s), %d addressing reply/replies, event=%s\n", len(sel.Findings), len(sel.Addressing), sel.Event)
 		return saveStateOrWarn(cfg.Home, state, pr, record)
 	}
-	// Auto-fold unanchored findings into the global comment if the user
-	// is posting. Concise rendering — title + anchor + agent + body —
-	// prepended (or used as a stub when no global was provided).
-	if len(unanchored) > 0 && (len(sel.Findings) > 0 || sel.Event != "") {
+	// Auto-fold unanchored findings into the global comment ONLY when the
+	// user is already posting inline findings. The original intent was:
+	// "user picked findings to post, some had bad anchors → fold those into
+	// the body so the substance lands." It's NOT supposed to override an
+	// explicit bare-review choice (bare approve / comment / request-changes
+	// where the user picked no inline findings) — in that case the user
+	// reviewed the findings and chose not to push them, and auto-folding
+	// rewrites their intent.
+	if len(unanchored) > 0 && len(sel.Findings) > 0 {
 		sel.GlobalComment = foldUnanchored(sel.GlobalComment, unanchored)
 	}
 
