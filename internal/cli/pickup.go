@@ -356,7 +356,6 @@ func copyDir(src, dst string) error {
 func init() {
 	pickupCmd.Flags().StringSliceVarP(&pickupRepos, "repos", "r", nil, "Repos to include (optional — omit for a research / cross-cutting workspace)")
 	pickupCmd.Flags().StringVarP(&pickupPersona, "persona", "p", "", "Persona to use (default: builder)")
-	pickupCmd.MarkFlagRequired("repos")
 
 	rootCmd.AddCommand(pickupCmd)
 }
