@@ -44,12 +44,10 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 	taskRef := args[0]
 
-	// Check if repos specified
-	if len(pickupRepos) == 0 {
-		return fmt.Errorf("at least one repo required (use --repos)")
-	}
-
-	// Validate repos exist
+	// --repos is optional: a scoping / research / cross-cutting task may not
+	// have a single home repo at pickup time. When empty, we still create the
+	// workspace (so AGENTS.md / persona context land) but skip worktree
+	// creation. The user can add repos later with `ox worktree add <repo>`.
 	for _, r := range pickupRepos {
 		if _, exists := cfg.Repos[r]; !exists {
 			return fmt.Errorf("repo %q not registered (run 'ox repo list' to see available)", r)
@@ -213,13 +211,20 @@ func runPickup(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nWorkspace created: %s\n", ws.Path)
 	fmt.Printf("Persona: %s\n", persona)
-	fmt.Printf("Repos: %s\n", strings.Join(pickupRepos, ", "))
+	if len(pickupRepos) == 0 {
+		fmt.Println("Repos: (none — research / cross-cutting workspace)")
+	} else {
+		fmt.Printf("Repos: %s\n", strings.Join(pickupRepos, ", "))
+	}
 
 	// Surface relevant learnings
 	surfaceRelevantLearnings(cfg.Home, t.Tags, pickupRepos)
 
 	fmt.Println("\nNext steps:")
 	fmt.Printf("  cd %s\n", ws.Path)
+	if len(pickupRepos) == 0 {
+		fmt.Println("  # Add a repo later with: ox worktree add <repo>")
+	}
 	fmt.Println("  # Start working with your AI agent")
 
 	return nil
@@ -349,7 +354,7 @@ func copyDir(src, dst string) error {
 }
 
 func init() {
-	pickupCmd.Flags().StringSliceVarP(&pickupRepos, "repos", "r", nil, "Repos to include (required)")
+	pickupCmd.Flags().StringSliceVarP(&pickupRepos, "repos", "r", nil, "Repos to include (optional — omit for a research / cross-cutting workspace)")
 	pickupCmd.Flags().StringVarP(&pickupPersona, "persona", "p", "", "Persona to use (default: builder)")
 	pickupCmd.MarkFlagRequired("repos")
 
