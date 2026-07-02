@@ -207,9 +207,17 @@ func findReposInWorkspace(workspacePath string) []string {
 }
 
 // createPR creates a pull request using gh CLI.
+//
+// Title and body deliberately avoid referencing the local task tracker
+// (no "Task #N", no "Shipped via ox ship" footer, no yoke) so nothing
+// leaks about the workspace tooling into the PR that reviewers on GitHub
+// see. The title is the task title verbatim; the body is a plain summary
+// the author is expected to expand on. Task-linking still happens via
+// `ox link-pr` on the yoke side — that's an internal side-channel.
 func createPR(worktreePath, repoName string, taskSeq int, taskTitle string, draft bool) (string, error) {
-	title := fmt.Sprintf("#%d: %s", taskSeq, taskTitle)
-	body := fmt.Sprintf("## Summary\nTask #%d: %s\n\n---\nShipped via `ox ship`", taskSeq, taskTitle)
+	_ = taskSeq // no longer surfaced in the PR itself
+	title := taskTitle
+	body := fmt.Sprintf("## Summary\n%s\n", taskTitle)
 
 	args := []string{"pr", "create", "--title", title, "--body", body}
 	if draft {

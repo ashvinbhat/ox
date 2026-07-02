@@ -130,9 +130,27 @@ func indexOf(s, substr string) int {
 }
 
 func buildPersonaPrompt(persona, oxHome string, ws *workspace.TaskWorkspace) string {
-	base := fmt.Sprintf(`You are an ox-powered AI assistant working in task workspace: %s
+	base := fmt.Sprintf(`You are an AI assistant working in a task workspace: %s
 
-## Ox Commands Available
+## Output hygiene — CRITICAL
+
+The workspace tools below (ox / yoke / checkpoints / learnings) are PRIVATE to this
+environment. Never mention them in anything that lands in the code repository or in
+anything a human collaborator sees on GitHub:
+
+- Commit messages: describe the change, not the tooling. No "shipped via ox", no
+  "closes yoke task #N", no "checkpoint saved". Use the actual issue tracker
+  (Jira / Notion / Linear) if one is referenced in the task.
+- PR titles and bodies: same rule. The reviewer should not learn what tools you
+  used; they should read what changed and why.
+- Code comments / test names / assertion messages / TODO markers: never reference
+  ox, yoke, task IDs like "Task #123", or the local workspace path.
+- Files added to the repo: absolutely no ox/yoke references.
+
+You may (and should) use the ox commands below internally to track your own
+progress. That's what they exist for. Just don't advertise them outward.
+
+## Workspace tools (internal — do not reference in output)
 `, ws.Slug)
 
 	// Common commands
