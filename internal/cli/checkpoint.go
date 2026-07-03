@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/checkpoint"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -231,20 +231,7 @@ func runResume(cmd *cobra.Command, args []string) error {
 
 // syncCheckpointToYoke adds the checkpoint as a note in yoke.
 func syncCheckpointToYoke(taskSeq int, cp *checkpoint.Checkpoint) error {
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return err
-	}
-	defer yokeClient.Close()
-
-	taskRef := fmt.Sprintf("%d", taskSeq)
-	t, err := yokeClient.Get(taskRef)
-	if err != nil {
-		return err
-	}
-
-	note := cp.ToYokeNote()
-	return yokeClient.AddNote(t.ID, note)
+	return yokecli.AddNote(fmt.Sprintf("%d", taskSeq), cp.ToYokeNote())
 }
 
 func init() {

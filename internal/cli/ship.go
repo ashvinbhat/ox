@@ -9,7 +9,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -45,22 +45,11 @@ func runShip(cmd *cobra.Command, args []string) error {
 	var ws *workspace.TaskWorkspace
 	var err error
 
+	ref := ""
 	if len(args) > 0 {
-		ws, err = workspace.Open(cfg.Home, args[0])
-	} else {
-		workspaces, listErr := workspace.List(cfg.Home)
-		if listErr != nil {
-			return fmt.Errorf("list workspaces: %w", listErr)
-		}
-		if len(workspaces) == 0 {
-			return fmt.Errorf("no active workspaces")
-		}
-		if len(workspaces) > 1 {
-			return fmt.Errorf("multiple workspaces active, specify task ID")
-		}
-		ws = workspaces[0]
+		ref = args[0]
 	}
-
+	ws, err = resolveWorkspace(cfg.Home, ref)
 	if err != nil {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
@@ -70,14 +59,10 @@ func runShip(cmd *cobra.Command, args []string) error {
 	// or revision — each becomes a separate note).
 	var taskTitle, taskID string
 	var taskSeq int
-	yokeClient, err := yokehelper.NewClient()
-	if err == nil {
-		defer yokeClient.Close()
-		if t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {
-			taskTitle = t.Title
-			taskSeq = t.Seq
-			taskID = t.ID
-		}
+	if t, err := yokecli.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {
+		taskTitle = t.Title
+		taskSeq = t.Seq
+		taskID = t.ID
 	}
 	if taskTitle == "" {
 		taskTitle = ws.Slug
@@ -171,14 +156,9 @@ func linkPRToTask(taskID, repoName, prURL string) error {
 	if taskID == "" || prURL == "" {
 		return nil
 	}
-	client, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer client.Close()
 
 	// De-dupe: if a note already records this exact URL, skip.
-	notes, err := client.GetNotes(taskID)
+	notes, err := yokecli.Notes(taskID)
 	if err == nil {
 		for _, n := range notes {
 			if strings.Contains(n.Content, prURL) {
@@ -187,10 +167,11 @@ func linkPRToTask(taskID, repoName, prURL string) error {
 		}
 	}
 	note := fmt.Sprintf("PR (%s): %s", repoName, prURL)
-	return client.AddNote(taskID, note)
+	return yokecli.AddNote(taskID, note)
 }
 
 // findReposInWorkspace returns repo names that have symlinks in the workspace.
+// Only directory targets count — doc symlinks (CLAUDE.md, YOKE.md) are files.
 func findReposInWorkspace(workspacePath string) []string {
 	var repos []string
 	entries, err := os.ReadDir(workspacePath)
@@ -199,9 +180,14 @@ func findReposInWorkspace(workspacePath string) []string {
 	}
 
 	for _, e := range entries {
-		if e.Type()&os.ModeSymlink != 0 {
-			repos = append(repos, e.Name())
+		if e.Type()&os.ModeSymlink == 0 {
+			continue
 		}
+		target, err := os.Stat(filepath.Join(workspacePath, e.Name()))
+		if err != nil || !target.IsDir() {
+			continue
+		}
+		repos = append(repos, e.Name())
 	}
 	return repos
 }
@@ -236,7 +222,24 @@ func createPR(worktreePath, repoName string, taskSeq int, taskTitle string, draf
 		return "", fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	return extractPRURL(string(output))
+}
+
+// extractPRURL picks the PR URL out of gh's output. CombinedOutput interleaves
+// stderr warnings (e.g. "Warning: 1 uncommitted change") with the URL, so
+// taking the whole output verbatim would poison downstream note content.
+func extractPRURL(output string) (string, error) {
+	url := ""
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "https://") {
+			url = line
+		}
+	}
+	if url == "" {
+		return "", fmt.Errorf("no PR URL in gh output: %s", strings.TrimSpace(output))
+	}
+	return url, nil
 }
 
 // getExistingPR returns the URL of an existing PR for the current branch.

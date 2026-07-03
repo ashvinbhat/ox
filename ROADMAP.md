@@ -84,8 +84,7 @@ notes, _ := store.GetNotes(t.ID)
 - [x] `ox status` - Show current task/workspace
 - [x] `ox done [task-id]` - Complete task, cleanup workspace
 - [x] Basic CLAUDE.md generation
-- [x] `ox tasks` - List yoke tasks
-- [x] `ox task <id>` - Show yoke task details
+- [x] ~~`ox tasks` / `ox task <id>`~~ - Removed; use `yoke list` / `yoke show` directly
 - [x] `copy_files` - Copy .env, .vscode etc to worktrees
 - [x] `post_setup` - Run setup commands after worktree creation
 

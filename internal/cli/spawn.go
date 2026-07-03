@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/agent"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -49,13 +49,7 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load task from yoke to get seq
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer yokeClient.Close()
-
-	t, err := yokeClient.Get(spawnTask)
+	t, err := yokecli.Get(spawnTask)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)
 	}

@@ -6,16 +6,18 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TaskWorkspace represents an active task workspace.
 type TaskWorkspace struct {
-	Path     string   // absolute path to task directory
-	TaskID   string   // yoke task ID
-	TaskSeq  int      // yoke task sequence number
-	Slug     string   // directory name (e.g., 9-refactor-auth)
-	Repos    []string // repos included in this workspace
-	Persona  string   // active persona
+	Path    string   // absolute path to task directory
+	TaskID  string   // yoke task ID
+	TaskSeq int      // yoke task sequence number
+	Slug    string   // directory name (e.g., 9-refactor-auth)
+	Repos   []string // repos included in this workspace
+	Persona string   // active persona
 }
 
 // Create creates a new task workspace directory under oxHome/tasks/.
@@ -119,42 +121,48 @@ func (ws *TaskWorkspace) AddRepoLink(repoName, worktreePath string) error {
 
 // loadState loads workspace state by examining the workspace directory.
 func (ws *TaskWorkspace) loadState() {
+	if data, err := os.ReadFile(filepath.Join(ws.Path, "state.yaml")); err == nil {
+		var st persistedState
+		if yaml.Unmarshal(data, &st) == nil {
+			ws.TaskID = st.TaskID
+			ws.Persona = st.Persona
+		}
+	}
+
 	// Discover repos by finding symlinks in the workspace
 	entries, err := os.ReadDir(ws.Path)
 	if err != nil {
 		return
 	}
 
-	// Known non-repo files to exclude
-	exclude := map[string]bool{
-		"CLAUDE.md":    true,
-		"AGENTS.md":    true,
-		"state.yaml":   true,
-		".checkpoints": true,
-	}
-
+	// Repo links point at worktree directories; doc links (CLAUDE.md,
+	// YOKE.md) point at files — the target type is what distinguishes them.
 	for _, e := range entries {
-		// Skip known non-repo files
-		if exclude[e.Name()] {
-			continue
-		}
-
-		// Use Lstat to check if it's a symlink (Info follows symlinks)
 		fullPath := filepath.Join(ws.Path, e.Name())
 		info, err := os.Lstat(fullPath)
-		if err != nil {
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
 			continue
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			ws.Repos = append(ws.Repos, e.Name())
+		target, err := os.Stat(fullPath)
+		if err != nil || !target.IsDir() {
+			continue
 		}
+		ws.Repos = append(ws.Repos, e.Name())
 	}
+}
+
+type persistedState struct {
+	TaskID  string `yaml:"task_id,omitempty"`
+	Persona string `yaml:"persona,omitempty"`
 }
 
 // SaveState saves workspace state to state.yaml.
 func (ws *TaskWorkspace) SaveState() error {
-	// TODO: Save to state.yaml
-	return nil
+	data, err := yaml.Marshal(persistedState{TaskID: ws.TaskID, Persona: ws.Persona})
+	if err != nil {
+		return fmt.Errorf("marshal state: %w", err)
+	}
+	return os.WriteFile(filepath.Join(ws.Path, "state.yaml"), data, 0o644)
 }
 
 // makeSlug creates a filesystem-safe directory name from seq and title.

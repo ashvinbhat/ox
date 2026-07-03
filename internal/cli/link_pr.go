@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -39,13 +39,7 @@ func runLinkPR(cmd *cobra.Command, args []string) error {
 	taskRef := args[0]
 	prRef := args[1]
 
-	client, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer client.Close()
-
-	t, err := client.Get(taskRef)
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
 		return fmt.Errorf("task %s not found: %w", taskRef, err)
 	}
@@ -57,7 +51,7 @@ func runLinkPR(cmd *cobra.Command, args []string) error {
 	}
 
 	// Dedupe against existing notes.
-	notes, _ := client.GetNotes(t.ID)
+	notes, _ := yokecli.Notes(t.ID)
 	for _, n := range notes {
 		if strings.Contains(n.Content, prURL) {
 			fmt.Printf("PR already linked to task #%d (note already references %s)\n", t.Seq, prURL)
@@ -70,7 +64,7 @@ func runLinkPR(cmd *cobra.Command, args []string) error {
 		label = "pr"
 	}
 	note := fmt.Sprintf("PR (%s): %s", label, prURL)
-	if err := client.AddNote(t.ID, note); err != nil {
+	if err := yokecli.AddNote(t.ID, note); err != nil {
 		return fmt.Errorf("add note to task: %w", err)
 	}
 	fmt.Printf("✓ Linked %s to task #%d (%s)\n", prURL, t.Seq, t.Title)

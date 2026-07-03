@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -36,26 +35,11 @@ Examples:
 func runOpen(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 
-	// Find workspace
-	var ws *workspace.TaskWorkspace
-	var err error
-
+	ref := ""
 	if len(args) > 0 {
-		ws, err = workspace.Open(cfg.Home, args[0])
-	} else {
-		workspaces, listErr := workspace.List(cfg.Home)
-		if listErr != nil {
-			return fmt.Errorf("list workspaces: %w", listErr)
-		}
-		if len(workspaces) == 0 {
-			return fmt.Errorf("no active workspaces")
-		}
-		if len(workspaces) > 1 {
-			return fmt.Errorf("multiple workspaces active, specify task ID")
-		}
-		ws = workspaces[0]
+		ref = args[0]
 	}
-
+	ws, err := resolveWorkspace(cfg.Home, ref)
 	if err != nil {
 		return fmt.Errorf("workspace not found: %w", err)
 	}

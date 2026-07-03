@@ -58,7 +58,8 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println("Available hooks:\n")
+	fmt.Println("Available hooks:")
+	fmt.Println()
 	for _, h := range hookList {
 		status := "enabled"
 		if !h.Enabled {

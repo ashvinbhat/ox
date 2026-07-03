@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ashvinbhat/ox/internal/context"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -32,40 +32,31 @@ func runRefresh(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not in a workspace: %w", err)
 	}
 
-	// Load yoke task
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer yokeClient.Close()
-
-	t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq))
+	taskRef := fmt.Sprintf("%d", ws.TaskSeq)
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
-	// Load context
-	notes, _ := yokeClient.GetNotes(t.ID)
-	events, _ := yokeClient.GetEvents(t.ID)
-	parent, _ := yokeClient.GetParent(t)
-	children, _ := yokeClient.GetChildren(t.ID)
-	blockers, _ := yokeClient.GetBlockers(t)
+	taskMD, err := yokecli.ContextMarkdown(taskRef)
+	if err != nil {
+		return fmt.Errorf("load task context: %w", err)
+	}
 
 	gen := context.NewGenerator(cfg.Home)
 	taskCtx := &context.TaskContext{
-		Task:     t,
-		Notes:    notes,
-		Events:   events,
-		Parent:   parent,
-		Children: children,
-		Blockers: blockers,
-		Persona:  ws.Persona,
-		Repos:    ws.Repos,
+		TaskMarkdown: taskMD,
+		Title:        t.Title,
+		Tags:         t.Tags,
+		Persona:      ws.Persona,
+		Repos:        ws.Repos,
 	}
 
 	if err := gen.Generate(ws.Path, taskCtx); err != nil {
 		return fmt.Errorf("generate AGENTS.md: %w", err)
 	}
+
+	linkYokeDocs(ws.Path)
 
 	fmt.Println("AGENTS.md regenerated")
 	fmt.Printf("  Workspace: %s\n", ws.Path)

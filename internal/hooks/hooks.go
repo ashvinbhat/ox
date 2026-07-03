@@ -41,12 +41,14 @@ func (m *Manager) Init() error {
 		return fmt.Errorf("create hooks dir: %w", err)
 	}
 
-	// Create built-in hooks
+	// Built-in scripts are owned by ox: rewrite them whenever the embedded
+	// content changes, otherwise stale copies advertise removed commands.
 	builtins := m.BuiltInHooks()
 	for _, h := range builtins {
 		scriptPath := filepath.Join(m.hooksDir, h.Name+".sh")
-		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			content := m.generateBuiltInScript(h.Name)
+		content := m.generateBuiltInScript(h.Name)
+		existing, err := os.ReadFile(scriptPath)
+		if err != nil || string(existing) != content {
 			if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
 				return fmt.Errorf("write hook %s: %w", h.Name, err)
 			}
@@ -93,7 +95,7 @@ func (m *Manager) generateBuiltInScript(name string) string {
 INPUT=$(cat)
 
 # Get ready tasks from yoke
-READY_TASKS=$(yoke ready --short 2>/dev/null || echo "No ready tasks")
+READY_TASKS=$(yoke ready 2>/dev/null || echo "No ready tasks")
 
 # Output JSON for Claude Code
 jq -n --arg ctx "## Ready Tasks (from yoke)
@@ -126,8 +128,13 @@ INSTRUCTIONS="## ox CLI Reference
 - ox skill inject <name>          # Add skill to workspace
 - ox ship                         # Push and create PR
 
+**Tasks (use yoke directly):**
+- yoke list / yoke ready          # List tasks / unblocked tasks
+- yoke show <id>                  # Task details
+- yoke context <id>               # Full task context
+- yoke note <id> <text>           # Add note
+
 **Info:**
-- ox tasks                        # List yoke tasks
 - ox personas                     # List personas
 - ox skill list                   # List skills"
 

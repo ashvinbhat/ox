@@ -2,12 +2,12 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/ashvinbhat/ox/internal/dashboard"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
 var dashboardPort int
@@ -22,11 +22,7 @@ var dashboardCmd = &cobra.Command{
 			return err
 		}
 
-		// Find yoke binary
-		yokePath := findYoke()
-		if yokePath == "" {
-			yokePath = "yoke" // fallback to PATH
-		}
+		yokePath := yokecli.BinaryPath()
 
 		// Find ox binary (self)
 		oxPath, err := os.Executable()
@@ -50,29 +46,6 @@ func loadConfig() (*Config, error) {
 
 type Config struct {
 	OxHome string
-}
-
-// findYoke is defined in yoke.go but we use it here too
-func findYokeForDashboard() string {
-	// Check PATH first
-	if path, err := exec.LookPath("yoke"); err == nil {
-		return path
-	}
-
-	// Check common locations
-	home := os.Getenv("HOME")
-	locations := []string{
-		home + "/go/bin/yoke",
-		"/usr/local/bin/yoke",
-	}
-
-	for _, loc := range locations {
-		if _, err := os.Stat(loc); err == nil {
-			return loc
-		}
-	}
-
-	return ""
 }
 
 func init() {

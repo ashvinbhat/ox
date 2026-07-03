@@ -157,23 +157,22 @@ The dashboard provides a visual interface for:
 - **Learnings** - Captured insights and gotchas
 - **Task creation** - Add tasks with title, tags, priority, parent
 
-### Task Management (yoke pass-through)
+### Task Management (yoke)
+
+Task management lives entirely in yoke — use it directly:
+
 ```bash
-ox add "title"                 # Create a new task
-ox tree                        # Show task hierarchy
-ox search "query"              # Search tasks
-ox edit <id>                   # Edit a task
-ox tag <id> <tag>              # Add tag
-ox untag <id> <tag>            # Remove tag
-ox block <id> --by <blocker>   # Add dependency
-ox unblock <id> <blocker>      # Remove dependency
-ox subtask <parent> "title"    # Create subtask
-ox note <id> "text"            # Add note
-ox notes <id>                  # Show notes
-ox log <id>                    # Show task history
-ox tags                        # List all tags
-ox ready                       # Show ready tasks
+yoke add "title"               # Create a new task
+yoke list / yoke ready         # List tasks / unblocked tasks
+yoke show <id>                 # Task details
+yoke context <id>              # Full task context (markdown)
+yoke note <id> "text"          # Add note
+yoke tree                      # Show task hierarchy
+yoke done <id>                 # Complete task
 ```
+
+`yoke docs` writes the full usage reference to `~/.yoke/AGENTS.md`; ox symlinks
+it into every workspace as `YOKE.md` so agents always know how to drive yoke.
 
 ## Personas
 

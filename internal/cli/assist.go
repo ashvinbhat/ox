@@ -140,23 +140,17 @@ ox learn "insight" -c category   # Capture a learning
 ox learnings                     # List all learnings
 ` + "```" + `
 
-### Task Management (yoke integration)
+### Task Management (yoke — use it directly)
 ` + "```bash" + `
-ox add "title"                   # Create task
-ox subtask <parent> "title"      # Create subtask
-ox tree                          # Show task hierarchy
-ox ready                         # Show unblocked tasks
-ox search "query"                # Search tasks
-ox task <id>                     # Show task details
-ox edit <id>                     # Edit task
-ox tag <id> <tag>                # Add tag
-ox untag <id> <tag>              # Remove tag
-ox block <id> --by <blocker>     # Add dependency
-ox unblock <id> <blocker>        # Remove dependency
-ox note <id> "text"              # Add note
-ox notes <id>                    # Show notes
-ox log <id>                      # Show task history
+yoke add "title"                 # Create task
+yoke list / yoke ready           # List tasks / unblocked tasks
+yoke show <id>                   # Task details
+yoke context <id>                # Full task context (markdown)
+yoke note <id> "text"            # Add note
+yoke tree                        # Show task hierarchy
+yoke done <id>                   # Complete task
 ` + "```" + `
+Full yoke reference: ~/.yoke/AGENTS.md (symlinked as YOKE.md in every workspace)
 
 ### Repository Management
 ` + "```bash" + `
@@ -202,7 +196,7 @@ Key skills:
 
 ### Starting a Task
 ` + "```bash" + `
-ox ready                         # See what's unblocked
+yoke ready                       # See what's unblocked
 ox pickup 28 --repos backend     # Create workspace
 cd ~/.ox/tasks/28-*/             # Enter workspace
 # Claude reads AGENTS.md automatically

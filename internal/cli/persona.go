@@ -8,7 +8,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/context"
 	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +59,8 @@ func runPersonasList(cmd *cobra.Command, args []string) error {
 		return all[i].Name < all[j].Name
 	})
 
-	fmt.Println("Available personas:\n")
+	fmt.Println("Available personas:")
+	fmt.Println()
 	for _, p := range all {
 		fmt.Printf("  %-12s %s\n", p.Name, p.Role)
 		if p.Description != "" {
@@ -100,44 +101,38 @@ func runMorph(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no active workspace: %w", err)
 	}
 
-	// Load task from yoke
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer yokeClient.Close()
-
 	taskRef := fmt.Sprintf("%d", ws.TaskSeq)
-	t, err := yokeClient.Get(taskRef)
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
 	// Update workspace persona
 	ws.Persona = personaName
+	ws.TaskID = t.ID
+	if err := ws.SaveState(); err != nil {
+		fmt.Printf("Warning: failed to save workspace state: %v\n", err)
+	}
 
-	// Regenerate AGENTS.md
-	notes, _ := yokeClient.GetNotes(t.ID)
-	events, _ := yokeClient.GetEvents(t.ID)
-	parent, _ := yokeClient.GetParent(t)
-	children, _ := yokeClient.GetChildren(t.ID)
-	blockers, _ := yokeClient.GetBlockers(t)
+	taskMD, err := yokecli.ContextMarkdown(taskRef)
+	if err != nil {
+		return fmt.Errorf("load task context: %w", err)
+	}
 
 	gen := context.NewGenerator(cfg.Home)
 	taskCtx := &context.TaskContext{
-		Task:     t,
-		Notes:    notes,
-		Events:   events,
-		Parent:   parent,
-		Children: children,
-		Blockers: blockers,
-		Persona:  personaName,
-		Repos:    ws.Repos,
+		TaskMarkdown: taskMD,
+		Title:        t.Title,
+		Tags:         t.Tags,
+		Persona:      personaName,
+		Repos:        ws.Repos,
 	}
 
 	if err := gen.Generate(ws.Path, taskCtx); err != nil {
 		return fmt.Errorf("regenerate AGENTS.md: %w", err)
 	}
+
+	linkYokeDocs(ws.Path)
 
 	fmt.Printf("Morphed to %s persona.\n", persona.Name)
 	fmt.Printf("  Role: %s\n", persona.Role)
@@ -166,6 +161,28 @@ func getCurrentWorkspace(oxHome string) (*workspace.TaskWorkspace, error) {
 	}
 
 	return nil, fmt.Errorf("not in a workspace directory")
+}
+
+// resolveWorkspace picks the workspace to operate on: the explicit ref if
+// given, else the workspace containing the cwd, else the sole active one.
+func resolveWorkspace(oxHome, ref string) (*workspace.TaskWorkspace, error) {
+	if ref != "" {
+		return workspace.Open(oxHome, ref)
+	}
+	if ws, err := getCurrentWorkspace(oxHome); err == nil {
+		return ws, nil
+	}
+	workspaces, err := workspace.List(oxHome)
+	if err != nil {
+		return nil, fmt.Errorf("list workspaces: %w", err)
+	}
+	if len(workspaces) == 0 {
+		return nil, fmt.Errorf("no active workspaces")
+	}
+	if len(workspaces) > 1 {
+		return nil, fmt.Errorf("multiple workspaces active: run from inside one or specify the task ID")
+	}
+	return workspaces[0], nil
 }
 
 // isSubdir checks if child is a subdirectory of parent.

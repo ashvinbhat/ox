@@ -25,7 +25,6 @@ These commands use `getCurrentWorkspace()` which detects if the current working 
 - `ox pickup` - creates workspace
 - `ox status` - lists all workspaces
 - `ox done <task-id>` - can specify task ID
-- `ox tasks` - lists yoke tasks
 - `ox repo list` - lists registered repos
 - `ox skill list` - lists available skills
 - `ox personas` - lists personas
@@ -35,9 +34,17 @@ These commands use `getCurrentWorkspace()` which detects if the current working 
 
 ## Yoke Integration
 
-ox depends on yoke for task management. Key points:
+ox is fully decoupled from yoke's code — no library import. All task data flows
+through the yoke CLI:
 
-- yoke binary location: `~/go/bin/yoke`
+- `internal/yokecli` is the ONLY bridge: it shells out to the yoke binary and
+  decodes `--json` output (show/list/notes + start/done/note/context/docs)
+- Task management is done with yoke directly (`yoke add/list/show/...`), not
+  through ox wrappers — those were removed
+- Every workspace gets a `YOKE.md` symlink → `~/.yoke/AGENTS.md` (regenerated
+  by `yoke docs`) so agents know how to drive yoke
+- yoke binary location: `~/go/bin/yoke` (yokecli.BinaryPath falls back there
+  when PATH lacks it)
 - yoke database: `~/.yoke/yoke.db`
 - Creating tasks: `yoke add "title" -t tag1 -t tag2 -p 2` (NOT `--tags`)
 
@@ -66,6 +73,7 @@ ox depends on yoke for task management. Key points:
 │   └── <task-id>-<slug>/
 │       ├── AGENTS.md    # Generated context
 │       ├── CLAUDE.md    # Symlink → AGENTS.md
+│       ├── YOKE.md      # Symlink → ~/.yoke/AGENTS.md (yoke usage reference)
 │       └── <repo>/      # Symlink → worktree
 ├── skills/              # Skill markdown files
 ├── personas/            # Persona definitions

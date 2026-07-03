@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/ashvinbhat/ox/internal/feedback"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -55,16 +55,13 @@ func runFeedbackReminder(cmd *cobra.Command, args []string) error {
 
 	// Get tasks this week from yoke
 	var tasks []feedback.TaskInfo
-	if yokeClient, err := yokehelper.NewClient(); err == nil {
-		defer yokeClient.Close()
-		if yokeTasks, err := yokeClient.ListTasksThisWeek(); err == nil {
-			for _, t := range yokeTasks {
-				tasks = append(tasks, feedback.TaskInfo{
-					ID:    t.ID,
-					Seq:   t.Seq,
-					Title: t.Title,
-				})
-			}
+	if yokeTasks, err := yokecli.TasksThisWeek(); err == nil {
+		for _, t := range yokeTasks {
+			tasks = append(tasks, feedback.TaskInfo{
+				ID:    t.ID,
+				Seq:   t.Seq,
+				Title: t.Title,
+			})
 		}
 	}
 

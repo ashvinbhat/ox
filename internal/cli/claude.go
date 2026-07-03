@@ -187,12 +187,13 @@ comment.
 - ox learn "insight" -c category  # Capture learnings
 - ox resume  # See last checkpoint
 
-### Task Management
-- ox tree  # See task hierarchy
-- ox subtask <parent> "title"  # Create subtask
-- ox block <id> --by <blocker>  # Add dependency
-- ox unblock <id> <blocker>  # Remove dependency
-- ox done  # Complete current task
+### Task Management (yoke — full reference in ./YOKE.md)
+- yoke context <id>  # Full task context: description, notes, history
+- yoke note <id> "text"  # Record progress and findings on the task
+- yoke subtask <parent> "title"  # Create subtask
+- yoke block <id> --by <blocker>  # Add dependency
+- yoke tree  # See task hierarchy
+- ox done  # Complete current task and clean up the workspace
 
 ### Code Review & Ship
 - ox review  # AI code review before shipping
@@ -215,16 +216,16 @@ You are in CAPTAIN mode. Your job is to ORCHESTRATE, not implement.
 5. **Coordinate** - Ensure pieces fit together
 
 ### Key Commands for Captains
-- ox subtask <this-task> "Implementation: X"  # Create work items
-- ox block <task> --by <other>  # Model dependencies
-- ox tree  # Visualize the plan
+- yoke subtask <this-task> "Implementation: X"  # Create work items
+- yoke block <task> --by <other>  # Model dependencies
+- yoke tree  # Visualize the plan
 - ox checkpoint --done "Planned X" --next "Coordinate Y"
 
 ### Captain Rules
 - Do NOT write implementation code yourself
 - DO create detailed subtasks with clear acceptance criteria
 - DO think about order of operations and dependencies
-- DO check on progress: ox tree, ox status
+- DO check on progress: yoke tree, ox status
 - DO document decisions in checkpoints
 
 ### Planning Template
@@ -251,7 +252,7 @@ You are in EXPLORER mode. Your job is to INVESTIGATE and UNDERSTAND.
 ### Key Commands for Explorers
 - ox learn "discovered X" -c finding  # Capture insights
 - ox checkpoint --done "Investigated X" --next "Explore Y"
-- ox note <task> "Finding: ..."  # Add notes to task
+- yoke note <task> "Finding: ..."  # Add notes to task
 
 ### Explorer Rules
 - DO read extensively before concluding

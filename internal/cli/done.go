@@ -10,7 +10,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/learning"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -56,17 +56,11 @@ func runDone(cmd *cobra.Command, args []string) error {
 		taskRef = args[0]
 		ws, _ = workspace.Open(cfg.Home, args[0])
 	} else {
-		workspaces, listErr := workspace.List(cfg.Home)
-		if listErr != nil {
-			return fmt.Errorf("list workspaces: %w", listErr)
+		var err error
+		ws, err = resolveWorkspace(cfg.Home, "")
+		if err != nil {
+			return fmt.Errorf("%w (pass a task ID to mark a workspace-less task done)", err)
 		}
-		if len(workspaces) == 0 {
-			return fmt.Errorf("no active workspaces (pass a task ID to mark a workspace-less task done)")
-		}
-		if len(workspaces) > 1 {
-			return fmt.Errorf("multiple workspaces active, specify task ID")
-		}
-		ws = workspaces[0]
 		taskRef = fmt.Sprintf("%d", ws.TaskSeq)
 	}
 
@@ -92,44 +86,33 @@ func runDone(cmd *cobra.Command, args []string) error {
 	}
 
 	// Mark task as done in yoke
-	yokeClient, err := yokehelper.NewClient()
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
-		fmt.Printf("Warning: could not open yoke: %v\n", err)
+		fmt.Printf("Warning: task not found in yoke: %v\n", err)
 	} else {
-		defer yokeClient.Close()
-		t, err := yokeClient.Get(taskRef)
-		if err != nil {
-			fmt.Printf("Warning: task not found in yoke: %v\n", err)
+		if err := yokecli.Done(t.ID, doneReason); err != nil {
+			fmt.Printf("Warning: failed to mark task done: %v\n", err)
 		} else {
-			if err := yokeClient.UpdateStatus(t.ID, "done"); err != nil {
-				fmt.Printf("Warning: failed to update task status: %v\n", err)
-			} else {
-				fmt.Println("Task marked as done in yoke")
-			}
-			if doneReason != "" {
-				if err := yokeClient.UpdateOutcome(t.ID, doneReason); err != nil {
-					fmt.Printf("Warning: failed to update outcome: %v\n", err)
-				}
-			}
+			fmt.Println("Task marked as done in yoke")
+		}
 
-			// Capture learning if provided (uses yoke seq even when no workspace)
-			if doneLearn != "" {
-				store, lerr := learning.NewStore(cfg.Home)
+		// Capture learning if provided (uses yoke seq even when no workspace)
+		if doneLearn != "" {
+			store, lerr := learning.NewStore(cfg.Home)
+			if lerr != nil {
+				fmt.Printf("Warning: failed to save learning: %v\n", lerr)
+			} else {
+				defer store.Close()
+				var repos []string
+				if ws != nil {
+					repos = ws.Repos
+				}
+				taskSeq := t.Seq
+				l, lerr := store.Add(doneLearn, learning.CategoryGeneral, repos, &taskSeq)
 				if lerr != nil {
 					fmt.Printf("Warning: failed to save learning: %v\n", lerr)
 				} else {
-					defer store.Close()
-					var repos []string
-					if ws != nil {
-						repos = ws.Repos
-					}
-					taskSeq := t.Seq
-					l, lerr := store.Add(doneLearn, learning.CategoryGeneral, repos, &taskSeq)
-					if lerr != nil {
-						fmt.Printf("Warning: failed to save learning: %v\n", lerr)
-					} else {
-						fmt.Printf("Learning captured (#%d)\n", l.ID)
-					}
+					fmt.Printf("Learning captured (#%d)\n", l.ID)
 				}
 			}
 		}

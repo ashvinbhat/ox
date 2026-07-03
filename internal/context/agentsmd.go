@@ -1,3 +1,8 @@
+// Package context generates the AGENTS.md working document for task
+// workspaces. Task data (description, hierarchy, notes, history) is
+// assembled by yoke (`yoke context`) and embedded verbatim; this package
+// adds the ox-owned sections: related files from git history, workspace
+// layout, persona, and skills.
 package context
 
 import (
@@ -11,17 +16,14 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/skills"
-	"github.com/ashvinbhat/yoke/task"
 )
 
-// Generator creates AGENTS.md files for task workspaces.
 type Generator struct {
 	oxHome     string
 	personaDir string
 	skillsDir  string
 }
 
-// NewGenerator creates a new context generator.
 func NewGenerator(oxHome string) *Generator {
 	return &Generator{
 		oxHome:     oxHome,
@@ -30,81 +32,38 @@ func NewGenerator(oxHome string) *Generator {
 	}
 }
 
-// TaskContext holds all context for generating AGENTS.md.
+// TaskContext holds the inputs for generating AGENTS.md.
 type TaskContext struct {
-	Task     *task.Task
-	Notes    []task.Note
-	Events   []task.Event
-	Parent   *task.Task   // Parent task (if any)
-	Children []*task.Task // Child tasks (if any)
-	Blockers []*task.Task // Tasks blocking this one (resolved)
+	// TaskMarkdown is yoke's assembled task context (`yoke context <ref>`),
+	// embedded verbatim as the document's task section.
+	TaskMarkdown string
+
+	// Title and Tags drive ox-side features (related-file discovery from
+	// git history, skill matching) without re-querying yoke.
+	Title string
+	Tags  []string
+
 	Persona  string
-	Skills   []string // Explicitly requested skills (legacy)
+	Skills   []string // explicitly requested skills
 	Repos    []string
-	TaskType string   // bug, feature, refactor, etc. (for skill matching)
+	TaskType string // bug, feature, refactor, etc. (for skill matching)
 }
 
-// Generate creates an AGENTS.md file in the workspace and symlinks CLAUDE.md to it.
+// Generate writes AGENTS.md in the workspace and symlinks CLAUDE.md to it.
 func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 	var sb strings.Builder
 
-	// Header
-	sb.WriteString(fmt.Sprintf("# Task #%d: %s\n\n", ctx.Task.Seq, ctx.Task.Title))
-
-	// Status section
-	sb.WriteString("## Status\n")
-	sb.WriteString(fmt.Sprintf("%s | P%d", strings.ToUpper(string(ctx.Task.Status)), ctx.Task.Priority))
-	if len(ctx.Task.Tags) > 0 {
-		sb.WriteString(fmt.Sprintf(" | Tags: %s", strings.Join(ctx.Task.Tags, ", ")))
-	}
+	sb.WriteString(strings.TrimRight(ctx.TaskMarkdown, "\n"))
 	sb.WriteString("\n\n")
 
-	// Context/Body
-	if ctx.Task.Body != "" {
-		sb.WriteString("## Context\n")
-		sb.WriteString(ctx.Task.Body)
-		sb.WriteString("\n\n")
-	}
+	sb.WriteString("## Task management\n")
+	sb.WriteString("Task state lives in yoke — use it directly (no wrapper):\n")
+	sb.WriteString("- `yoke note <id> \"...\"` to record progress, decisions, and artifact links as you work\n")
+	sb.WriteString("- `yoke context <id>` to reload this task's latest state\n")
+	sb.WriteString("- Full command reference: ./YOKE.md\n\n")
 
-	// Notes
-	if len(ctx.Notes) > 0 {
-		sb.WriteString("## Notes\n")
-		for _, note := range ctx.Notes {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", note.CreatedAt.Format("2006-01-02"), note.Content))
-		}
-		sb.WriteString("\n")
-	}
-
-	// Dependencies section
-	g.writeDependencies(&sb, ctx)
-
-	// Hierarchy section
-	g.writeHierarchy(&sb, ctx)
-
-	// Recent activity
-	if len(ctx.Events) > 0 {
-		sb.WriteString("## Recent Activity\n")
-		// Show last 10 events
-		limit := 10
-		if len(ctx.Events) < limit {
-			limit = len(ctx.Events)
-		}
-		for i := len(ctx.Events) - limit; i < len(ctx.Events); i++ {
-			e := ctx.Events[i]
-			if e.OldValue != "" && e.NewValue != "" {
-				sb.WriteString(fmt.Sprintf("- %s: %s → %s\n", e.EventType, e.OldValue, e.NewValue))
-			} else if e.NewValue != "" {
-				sb.WriteString(fmt.Sprintf("- %s: %s\n", e.EventType, e.NewValue))
-			} else {
-				sb.WriteString(fmt.Sprintf("- %s\n", e.EventType))
-			}
-		}
-		sb.WriteString("\n")
-	}
-
-	// Related files from git history
 	if len(ctx.Repos) > 0 {
-		relatedFiles := g.findRelatedFiles(workspacePath, ctx.Repos, ctx.Task.Title)
+		relatedFiles := g.findRelatedFiles(workspacePath, ctx.Repos, ctx.Title)
 		if len(relatedFiles) > 0 {
 			sb.WriteString("## Related Files (from git history)\n")
 			for _, rf := range relatedFiles {
@@ -112,16 +71,7 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 			}
 			sb.WriteString("\n")
 		}
-	}
 
-	// External links
-	if ctx.Task.NotionURL != nil && *ctx.Task.NotionURL != "" {
-		sb.WriteString("## External\n")
-		sb.WriteString(fmt.Sprintf("Notion: %s\n\n", *ctx.Task.NotionURL))
-	}
-
-	// Repos in workspace
-	if len(ctx.Repos) > 0 {
 		sb.WriteString("## Workspace Repos\n")
 		for _, r := range ctx.Repos {
 			sb.WriteString(fmt.Sprintf("- %s/\n", r))
@@ -129,7 +79,6 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 		sb.WriteString("\n")
 	}
 
-	// Persona
 	if ctx.Persona != "" {
 		sb.WriteString("---\n\n")
 		if reg, err := personas.LoadRegistry(g.oxHome); err == nil {
@@ -144,22 +93,18 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 		}
 	}
 
-	// Skills - auto-inject based on tags, persona, task type
 	g.writeSkills(&sb, workspacePath, ctx)
 
-	// Footer
 	sb.WriteString("---\n")
 	sb.WriteString(fmt.Sprintf("Generated by ox at %s\n", time.Now().Format(time.RFC3339)))
 
-	// Write AGENTS.md
 	agentsPath := filepath.Join(workspacePath, "AGENTS.md")
 	if err := os.WriteFile(agentsPath, []byte(sb.String()), 0o644); err != nil {
 		return fmt.Errorf("write AGENTS.md: %w", err)
 	}
 
-	// Create CLAUDE.md symlink pointing to AGENTS.md
 	claudePath := filepath.Join(workspacePath, "CLAUDE.md")
-	os.Remove(claudePath) // Remove if exists
+	os.Remove(claudePath)
 	if err := os.Symlink("AGENTS.md", claudePath); err != nil {
 		return fmt.Errorf("create CLAUDE.md symlink: %w", err)
 	}
@@ -167,41 +112,17 @@ func (g *Generator) Generate(workspacePath string, ctx *TaskContext) error {
 	return nil
 }
 
-// writeDependencies writes the blocked by section.
-func (g *Generator) writeDependencies(sb *strings.Builder, ctx *TaskContext) {
-	if len(ctx.Blockers) == 0 && len(ctx.Task.Blockers) == 0 {
+// writeSkills auto-injects skills based on tags, persona, and task type.
+func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *TaskContext) {
+	reg, err := skills.LoadRegistry(g.oxHome)
+	if err != nil {
 		return
 	}
 
-	sb.WriteString("## Blocked By\n")
-	if len(ctx.Blockers) > 0 {
-		for _, b := range ctx.Blockers {
-			status := strings.ToLower(string(b.Status))
-			sb.WriteString(fmt.Sprintf("- #%d: %s [%s]\n", b.Seq, b.Title, status))
-		}
-	} else {
-		// Fallback to IDs if we couldn't resolve
-		for _, id := range ctx.Task.Blockers {
-			sb.WriteString(fmt.Sprintf("- %s\n", id))
-		}
-	}
-	sb.WriteString("\n")
-}
-
-// writeSkills auto-injects skills based on tags, persona, and task type.
-func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *TaskContext) {
-	// Load skills registry
-	reg, err := skills.LoadRegistry(g.oxHome)
-	if err != nil {
-		return // No skills registry
-	}
-
-	// Collect skills to include
 	var skillsToInclude []*skills.Skill
 	skillNames := make(map[string]bool)
 
-	// 1. Auto-match from registry based on tags, persona, task type
-	matched := reg.MatchForTask(ctx.Task.Tags, ctx.Persona, ctx.TaskType)
+	matched := reg.MatchForTask(ctx.Tags, ctx.Persona, ctx.TaskType)
 	for _, s := range matched {
 		if !skillNames[s.Name] {
 			skillsToInclude = append(skillsToInclude, s)
@@ -209,7 +130,6 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 		}
 	}
 
-	// 2. Include explicitly requested skills (legacy)
 	for _, name := range ctx.Skills {
 		if skillNames[name] {
 			continue
@@ -220,7 +140,6 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 		}
 	}
 
-	// 3. Include workspace-injected skills from .skills/
 	wsSkillsDir := filepath.Join(workspacePath, ".skills")
 	if entries, err := os.ReadDir(wsSkillsDir); err == nil {
 		for _, e := range entries {
@@ -231,7 +150,6 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 			if skillNames[name] {
 				continue
 			}
-			// Create a temporary skill for workspace-injected ones
 			skillsToInclude = append(skillsToInclude, &skills.Skill{
 				Name: name,
 				File: e.Name(),
@@ -248,7 +166,6 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 	sb.WriteString("# Skills\n\n")
 
 	for _, skill := range skillsToInclude {
-		// Try workspace .skills/ first, then global
 		var content string
 		wsPath := filepath.Join(workspacePath, ".skills", skill.File)
 		if data, err := os.ReadFile(wsPath); err == nil {
@@ -256,7 +173,7 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 		} else if c, err := reg.GetContent(skill); err == nil {
 			content = c
 		} else {
-			continue // Skip if can't load
+			continue
 		}
 
 		sb.WriteString(fmt.Sprintf("## %s\n", skill.Name))
@@ -268,49 +185,6 @@ func (g *Generator) writeSkills(sb *strings.Builder, workspacePath string, ctx *
 	}
 }
 
-// writeHierarchy writes parent and children info.
-func (g *Generator) writeHierarchy(sb *strings.Builder, ctx *TaskContext) {
-	if ctx.Parent == nil && len(ctx.Children) == 0 {
-		return
-	}
-
-	sb.WriteString("## Hierarchy\n")
-
-	if ctx.Parent != nil {
-		sb.WriteString(fmt.Sprintf("Parent: #%d %s\n", ctx.Parent.Seq, ctx.Parent.Title))
-	}
-
-	if len(ctx.Children) > 0 {
-		sb.WriteString("Children:\n")
-		for _, child := range ctx.Children {
-			status := g.statusIcon(child.Status)
-			sb.WriteString(fmt.Sprintf("  %s #%d: %s\n", status, child.Seq, child.Title))
-		}
-	}
-	sb.WriteString("\n")
-}
-
-// statusIcon returns an icon for the status.
-func (g *Generator) statusIcon(status task.Status) string {
-	switch status {
-	case task.StatusPending:
-		return "○"
-	case task.StatusActive:
-		return "◐"
-	case task.StatusInProgress:
-		return "●"
-	case task.StatusBlocked:
-		return "⊘"
-	case task.StatusDone:
-		return "✓"
-	case task.StatusDropped:
-		return "✗"
-	default:
-		return "?"
-	}
-}
-
-// RelatedFile represents a file related to the task based on git history.
 type RelatedFile struct {
 	Path    string
 	Commits int
@@ -320,7 +194,6 @@ type RelatedFile struct {
 func (g *Generator) findRelatedFiles(workspacePath string, repos []string, taskTitle string) []RelatedFile {
 	var results []RelatedFile
 
-	// Extract keywords from task title
 	keywords := extractKeywords(taskTitle)
 	if len(keywords) == 0 {
 		return nil
@@ -332,18 +205,15 @@ func (g *Generator) findRelatedFiles(workspacePath string, repos []string, taskT
 			continue
 		}
 
-		// Search git log for commits mentioning keywords
 		for _, keyword := range keywords {
 			files := searchGitHistory(repoPath, keyword)
 			for path, commits := range files {
-				// Prefix with repo name for clarity
 				fullPath := filepath.Join(repoName, path)
 				results = append(results, RelatedFile{Path: fullPath, Commits: commits})
 			}
 		}
 	}
 
-	// Dedupe and sort by commit count
 	seen := make(map[string]int)
 	for _, rf := range results {
 		if existing, ok := seen[rf.Path]; ok {
@@ -364,7 +234,6 @@ func (g *Generator) findRelatedFiles(workspacePath string, repos []string, taskT
 		return deduped[i].Commits > deduped[j].Commits
 	})
 
-	// Limit to top 10
 	if len(deduped) > 10 {
 		deduped = deduped[:10]
 	}
@@ -372,9 +241,7 @@ func (g *Generator) findRelatedFiles(workspacePath string, repos []string, taskT
 	return deduped
 }
 
-// extractKeywords extracts meaningful words from a title.
 func extractKeywords(title string) []string {
-	// Common words to ignore
 	stopWords := map[string]bool{
 		"the": true, "a": true, "an": true, "and": true, "or": true,
 		"to": true, "for": true, "of": true, "in": true, "on": true,
@@ -385,7 +252,6 @@ func extractKeywords(title string) []string {
 	words := strings.Fields(strings.ToLower(title))
 	var keywords []string
 	for _, w := range words {
-		// Clean punctuation
 		w = strings.Trim(w, ".,!?:;()[]{}\"'")
 		if len(w) < 3 {
 			continue
@@ -402,7 +268,6 @@ func extractKeywords(title string) []string {
 func searchGitHistory(repoPath, keyword string) map[string]int {
 	files := make(map[string]int)
 
-	// Search for commits with this keyword in message
 	cmd := exec.Command("git", "log", "--all", "--oneline", "--grep="+keyword, "-n", "50")
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
@@ -418,7 +283,6 @@ func searchGitHistory(repoPath, keyword string) map[string]int {
 		}
 		commitHash := parts[0]
 
-		// Get files changed in this commit
 		filesCmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", commitHash)
 		filesCmd.Dir = repoPath
 		filesOutput, err := filesCmd.Output()
@@ -452,11 +316,11 @@ func (g *Generator) ListSkills() ([]string, error) {
 		return nil, err
 	}
 
-	var skills []string
+	var names []string
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
-			skills = append(skills, strings.TrimSuffix(e.Name(), ".md"))
+			names = append(names, strings.TrimSuffix(e.Name(), ".md"))
 		}
 	}
-	return skills, nil
+	return names, nil
 }

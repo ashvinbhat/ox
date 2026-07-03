@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/gitutil"
-	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -57,6 +56,18 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 		repoName := repoEntry.Name()
 		repoWorktreesDir := filepath.Join(worktreesDir, repoName)
 
+		// Review worktrees are checked out directly at worktrees/<name>/
+		// rather than worktrees/<repo>/<task>/ — without this check their
+		// package dirs would each be listed as bogus task worktrees.
+		if _, err := os.Stat(filepath.Join(repoWorktreesDir, ".git")); err == nil {
+			branch, err := gitutil.CurrentBranch(repoWorktreesDir)
+			if err != nil {
+				branch = "(unknown)"
+			}
+			fmt.Printf("%-15s %-8s %-35s %s\n", repoName, "-", branch, repoWorktreesDir)
+			continue
+		}
+
 		taskEntries, err := os.ReadDir(repoWorktreesDir)
 		if err != nil {
 			continue
@@ -68,8 +79,10 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 			}
 			taskID := taskEntry.Name()
 			worktreePath := filepath.Join(repoWorktreesDir, taskID)
+			if _, err := os.Stat(filepath.Join(worktreePath, ".git")); err != nil {
+				continue
+			}
 
-			// Get branch name
 			branch, err := gitutil.CurrentBranch(worktreePath)
 			if err != nil {
 				branch = "(unknown)"
@@ -110,19 +123,10 @@ func runWorktreeAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("repo %q not registered", repoName)
 	}
 
-	// Find current workspace
-	workspaces, err := workspace.List(cfg.Home)
+	ws, err := resolveWorkspace(cfg.Home, "")
 	if err != nil {
-		return fmt.Errorf("list workspaces: %w", err)
+		return err
 	}
-	if len(workspaces) == 0 {
-		return fmt.Errorf("no active workspaces")
-	}
-	if len(workspaces) > 1 {
-		return fmt.Errorf("multiple workspaces active, use 'ox pickup' with --repos flag instead")
-	}
-
-	ws := workspaces[0]
 
 	// Check if worktree already exists
 	worktreePath := filepath.Join(cfg.Home, "worktrees", repoName, fmt.Sprintf("%d", ws.TaskSeq))
@@ -221,18 +225,10 @@ func runWorktreeRm(cmd *cobra.Command, args []string) error {
 	repoName := args[0]
 
 	// Find current workspace
-	workspaces, err := workspace.List(cfg.Home)
+	ws, err := resolveWorkspace(cfg.Home, "")
 	if err != nil {
-		return fmt.Errorf("list workspaces: %w", err)
+		return err
 	}
-	if len(workspaces) == 0 {
-		return fmt.Errorf("no active workspaces")
-	}
-	if len(workspaces) > 1 {
-		return fmt.Errorf("multiple workspaces active")
-	}
-
-	ws := workspaces[0]
 	worktreePath := filepath.Join(cfg.Home, "worktrees", repoName, fmt.Sprintf("%d", ws.TaskSeq))
 	repoPath := filepath.Join(cfg.Home, "repos", repoName)
 

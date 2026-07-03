@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -34,25 +34,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Try to get task details from yoke
-	yokeClient, _ := yokehelper.NewClient()
-	if yokeClient != nil {
-		defer yokeClient.Close()
-	}
-
 	fmt.Printf("%-6s %-40s %-15s %s\n", "TASK", "TITLE", "REPOS", "PATH")
 	fmt.Println(strings.Repeat("-", 80))
 
 	for _, ws := range workspaces {
 		title := "(unknown)"
 		var taskID string
-		if yokeClient != nil {
-			if t, err := yokeClient.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {
-				title = t.Title
-				taskID = t.ID
-				if len(title) > 35 {
-					title = title[:32] + "..."
-				}
+		if t, err := yokecli.Get(fmt.Sprintf("%d", ws.TaskSeq)); err == nil {
+			title = t.Title
+			taskID = t.ID
+			if len(title) > 35 {
+				title = title[:32] + "..."
 			}
 		}
 
@@ -64,8 +56,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("#%-5d %-40s %-15s %s\n", ws.TaskSeq, title, repos, ws.Path)
 
 		// Surface linked PRs (from yoke notes) so the user sees what's shipped.
-		if yokeClient != nil && taskID != "" {
-			if notes, err := yokeClient.GetNotes(taskID); err == nil {
+		if taskID != "" {
+			if notes, err := yokecli.Notes(taskID); err == nil {
 				for _, n := range notes {
 					if strings.HasPrefix(n.Content, "PR ") || strings.HasPrefix(n.Content, "PR(") {
 						fmt.Printf("       %s\n", n.Content)

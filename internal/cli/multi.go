@@ -13,7 +13,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/filelock"
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -61,13 +61,7 @@ func runMulti(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load task
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer yokeClient.Close()
-
-	t, err := yokeClient.Get(taskRef)
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
@@ -216,8 +210,8 @@ func runMulti(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   Workspace: %s\n\n", ws.Path)
 	}
 
-	if t.Status != "in_progress" {
-		if err := yokeClient.UpdateStatus(t.ID, "in_progress"); err != nil {
+	if t.Status != yokecli.StatusInProgress {
+		if err := yokecli.Start(t.ID); err != nil {
 			fmt.Printf("Warning: failed to update task status: %v\n", err)
 		}
 	}

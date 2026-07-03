@@ -9,7 +9,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/ashvinbhat/ox/internal/skills"
-	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -201,19 +200,10 @@ func runSkillInject(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("skill %q not found", name)
 	}
 
-	// Find current workspace
-	workspaces, err := workspace.List(cfg.Home)
+	ws, err := resolveWorkspace(cfg.Home, "")
 	if err != nil {
-		return fmt.Errorf("list workspaces: %w", err)
+		return err
 	}
-	if len(workspaces) == 0 {
-		return fmt.Errorf("no active workspace")
-	}
-	if len(workspaces) > 1 {
-		return fmt.Errorf("multiple workspaces active")
-	}
-
-	ws := workspaces[0]
 
 	// Create .skills directory in workspace if needed
 	skillsDir := filepath.Join(ws.Path, ".skills")
@@ -266,19 +256,10 @@ func runSkillEject(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("skill %q not found", name)
 	}
 
-	// Find current workspace
-	workspaces, err := workspace.List(cfg.Home)
+	ws, err := resolveWorkspace(cfg.Home, "")
 	if err != nil {
-		return fmt.Errorf("list workspaces: %w", err)
+		return err
 	}
-	if len(workspaces) == 0 {
-		return fmt.Errorf("no active workspace")
-	}
-	if len(workspaces) > 1 {
-		return fmt.Errorf("multiple workspaces active")
-	}
-
-	ws := workspaces[0]
 
 	// Remove symlink
 	dst := filepath.Join(ws.Path, ".skills", skill.File)

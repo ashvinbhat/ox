@@ -13,7 +13,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/learning"
 	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/workspace"
-	"github.com/ashvinbhat/ox/internal/yokehelper"
+	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
 )
 
@@ -55,13 +55,7 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load yoke task
-	yokeClient, err := yokehelper.NewClient()
-	if err != nil {
-		return fmt.Errorf("open yoke: %w", err)
-	}
-	defer yokeClient.Close()
-
-	t, err := yokeClient.Get(taskRef)
+	t, err := yokecli.Get(taskRef)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
@@ -178,33 +172,33 @@ func runPickup(cmd *cobra.Command, args []string) error {
 		persona = "builder"
 	}
 	ws.Persona = persona
+	if err := ws.SaveState(); err != nil {
+		fmt.Printf("Warning: failed to save workspace state: %v\n", err)
+	}
 
-	// Load context and generate AGENTS.md (with CLAUDE.md symlink)
-	notes, _ := yokeClient.GetNotes(t.ID)
-	events, _ := yokeClient.GetEvents(t.ID)
-	parent, _ := yokeClient.GetParent(t)
-	children, _ := yokeClient.GetChildren(t.ID)
-	blockers, _ := yokeClient.GetBlockers(t)
+	// Generate AGENTS.md (with CLAUDE.md symlink) — task section assembled by yoke
+	taskMD, err := yokecli.ContextMarkdown(taskRef)
+	if err != nil {
+		fmt.Printf("Warning: failed to load task context: %v\n", err)
+	}
 
 	gen := context.NewGenerator(cfg.Home)
 	taskCtx := &context.TaskContext{
-		Task:     t,
-		Notes:    notes,
-		Events:   events,
-		Parent:   parent,
-		Children: children,
-		Blockers: blockers,
-		Persona:  persona,
-		Repos:    pickupRepos,
+		TaskMarkdown: taskMD,
+		Title:        t.Title,
+		Tags:         t.Tags,
+		Persona:      persona,
+		Repos:        pickupRepos,
 	}
 
 	if err := gen.Generate(ws.Path, taskCtx); err != nil {
 		fmt.Printf("Warning: failed to generate AGENTS.md: %v\n", err)
 	}
 
-	// Update task status in yoke to in_progress
-	if t.Status != "in_progress" {
-		if err := yokeClient.UpdateStatus(t.ID, "in_progress"); err != nil {
+	linkYokeDocs(ws.Path)
+
+	if t.Status != yokecli.StatusInProgress {
+		if err := yokecli.Start(t.ID); err != nil {
 			fmt.Printf("Warning: failed to update task status: %v\n", err)
 		}
 	}
@@ -228,6 +222,24 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	fmt.Println("  # Start working with your AI agent")
 
 	return nil
+}
+
+// linkYokeDocs symlinks yoke's canonical usage doc into the workspace as
+// YOKE.md so agent sessions know how to drive task management directly.
+// `yoke docs` refreshes the doc from the installed binary, so the link
+// always reflects current capabilities. Failure is non-fatal — the
+// workspace still works, agents just lose the local reference copy.
+func linkYokeDocs(workspacePath string) {
+	docsPath, err := yokecli.DocsPath()
+	if err != nil {
+		fmt.Printf("Warning: could not resolve yoke docs: %v\n", err)
+		return
+	}
+	linkPath := filepath.Join(workspacePath, "YOKE.md")
+	os.Remove(linkPath)
+	if err := os.Symlink(docsPath, linkPath); err != nil {
+		fmt.Printf("Warning: could not link YOKE.md: %v\n", err)
+	}
 }
 
 // surfaceRelevantLearnings shows learnings matching task tags or repos.
