@@ -48,7 +48,7 @@ func (s *Scratchpad) Append(entry Entry) error {
 	defer f.Close()
 
 	line := fmt.Sprintf("### [%s] %s (%s)\n%s\n\n",
-		entry.Timestamp.Format("15:04"),
+		entry.Timestamp.Format(time.RFC3339),
 		entry.AgentID,
 		entry.Kind,
 		entry.Content,
@@ -100,7 +100,7 @@ func (s *Scratchpad) ReadSince(since time.Time) (string, error) {
 	}
 
 	if result.Len() == 0 {
-		return "(no entries since " + since.Format("15:04") + ")", nil
+		return "(no entries since " + since.Format(time.RFC3339) + ")", nil
 	}
 
 	return result.String(), nil
@@ -112,7 +112,7 @@ func (s *Scratchpad) Path() string {
 }
 
 func parseEntryTime(line string) (time.Time, bool) {
-	// Format: ### [15:04] agent-id (kind)
+	// Format: ### [<RFC3339>] agent-id (kind)
 	if !strings.HasPrefix(line, "### [") {
 		return time.Time{}, false
 	}
@@ -121,12 +121,15 @@ func parseEntryTime(line string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	timeStr := line[5:end]
-	now := time.Now()
+	if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
+		return t, true
+	}
+	// Legacy entries carried wall-clock time only; date them today so old
+	// scratchpads keep parsing (wrong across midnight, gone after rollover).
 	t, err := time.Parse("15:04", timeStr)
 	if err != nil {
 		return time.Time{}, false
 	}
-	// Set date to today
-	t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-	return t, true
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), true
 }

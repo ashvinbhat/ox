@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/filelock"
 	"github.com/ashvinbhat/ox/internal/gitutil"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
 )
@@ -248,9 +249,7 @@ func (m *Manager) ReconcileStatus(taskID string) error {
 		}
 
 		if isDone {
-			now := time.Now()
-			a.Status = StatusDone
-			a.FinishedAt = &now
+			m.MarkFinished(taskID, a, StatusDone)
 			changed = true
 		}
 	}
@@ -524,11 +523,23 @@ func (m *Manager) buildClaudeCmd(agent *Agent) string {
 	if agent.MaxTurns > 0 {
 		parts = append(parts, "--max-turns", fmt.Sprintf("%d", agent.MaxTurns))
 	}
-	if agent.MaxBudget > 0 {
-		parts = append(parts, "--max-budget-usd", fmt.Sprintf("%.2f", agent.MaxBudget))
-	}
+	// MaxBudget is deliberately NOT passed: --max-budget-usd only works with
+	// --print, so on interactive sessions it was a silent no-op. Enforcement
+	// happens outside the process (watcher).
 
 	return strings.Join(parts, " ")
+}
+
+// MarkFinished is the single path to a terminal agent status: it stamps the
+// status + finish time and releases the agent's file locks, which previously
+// leaked forever.
+func (m *Manager) MarkFinished(taskID string, a *Agent, status AgentStatus) {
+	now := time.Now()
+	a.Status = status
+	a.FinishedAt = &now
+	if len(a.FileLocks) > 0 {
+		filelock.NewManager(m.AgentsDir(taskID)).Release(a.ID)
+	}
 }
 
 func (m *Manager) generateBuilderContext(agent *Agent, taskID string) string {

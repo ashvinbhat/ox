@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ashvinbhat/ox/internal/agent"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
@@ -128,9 +127,7 @@ func runKill(cmd *cobra.Command, args []string) error {
 	}
 
 	err = mgr.UpdateAgent(taskID, a.ID, func(a *agent.Agent) {
-		now := time.Now()
-		a.Status = agent.StatusKilled
-		a.FinishedAt = &now
+		mgr.MarkFinished(taskID, a, agent.StatusKilled)
 	})
 	if err != nil {
 		return fmt.Errorf("update status: %w", err)

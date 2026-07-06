@@ -124,3 +124,65 @@ func IsAvailable() bool {
 	_, err := exec.LookPath("tmux")
 	return err == nil
 }
+
+// RenameWindow renames a window (target: "session:index").
+func RenameWindow(target, name string) error {
+	output, err := exec.Command("tmux", "rename-window", "-t", target, name).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux rename-window: %w\n%s", err, output)
+	}
+	return nil
+}
+
+// NewWindow adds a window to an existing session and runs an optional command.
+func NewWindow(session, name, dir, command string) error {
+	args := []string{"new-window", "-d", "-t", session, "-n", name}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	output, err := exec.Command("tmux", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux new-window: %w\n%s", err, output)
+	}
+	return nil
+}
+
+// HasWindow reports whether a named window exists in a session.
+func HasWindow(session, name string) bool {
+	out, err := exec.Command("tmux", "list-windows", "-t", session, "-F", "#{window_name}").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.TrimSpace(line) == name {
+			return true
+		}
+	}
+	return false
+}
+
+// RespawnWindow kills whatever runs in a window and starts a new command there.
+func RespawnWindow(target, command string) error {
+	output, err := exec.Command("tmux", "respawn-window", "-k", "-t", target, command).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux respawn-window: %w\n%s", err, output)
+	}
+	return nil
+}
+
+// InsideTmux reports whether the current process runs inside a tmux client.
+func InsideTmux() bool {
+	return os.Getenv("TMUX") != ""
+}
+
+// SwitchClient switches the attached tmux client to another session.
+func SwitchClient(name string) error {
+	output, err := exec.Command("tmux", "switch-client", "-t", name).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux switch-client: %w\n%s", err, output)
+	}
+	return nil
+}
