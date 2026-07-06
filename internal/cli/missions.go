@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -108,12 +109,16 @@ var missionsPruneCmd = &cobra.Command{
 			if m.Open() {
 				continue
 			}
-			reg, err := harness.LoadRegistry(m)
-			if err != nil {
-				continue
+			if reg, err := harness.LoadRegistry(m); err == nil {
+				for _, w := range reg.Workers {
+					if _, err := os.Stat(w.WorktreePath); err == nil {
+						fmt.Printf("Removing worker worktree %s\n", w.WorktreePath)
+					}
+					harness.RemoveWorkerWorktree(cfg, w)
+				}
 			}
-			for _, w := range reg.Workers {
-				harness.RemoveWorkerWorktree(cfg, w)
+			for _, repo := range harness.PruneIntegration(cfg, m) {
+				fmt.Printf("Removed integration worktree for %s (%s — PRs merged/closed)\n", repo, m.ID)
 			}
 		}
 		fmt.Println("Prune complete")

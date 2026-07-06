@@ -45,6 +45,7 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 			removeWorktree(cfg, w.Repo, w.WorktreePath)
 		}
 	}
+	PruneIntegration(cfg, m)
 
 	if store, err := memory.Open(cfg.Home, nil); err == nil {
 		store.GC(nil)
@@ -267,6 +268,46 @@ func stripFences(s string) string {
 // RemoveWorkerWorktree cleans a worker's worktree from its base repo.
 func RemoveWorkerWorktree(cfg *config.Config, w *Worker) {
 	removeWorktree(cfg, w.Repo, w.WorktreePath)
+}
+
+// PruneIntegration removes a mission's integration worktrees once they are
+// safe to drop: every PR on that repo is merged or closed, or the repo
+// shipped no PR at all (nothing references the branch). Open PRs keep their
+// worktree — review fixes push from it. Returns the repos pruned.
+func PruneIntegration(cfg *config.Config, m *mission.Mission) []string {
+	var pruned []string
+	for repo, binding := range m.Repos {
+		if binding.IntegrationWorktree == "" {
+			continue
+		}
+		if _, err := os.Stat(binding.IntegrationWorktree); err != nil {
+			continue
+		}
+
+		safe := true
+		for _, pr := range m.PRs {
+			if pr.Repo != repo {
+				continue
+			}
+			out, err := exec.Command("gh", "pr", "view", pr.URL, "--json", "state", "-q", ".state").Output()
+			if err != nil {
+				safe = false // can't verify → keep
+				break
+			}
+			state := strings.TrimSpace(string(out))
+			if state != "MERGED" && state != "CLOSED" {
+				safe = false
+				break
+			}
+		}
+		if !safe {
+			continue
+		}
+		removeWorktree(cfg, repo, binding.IntegrationWorktree)
+		os.Remove(filepath.Join(m.Dir(), repo))
+		pruned = append(pruned, repo)
+	}
+	return pruned
 }
 
 func removeWorktree(cfg *config.Config, repo, worktreePath string) {
