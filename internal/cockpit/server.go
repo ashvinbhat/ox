@@ -197,17 +197,34 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	meta, _ := json.Marshal(map[string]int{"cols": cols, "rows": rows})
 	sse(w, flusher, "meta", string(meta))
 
-	// Bootstrap frame: recent scrollback with ANSI, then live deltas.
-	if snap, err := tmuxutil.CaptureScrollback(target, 2000); err == nil {
-		sse(w, flusher, "full", encodeChunk(snap))
-	}
-
+	// Attach BEFORE snapshotting so no output falls between the two; deltas
+	// that arrive while we capture are already part of the snapshot and get
+	// drained below.
 	cs, err := tmuxutil.OpenControlStream(session)
 	if err != nil {
 		sse(w, flusher, "err", "control mode attach failed: "+err.Error())
 		return
 	}
 	defer cs.Close()
+
+	snap, err := tmuxutil.CaptureVisible(target)
+	if err != nil {
+		sse(w, flusher, "err", err.Error())
+		return
+	}
+	curX, curY := tmuxutil.CursorPos(target)
+drain:
+	for {
+		select {
+		case <-cs.Events:
+		default:
+			break drain
+		}
+	}
+	// Clear, paint the current screen, then park the cursor where tmux has
+	// it so absolute-addressed deltas line up.
+	frame := "\x1b[2J\x1b[H" + strings.TrimRight(snap, "\n") + fmt.Sprintf("\x1b[%d;%dH", curY+1, curX+1)
+	sse(w, flusher, "full", encodeChunk(frame))
 
 	keepalive := time.NewTicker(20 * time.Second)
 	defer keepalive.Stop()

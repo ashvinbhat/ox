@@ -125,14 +125,27 @@ func (cs *ControlStream) Close() {
 	go cs.cmd.Wait()
 }
 
-// CaptureScrollback returns up to `lines` of history with ANSI sequences
-// preserved — the bootstrap frame before live streaming takes over.
-func CaptureScrollback(target string, lines int) (string, error) {
-	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-e", "-S", fmt.Sprintf("-%d", lines)).Output()
+// CaptureVisible returns the pane's current screen with ANSI preserved.
+// Deliberately NOT scrollback: for full-screen TUIs, tmux history is a pile
+// of intermediate redraw frames — replaying it renders garbage.
+func CaptureVisible(target string) (string, error) {
+	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-e").Output()
 	if err != nil {
 		return "", fmt.Errorf("capture-pane: %w", err)
 	}
 	return string(out), nil
+}
+
+// CursorPos returns the pane's 0-based cursor position. Live deltas use
+// absolute addressing, so the viewer must start with its cursor exactly
+// where tmux has it or every subsequent overwrite lands on the wrong row.
+func CursorPos(target string) (x, y int) {
+	out, err := exec.Command("tmux", "display", "-p", "-t", target, "#{cursor_x} #{cursor_y}").Output()
+	if err != nil {
+		return 0, 0
+	}
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d %d", &x, &y)
+	return x, y
 }
 
 // decodeOctal reverses tmux control-mode escaping: control bytes arrive as
