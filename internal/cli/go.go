@@ -15,6 +15,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/mission"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
+	"github.com/ashvinbhat/ox/internal/watcher"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
@@ -183,6 +184,8 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 		}
 		m.AppendEvent("orchestrator_launched", "system", map[string]any{"resume": true})
 	}
+
+	watcher.EnsureRunning(requireConfig(), m)
 
 	if !harness.EnsureClaudeReady(orcTarget, 45*time.Second) {
 		fmt.Println("Warning: orchestrator did not reach the input prompt in time — check the tmux window")

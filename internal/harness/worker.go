@@ -484,7 +484,7 @@ func kickWorker(session, msg string) {
 	if !EnsureClaudeReady(session, 90*time.Second) {
 		return
 	}
-	tmuxutil.SendKeys(session, msg)
+	SendMessageEnsured(session, msg)
 }
 
 func personaModel(cfg *config.Config, persona, fallback string) string {

@@ -21,6 +21,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/memory/embed"
 	"github.com/ashvinbhat/ox/internal/mission"
 	"github.com/ashvinbhat/ox/internal/scratchpad"
+	"github.com/ashvinbhat/ox/internal/watcher"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
@@ -53,6 +54,7 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 	if role == RoleOrchestrator {
 		s.registerOrchestrator(srv)
 		s.registerAgentTools(srv)
+		s.registerJobTools(srv)
 	} else {
 		s.registerWorker(srv)
 	}
@@ -320,6 +322,7 @@ func (s *Server) registerOrchestrator(srv *mcp.Server) {
 		if err != nil {
 			return nil, missionStatusOut{}, err
 		}
+		watcher.EnsureRunning(s.cfg, m)
 
 		out := missionStatusOut{
 			ID: m.ID, Goal: m.Goal, Type: m.Type, Phase: m.Phase,
