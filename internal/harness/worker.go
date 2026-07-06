@@ -135,7 +135,7 @@ func SpawnWorker(cfg *config.Config, m *mission.Mission, in SpawnInput) (*Worker
 	if _, ok := cfg.Repos[in.Repo]; !ok {
 		return nil, fmt.Errorf("repo %q not registered", in.Repo)
 	}
-	if m.SpendFrozen {
+	if m.SpendFrozen && cfg.Budgets.Enforce {
 		return nil, fmt.Errorf("mission spend is frozen — raise the budget first")
 	}
 

@@ -109,7 +109,7 @@ func Start(cfg *config.Config, m *mission.Mission, in StartInput) (*Job, error) 
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt required")
 	}
-	if m.SpendFrozen {
+	if m.SpendFrozen && cfg.Budgets.Enforce {
 		return nil, fmt.Errorf("mission spend is frozen — raise the budget first")
 	}
 	if in.ID == "" {

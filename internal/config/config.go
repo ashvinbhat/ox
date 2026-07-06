@@ -47,6 +47,13 @@ type MemoryConfig struct {
 	Embeddings EmbeddingsConfig `yaml:"embeddings,omitempty"`
 }
 
+// BudgetsConfig controls whether the harness enforces spend limits (warnings,
+// worker wrap-up/kill, mission spend freeze). Tracking is always on —
+// enforcement is opt-in.
+type BudgetsConfig struct {
+	Enforce bool `yaml:"enforce"`
+}
+
 // ModelsConfig routes roles to model tiers for the harness.
 type ModelsConfig struct {
 	Orchestrator   string            `yaml:"orchestrator,omitempty"`    // default opus
@@ -68,6 +75,7 @@ type Config struct {
 	Multi            MultiConfig            `yaml:"multi,omitempty"`
 	Memory           MemoryConfig           `yaml:"memory,omitempty"`
 	Models           ModelsConfig           `yaml:"models,omitempty"`
+	Budgets          BudgetsConfig          `yaml:"budgets,omitempty"`
 	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
 }
 

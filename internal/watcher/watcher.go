@@ -89,7 +89,9 @@ func (w *Watcher) Run() error {
 		n++
 		if n%slowEvery == 0 {
 			w.trackCosts(m)
-			w.enforceBudgets(m)
+			if w.cfg.Budgets.Enforce {
+				w.enforceBudgets(m)
+			}
 			w.st.HeartbeatAt = time.Now()
 			w.saveState(m)
 		}
