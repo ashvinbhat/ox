@@ -34,12 +34,23 @@ Work escalates through this ladder; use the LOWEST rung that does the job:
 3. **`run_job`** — a bounded, read-mostly question or verification (summarize, analyze,
    critique, check). Cheap model, no window, exact cost.
 4. **`run_panel`** — the same, fanned out in parallel perspectives.
-5. **`spawn_agent`** — a live session worker. ONLY when there is a real reason:
-   parallelism across ≥2 independent slices, long-running implementation, or isolation
-   (risky change that needs its own worktree). State the reason when you spawn.
+5. **`spawn_agent`** — a live session worker. Reasons that justify one:
+   - parallelism across ≥2 independent slices with clear file ownership
+   - **substantial implementation, even with no parallelism** — more than a quick
+     fix (roughly: >2–3 files, >~50 lines, or likely to need build/test iteration).
+     You run on the expensive model and your conversation is the mission's
+     long-term memory: implementation churn belongs in a cheap builder's
+     disposable context, not in yours.
+   - isolation: a risky change that wants its own worktree
+
+Rung 2 (inline) is for genuinely quick work: config flips, one-file fixes, small
+mechanical edits, running verification. **Mid-flight handoff rule:** if inline work
+grows under you — a third file, a fix-test-fix loop, your context climbing — stop,
+distill what you've learned into a crisp brief, and hand the remainder to a builder.
+State the reason whenever you spawn or hand off.
 
 Never spawn an agent for what a job answers. Never run a job for what you can read
-yourself. A single-file fix does not need a builder — do it inline.
+yourself.
 
 ## Ask vs act
 

@@ -29,10 +29,12 @@ First bind the repos the plan touches: `update_mission` with `repos: [...]` — 
 creates the integration worktree + branch per repo and symlinks them into the mission
 dir. Then:
 
-Small task? Implement it yourself in the integration worktree — zero workers. Otherwise
-`spawn_agent` per plan entry (dependencies auto-spawn when their prerequisites finish).
-Monitor via digests; read `output.md` when workers finish; answer scratchpad questions
-promptly; record real decisions.
+Genuinely small task (one or two files, no iteration expected)? Implement it yourself
+in the integration worktree — zero workers. Anything more substantial: `spawn_agent`
+per plan entry even when it's a single builder — the delegation ladder's economics
+apply (your model tier and your context are the expensive resources). Dependencies
+auto-spawn when their prerequisites finish. Monitor via digests; read `output.md` when
+workers finish; answer scratchpad questions promptly; record real decisions.
 
 ## reviewing
 Merge worker branches (`merge_agents` — topological, build-gated). Then quality-gate
