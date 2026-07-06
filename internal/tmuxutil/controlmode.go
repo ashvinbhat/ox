@@ -136,6 +136,18 @@ func CaptureVisible(target string) (string, error) {
 	return string(out), nil
 }
 
+// CaptureHistory returns up to `lines` of pane history plus the current
+// screen, ANSI colors preserved. History rows are final rendered lines (no
+// cursor addressing), so they read as a coherent transcript — meant for a
+// scrollable read-only view, never for replay into a live grid.
+func CaptureHistory(target string, lines int) (string, error) {
+	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-e", "-S", fmt.Sprintf("-%d", lines)).Output()
+	if err != nil {
+		return "", fmt.Errorf("capture-pane history: %w", err)
+	}
+	return string(out), nil
+}
+
 // CursorPos returns the pane's 0-based cursor position. Live deltas use
 // absolute addressing, so the viewer must start with its cursor exactly
 // where tmux has it or every subsequent overwrite lands on the wrong row.

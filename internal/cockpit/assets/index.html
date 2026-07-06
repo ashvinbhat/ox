@@ -51,7 +51,6 @@
               display: flex; align-items: center; gap: 10px; }
   #termhead .target { color: var(--accent); font-weight: bold; }
   #termhead .state { color: var(--dim); font-size: 12px; }
-  #paused { display: none; color: var(--yellow); cursor: pointer; }
   #term { flex: 1; padding: 6px 4px 0 10px; min-height: 0; overflow: auto; }
 
   #inputbar { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border);
@@ -75,7 +74,7 @@
     <div id="termhead">
       <span class="target" id="curtarget">—</span>
       <span class="state" id="streamstate"></span>
-      <span id="paused">⏸ scrolled up — click for live</span>
+      <button id="histbtn" class="ghost" style="display:none;margin-left:auto;padding:4px 10px">history</button>
     </div>
     <div id="empty">select a session on the left</div>
     <div id="term" style="display:none"></div>
@@ -89,7 +88,7 @@
 <script src="https://unpkg.com/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-let term = null, es = null, current = null, atBottom = true;
+let term = null, es = null, current = null;
 
 function b64(s) {
   const bin = atob(s), bytes = new Uint8Array(bin.length);
@@ -97,45 +96,62 @@ function b64(s) {
   return new TextDecoder().decode(bytes);
 }
 
-function ensureTerm(cols, rows) {
+function ensureTerm(cols, rows, scrollback) {
   if (term) term.dispose();
   // Fixed geometry matching the real tmux pane — fitting to the browser
   // would desync every absolute-positioned redraw. Wide panes scroll.
   term = new Terminal({
-    cols, rows, scrollback: 4000, fontSize: 12,
+    cols, rows, scrollback, fontSize: 12,
     theme: { background: '#1e1e2e', foreground: '#cdd6f4' },
     convertEol: false, disableStdin: true,
   });
   term.open($('#term'));
-  term.onScroll(() => {
-    atBottom = term.buffer.active.viewportY + term.rows >= term.buffer.active.length;
-    $('#paused').style.display = atBottom ? 'none' : 'inline';
-  });
-  $('#paused').onclick = () => { term.scrollToBottom(); atBottom = true; $('#paused').style.display = 'none'; };
 }
+
+let mode = 'live';
 
 function openStream(target) {
   if (es) es.close();
   current = target;
+  mode = 'live';
   $('#curtarget').textContent = target;
   $('#streamstate').textContent = 'connecting…';
   $('#empty').style.display = 'none';
   $('#term').style.display = 'block';
   $('#inputbar').style.display = 'flex';
+  $('#histbtn').style.display = 'inline';
+  $('#histbtn').textContent = 'history';
   document.querySelectorAll('.sess').forEach(el =>
     el.classList.toggle('active', el.dataset.target === target));
 
   es = new EventSource('/api/stream?target=' + encodeURIComponent(target));
   es.addEventListener('meta', e => {
     const m = JSON.parse(e.data);
-    ensureTerm(m.cols, m.rows);
+    // Live view mirrors the pane exactly: no client scrollback — the pane's
+    // past lives in tmux history (the history button).
+    ensureTerm(m.cols, m.rows, 0);
   });
-  es.addEventListener('full', e => { term.reset(); term.write(b64(e.data)); term.scrollToBottom();
+  es.addEventListener('full', e => { term.reset(); term.write(b64(e.data));
                                      $('#streamstate').textContent = 'live'; });
-  es.addEventListener('out', e => { term.write(b64(e.data)); if (atBottom) term.scrollToBottom(); });
+  es.addEventListener('out', e => { term.write(b64(e.data)); });
   es.addEventListener('err', e => { $('#streamstate').textContent = e.data; });
   es.onerror = () => { $('#streamstate').textContent = 'reconnecting…'; };
 }
+
+async function openHistory() {
+  if (!current) return;
+  if (es) es.close();
+  mode = 'history';
+  $('#histbtn').textContent = '⏵ live';
+  $('#streamstate').textContent = 'history (read-only, scroll freely)';
+  const r = await fetch('/api/history?target=' + encodeURIComponent(current));
+  if (!r.ok) { $('#streamstate').textContent = 'history failed: ' + await r.text(); return; }
+  const h = await r.json();
+  ensureTerm(h.cols, 40, 12000);
+  term.write(b64(h.data), () => term.scrollToBottom());
+}
+
+$('#histbtn').onclick = () => (mode === 'live' ? openHistory() : openStream(current));
 
 async function send(background) {
   const text = $('#msg').value.trim();

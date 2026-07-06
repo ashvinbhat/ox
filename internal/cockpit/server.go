@@ -39,6 +39,7 @@ func (s *Server) Start() error {
 	mux.Handle("/", http.FileServer(http.FS(static)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/stream", s.handleStream)
+	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/send", s.handleSend)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
@@ -260,6 +261,25 @@ func encodeChunk(s string) string {
 func sse(w http.ResponseWriter, f http.Flusher, event, data string) {
 	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
 	f.Flush()
+}
+
+// handleHistory serves the pane's scrollback as one colored transcript for
+// the read-only history view.
+func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	target := r.URL.Query().Get("target")
+	if target == "" || !strings.HasPrefix(target, "ox-") {
+		http.Error(w, "target must be an ox tmux target", 400)
+		return
+	}
+	hist, err := tmuxutil.CaptureHistory(target, 8000)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	cols, _ := tmuxutil.PaneSize(target)
+	screen := strings.ReplaceAll(strings.TrimRight(hist, "\n"), "\n", "\r\n")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"cols": cols, "data": encodeChunk(screen)})
 }
 
 // ---- input ----
