@@ -1,0 +1,288 @@
+{
+  "main": {
+    "id": "5cf18adb49db5e7c",
+    "type": "split",
+    "children": [
+      {
+        "id": "abbb19c0cf58f13f",
+        "type": "tabs",
+        "dimension": 62.22527472527473,
+        "children": [
+          {
+            "id": "ad140600e1a251a9",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Contracts/AdSet/Create.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Create"
+            }
+          },
+          {
+            "id": "3b8108ca8cf152fa",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Contracts/AdSet/Create.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Create"
+            }
+          },
+          {
+            "id": "13b5a01bae277bc6",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Contracts/AdSet/Get.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Get"
+            }
+          },
+          {
+            "id": "be799d3806d9630d",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Contracts/AdSet/Update.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Update"
+            }
+          },
+          {
+            "id": "6952e8c11154354f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Contracts/AdSet/Create.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Create"
+            }
+          },
+          {
+            "id": "150466fbe3dae3a8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Views/AdSetView.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "AdSetView"
+            }
+          },
+          {
+            "id": "7c7391dd8d6602e7",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Views/AdSetView.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "AdSetView"
+            }
+          }
+        ],
+        "currentTab": 2
+      },
+      {
+        "id": "5c9cf7eada1587e5",
+        "type": "tabs",
+        "dimension": 37.77472527472527,
+        "children": [
+          {
+            "id": "717cf0e3a73cfceb",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "98fb0e43b15f0ad9",
+    "type": "split",
+    "children": [
+      {
+        "id": "78b2adbab48524f8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c4f8bf8475ebf30e",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "ba3f59cbdd803bf1",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "0619e62ce1e5de8a",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "ffbcb888ee2dcfd1",
+    "type": "split",
+    "children": [
+      {
+        "id": "31a027cfd352a0b7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1709f003847a8651",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Contracts/AdSet/Get.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Get"
+            }
+          },
+          {
+            "id": "6827887f2561681b",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Contracts/AdSet/Get.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Get"
+            }
+          },
+          {
+            "id": "766daffa438de05f",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "5694536713934070",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Contracts/AdSet/Get.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Get"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "13b5a01bae277bc6",
+  "lastOpenFiles": [
+    "Views/AdSetView.md",
+    "Contracts/AdSet/Create.md",
+    "Contracts/AdSet/Get.md",
+    "Contracts/AdSet/Update.md",
+    "Contracts/AdSet/Publish.md",
+    "User Flows/Basic LinkedIn Publish.md",
+    "Views",
+    "User Flows",
+    "Contracts/AdSet",
+    "Contracts"
+  ]
+}

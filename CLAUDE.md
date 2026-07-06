@@ -1,5 +1,26 @@
 # Ox - Agent Instructions
 
+## The Harness (v2 core)
+
+ox's center is the mission harness: `ox go <task-ref|mission-id|"goal">` opens a
+persistent orchestrator (interactive claude, tmux window "orc") that plans
+conversationally, spawns workers/jobs only when the delegation ladder justifies
+it, integrates, and ships — resumable at any time (`claude --resume` via
+pre-assigned session ids; the task is the resume handle).
+
+- Missions live at `~/.ox/missions/m<seq>-<slug>/` — mission.yaml, plan.md,
+  decisions.md, scratchpad.md, events.jsonl, ledger.jsonl, agents.json,
+  jobs.json, workers/, jobs/. Files are truth; every process is stateless.
+- `ox mcp --mission <id> --role orchestrator|worker` serves the typed tool
+  surface per claude session (wired via --mcp-config --strict-mcp-config)
+- The watcher (window "watch", `ox watch <id>`) reconciles state, auto-starts
+  dependency-gated workers, prices transcripts into the ledger, enforces
+  budgets, and injects digests into the orc pane (single-injector, guarded)
+- Memory: ~/.ox/memory.db (FTS5 + embeddings, hybrid RRF recall), repo docs at
+  ~/.ox/memory/repos/, distiller runs at mission close
+- Playbooks (mission types) are markdown at ~/.ox/playbooks/ overriding
+  embedded defaults (task, debug) — new type = new file, zero Go
+
 ## Building
 
 After any code changes, rebuild the binary:
@@ -66,19 +87,19 @@ through the yoke CLI:
 
 ```
 ~/.ox/
-├── ox.yaml              # Config
+├── ox.yaml              # Config (repos, models tiers, memory.embeddings)
 ├── repos/               # Cloned repos (base)
-├── worktrees/           # Git worktrees per task
-├── tasks/               # Workspace directories
-│   └── <task-id>-<slug>/
-│       ├── AGENTS.md    # Generated context
-│       ├── CLAUDE.md    # Symlink → AGENTS.md
-│       ├── YOKE.md      # Symlink → ~/.yoke/AGENTS.md (yoke usage reference)
-│       └── <repo>/      # Symlink → worktree
+├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
+├── missions/            # Harness missions (the primary work unit)
+│   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/...
+├── memory.db            # Long-term memory (FTS5 + embedding BLOBs)
+├── memory/repos/        # Living per-repo knowledge docs (distiller-maintained)
+├── playbooks/           # Mission-type overrides (task.md, debug.md, ...)
+├── tasks/               # Legacy solo workspaces (ox pickup)
 ├── skills/              # Skill markdown files
 ├── personas/            # Persona definitions
 ├── hooks/               # Claude Code hooks
-└── learnings.db         # SQLite learnings store
+└── learnings.db         # Legacy learnings (migrated into memory.db)
 ```
 
 ## Full Workflow Test

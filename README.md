@@ -76,14 +76,25 @@ ox done
 
 ## Commands
 
-### Assistant Mode
+### Missions (the harness — primary workflow)
 ```bash
-ox assist                        # General AI assistant with ox knowledge
-ox assist --persona builder      # Start with builder mindset
-ox assist --skill mongodb,debug  # Load specific skills
+ox go 114                        # Open/resume the mission for a task
+ox go m17                        # Resume a mission by id
+ox go "why is CI flaky" --playbook debug   # Freeform mission
+ox go                            # Pick from open missions
 
-ox claude 18                     # Start Claude in task workspace with full ox context
-ox claude --persona captain      # Override persona (orchestration mode)
+# Inside: a persistent orchestrator plans with you, spawns workers/jobs only
+# when needed, merges, and ships — all in one resumable tmux session.
+# The watcher (window "watch") feeds it events and enforces budgets.
+
+ox missions                      # List missions with phase + spend
+ox missions distill m17          # Re-run knowledge distillation
+ox missions prune                # GC zombie sessions + closed-mission worktrees
+
+ox memory recall "query"         # Search long-term memory
+ox memory stats|migrate|backfill|gc
+
+ox claude 18                     # Start Claude in a legacy task workspace
 ```
 
 ### Workspace
