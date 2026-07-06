@@ -9,15 +9,15 @@ import (
 
 // SlackMessage represents a Slack webhook message
 type SlackMessage struct {
-	Text        string       `json:"text,omitempty"`
-	Blocks      []SlackBlock `json:"blocks,omitempty"`
+	Text        string            `json:"text,omitempty"`
+	Blocks      []SlackBlock      `json:"blocks,omitempty"`
 	Attachments []SlackAttachment `json:"attachments,omitempty"`
 }
 
 // SlackBlock represents a Slack block element
 type SlackBlock struct {
-	Type     string      `json:"type"`
-	Text     *SlackText  `json:"text,omitempty"`
+	Type     string         `json:"type"`
+	Text     *SlackText     `json:"text,omitempty"`
 	Elements []SlackElement `json:"elements,omitempty"`
 }
 

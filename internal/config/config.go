@@ -19,12 +19,12 @@ type RepoConfig struct {
 
 // MultiConfig holds multi-agent orchestration settings.
 type MultiConfig struct {
-	DefaultModel      string  `yaml:"default_model,omitempty"`             // Default model for builders (e.g. "sonnet")
-	CaptainModel      string  `yaml:"captain_model,omitempty"`             // Model for captain (e.g. "opus")
-	MaxAgents         int     `yaml:"max_agents,omitempty"`                // Maximum concurrent agents
-	MaxBudgetPerAgent float64 `yaml:"max_budget_per_agent_usd,omitempty"`  // Default budget cap per agent
-	MaxTotalBudget    float64 `yaml:"max_total_budget_usd,omitempty"`      // Total budget cap
-	DefaultMaxTurns   int     `yaml:"default_max_turns,omitempty"`         // Default max turns per agent
+	DefaultModel      string  `yaml:"default_model,omitempty"`            // Default model for builders (e.g. "sonnet")
+	CaptainModel      string  `yaml:"captain_model,omitempty"`            // Model for captain (e.g. "opus")
+	MaxAgents         int     `yaml:"max_agents,omitempty"`               // Maximum concurrent agents
+	MaxBudgetPerAgent float64 `yaml:"max_budget_per_agent_usd,omitempty"` // Default budget cap per agent
+	MaxTotalBudget    float64 `yaml:"max_total_budget_usd,omitempty"`     // Total budget cap
+	DefaultMaxTurns   int     `yaml:"default_max_turns,omitempty"`        // Default max turns per agent
 }
 
 // Defaults holds default settings.

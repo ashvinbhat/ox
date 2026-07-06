@@ -39,8 +39,8 @@ func ParsePlanContent(content string) (*Plan, error) {
 	plan := &Plan{}
 	scanner := bufio.NewScanner(strings.NewReader(content))
 
-	var section string       // current h2 section
-	var agentID string       // current h3 agent
+	var section string // current h2 section
+	var agentID string // current h3 agent
 	var currentAgent *PlannedAgent
 	var descLines []string
 	var inDescription bool

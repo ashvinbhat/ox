@@ -55,6 +55,7 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 		s.registerOrchestrator(srv)
 		s.registerAgentTools(srv)
 		s.registerJobTools(srv)
+		s.registerIntegrateTools(srv)
 	} else {
 		s.registerWorker(srv)
 	}
@@ -302,11 +303,12 @@ type missionStatusOut struct {
 }
 
 type updateMissionIn struct {
-	Phase             string  `json:"phase,omitempty" jsonschema:"transition to this phase (playbook-defined; 'closed' ends the mission)"`
-	Goal              string  `json:"goal,omitempty"`
-	Outcome           string  `json:"outcome,omitempty" jsonschema:"required when closing"`
-	BudgetUSD         float64 `json:"budget_usd,omitempty" jsonschema:"raise/lower the mission budget"`
-	MaxParallelAgents int     `json:"max_parallel_agents,omitempty"`
+	Phase             string   `json:"phase,omitempty" jsonschema:"transition to this phase (playbook-defined; 'closed' ends the mission)"`
+	Goal              string   `json:"goal,omitempty"`
+	Outcome           string   `json:"outcome,omitempty" jsonschema:"required when closing"`
+	Repos             []string `json:"repos,omitempty" jsonschema:"bind repos to the mission — creates integration worktrees and branches"`
+	BudgetUSD         float64  `json:"budget_usd,omitempty" jsonschema:"raise/lower the mission budget"`
+	MaxParallelAgents int      `json:"max_parallel_agents,omitempty"`
 }
 type updateMissionOut struct {
 	Phase   string `json:"phase"`
@@ -355,6 +357,16 @@ func (s *Server) registerOrchestrator(srv *mcp.Server) {
 		Name:        "update_mission",
 		Description: "Update mission state: phase transitions, goal, budget raises. Closing requires outcome and no running workers.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateMissionIn) (*mcp.CallToolResult, updateMissionOut, error) {
+		if len(in.Repos) > 0 {
+			cur, err := s.openMission()
+			if err != nil {
+				return nil, updateMissionOut{}, err
+			}
+			if err := harness.BindRepos(s.cfg, cur, in.Repos); err != nil {
+				return nil, updateMissionOut{}, fmt.Errorf("bind repos: %w", err)
+			}
+		}
+
 		var msg string
 		m, err := mission.Update(s.oxHome, s.missionID, func(m *mission.Mission) error {
 			if in.Goal != "" {
@@ -392,6 +404,13 @@ func (s *Server) registerOrchestrator(srv *mcp.Server) {
 		}
 		if in.Phase != "" {
 			m.AppendEvent("phase_changed", s.actor(), map[string]any{"phase": in.Phase})
+		}
+		if in.Phase == mission.PhaseClosed {
+			if err := harness.CloseMission(s.cfg, m); err != nil {
+				msg = "closed with cleanup warnings: " + err.Error()
+			} else if msg == "" {
+				msg = "mission closed — distilled to memory, workers cleaned up"
+			}
 		}
 		return nil, updateMissionOut{Phase: m.Phase, Message: msg}, nil
 	})

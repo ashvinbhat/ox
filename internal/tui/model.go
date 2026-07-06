@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	pollInterval   = 2 * time.Second
-	sidebarWidth   = 32
-	minPaneHeight  = 10
-	captureLines   = 80
+	pollInterval  = 2 * time.Second
+	sidebarWidth  = 32
+	minPaneHeight = 10
+	captureLines  = 80
 )
 
 // Model is the bubbletea model for the agent TUI.

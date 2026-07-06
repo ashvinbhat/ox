@@ -32,16 +32,16 @@ type Selection struct {
 	// Addressing verdicts the user accepted for posting as replies. PriorByRef
 	// maps the prior finding ref to its CommentID so the caller can post
 	// each reply with PostReply(in_reply_to=...).
-	Addressing  []Addressing
-	PriorByRef  map[string]Finding // for the caller's posting loop (ref → prior finding incl. CommentID)
+	Addressing []Addressing
+	PriorByRef map[string]Finding // for the caller's posting loop (ref → prior finding incl. CommentID)
 }
 
 // RunInteractive presents the review to the user and walks them through:
-//   1. (follow-up only) which addressing verdicts to post as replies to the prior comments
-//   2. which new findings to post as inline comments
-//   3. the review event type (comment / request-changes / approve)
-//   4. an optional final global comment
-//   5. final preview + explicit y/N confirmation
+//  1. (follow-up only) which addressing verdicts to post as replies to the prior comments
+//  2. which new findings to post as inline comments
+//  3. the review event type (comment / request-changes / approve)
+//  4. an optional final global comment
+//  5. final preview + explicit y/N confirmation
 //
 // addressing + priorByRef may be empty/nil for a first-time review.
 // priorByRef maps a prior finding's Ref to the prior Finding (so its

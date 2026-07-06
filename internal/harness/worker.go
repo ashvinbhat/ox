@@ -424,6 +424,15 @@ func writeWorkerFiles(cfg *config.Config, m *mission.Mission, w *Worker) error {
 	agents.WriteString("\n## Brief\n\n")
 	agents.Write(brief)
 	agents.WriteString("\n")
+	if pk := PriorKnowledge(cfg, m, m.Goal+" "+string(brief[:min(len(brief), 200)]), 6); pk != "" {
+		agents.WriteString("\n")
+		agents.WriteString(pk)
+	}
+	if doc := RepoDoc(cfg.Home, w.Repo); doc != "" {
+		agents.WriteString("\n## Repo knowledge (living doc — the distiller keeps it current)\n\n")
+		agents.WriteString(doc)
+		agents.WriteString("\n")
+	}
 
 	if err := os.WriteFile(filepath.Join(w.WorktreePath, "AGENTS.md"), []byte(agents.String()), 0o644); err != nil {
 		return err

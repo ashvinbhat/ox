@@ -10,11 +10,11 @@ import (
 
 // ReviewWorktree is an ephemeral worktree created for a single review session.
 type ReviewWorktree struct {
-	RepoName     string // ox-registered repo name (e.g. "frontend")
-	PRNumber     int
-	Path         string // ~/.ox/worktrees/<repo>/review-<pr>
-	Branch       string // local branch tracking the PR head
-	BaseRef      string // base branch the PR targets, fully qualified (e.g. origin/main)
+	RepoName string // ox-registered repo name (e.g. "frontend")
+	PRNumber int
+	Path     string // ~/.ox/worktrees/<repo>/review-<pr>
+	Branch   string // local branch tracking the PR head
+	BaseRef  string // base branch the PR targets, fully qualified (e.g. origin/main)
 }
 
 // CreateReviewWorktree fetches the PR head into a local branch and checks it

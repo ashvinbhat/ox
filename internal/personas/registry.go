@@ -14,9 +14,9 @@ import (
 type Persona struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
-	Role        string   `yaml:"role"`                  // Short role description
-	Triggers    []string `yaml:"triggers,omitempty"`    // Tags that trigger this persona
-	Content     string   `yaml:"-"`                     // Loaded from markdown body
+	Role        string   `yaml:"role"`               // Short role description
+	Triggers    []string `yaml:"triggers,omitempty"` // Tags that trigger this persona
+	Content     string   `yaml:"-"`                  // Loaded from markdown body
 }
 
 // Registry holds all registered personas.

@@ -434,4 +434,3 @@ func filepathBase(p string) string {
 	}
 	return p
 }
-

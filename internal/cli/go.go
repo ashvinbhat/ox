@@ -117,7 +117,7 @@ func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD 
 		return fmt.Errorf("create mission: %w", err)
 	}
 
-	if err := harness.WriteOrchestratorFiles(oxHome, m, taskMD); err != nil {
+	if err := harness.WriteOrchestratorFiles(requireConfig(), m, taskMD); err != nil {
 		return err
 	}
 	if err := harness.WriteMCPConfig(m); err != nil {
@@ -151,7 +151,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 		return err
 	}
 	if _, err := os.Stat(m.Dir() + "/orchestrator-prompt.md"); err != nil {
-		if err := harness.WriteOrchestratorFiles(oxHome, m, ""); err != nil {
+		if err := harness.WriteOrchestratorFiles(requireConfig(), m, ""); err != nil {
 			return err
 		}
 	}

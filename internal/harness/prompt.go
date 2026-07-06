@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/mission"
 )
 
@@ -85,10 +86,10 @@ func missionHeader(m *mission.Mission) string {
 
 // WriteOrchestratorFiles materializes the mission-dir documents the
 // orchestrator and any manual `claude` session rely on: the prompt file
-// consumed at launch, AGENTS.md (mission header + task context), and the
-// CLAUDE.md symlink.
-func WriteOrchestratorFiles(oxHome string, m *mission.Mission, taskContextMD string) error {
-	prompt, err := BuildOrchestratorPrompt(oxHome, m)
+// consumed at launch, AGENTS.md (mission header + task context + prior
+// knowledge), and the CLAUDE.md symlink.
+func WriteOrchestratorFiles(cfg *config.Config, m *mission.Mission, taskContextMD string) error {
+	prompt, err := BuildOrchestratorPrompt(cfg.Home, m)
 	if err != nil {
 		return err
 	}
@@ -101,6 +102,10 @@ func WriteOrchestratorFiles(oxHome string, m *mission.Mission, taskContextMD str
 	if taskContextMD != "" {
 		agents.WriteString("\n---\n\n")
 		agents.WriteString(taskContextMD)
+	}
+	if pk := PriorKnowledge(cfg, m, m.Goal, 8); pk != "" {
+		agents.WriteString("\n")
+		agents.WriteString(pk)
 	}
 	if err := os.WriteFile(filepath.Join(m.Dir(), "AGENTS.md"), []byte(agents.String()), 0o644); err != nil {
 		return fmt.Errorf("write AGENTS.md: %w", err)

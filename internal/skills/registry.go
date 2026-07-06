@@ -12,11 +12,11 @@ import (
 
 // Skill represents a skill definition with metadata for auto-injection.
 type Skill struct {
-	Name        string   `yaml:"-"`              // Derived from key
-	File        string   `yaml:"file"`           // Path to skill markdown file
-	Description string   `yaml:"description"`    // Short description
-	Tags        []string `yaml:"tags,omitempty"` // Tags that trigger this skill
-	Personas    []string `yaml:"personas,omitempty"` // Personas that use this skill
+	Name        string   `yaml:"-"`                    // Derived from key
+	File        string   `yaml:"file"`                 // Path to skill markdown file
+	Description string   `yaml:"description"`          // Short description
+	Tags        []string `yaml:"tags,omitempty"`       // Tags that trigger this skill
+	Personas    []string `yaml:"personas,omitempty"`   // Personas that use this skill
 	TaskTypes   []string `yaml:"task_types,omitempty"` // Task types (bug, feature, etc.)
 }
 

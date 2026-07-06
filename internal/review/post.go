@@ -12,12 +12,12 @@ import (
 // reviewComment is the wire shape for one inline comment in a batched PR
 // review (POST /repos/.../pulls/<n>/reviews → comments[]).
 type reviewComment struct {
-	Path     string `json:"path"`
-	Line     int    `json:"line"`
-	Side     string `json:"side"`               // "RIGHT" for additions / unchanged-in-new
-	StartLine int   `json:"start_line,omitempty"`
+	Path      string `json:"path"`
+	Line      int    `json:"line"`
+	Side      string `json:"side"` // "RIGHT" for additions / unchanged-in-new
+	StartLine int    `json:"start_line,omitempty"`
 	StartSide string `json:"start_side,omitempty"`
-	Body     string `json:"body"`
+	Body      string `json:"body"`
 }
 
 type reviewPayload struct {

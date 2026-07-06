@@ -9,18 +9,18 @@ import (
 
 // PRInfo is the subset of GitHub PR metadata we need to drive a review.
 type PRInfo struct {
-	Number     int      `json:"number"`
-	Title      string   `json:"title"`
-	Body       string   `json:"body"`
-	URL        string   `json:"url"`
-	BaseRef    string   `json:"baseRefName"`
-	HeadRef    string   `json:"headRefName"`
-	HeadSHA    string   `json:"headRefOid"`
-	Author     ghLogin  `json:"author"`
-	HeadRepo   ghRepo   `json:"headRepository"`
-	BaseRepo   ghRepo   `json:"headRepositoryOwner"`
-	Files      []ghFile `json:"files"`
-	OwnerRepo  string   // owner/repo of the base — filled in by ResolvePR
+	Number    int      `json:"number"`
+	Title     string   `json:"title"`
+	Body      string   `json:"body"`
+	URL       string   `json:"url"`
+	BaseRef   string   `json:"baseRefName"`
+	HeadRef   string   `json:"headRefName"`
+	HeadSHA   string   `json:"headRefOid"`
+	Author    ghLogin  `json:"author"`
+	HeadRepo  ghRepo   `json:"headRepository"`
+	BaseRepo  ghRepo   `json:"headRepositoryOwner"`
+	Files     []ghFile `json:"files"`
+	OwnerRepo string   // owner/repo of the base — filled in by ResolvePR
 }
 
 type ghLogin struct {
@@ -28,8 +28,8 @@ type ghLogin struct {
 }
 
 type ghRepo struct {
-	Name  string  `json:"name"`
-	Login string  `json:"login,omitempty"` // for owner objects
+	Name  string `json:"name"`
+	Login string `json:"login,omitempty"` // for owner objects
 }
 
 type ghFile struct {
