@@ -222,8 +222,11 @@ drain:
 		}
 	}
 	// Clear, paint the current screen, then park the cursor where tmux has
-	// it so absolute-addressed deltas line up.
-	frame := "\x1b[2J\x1b[H" + strings.TrimRight(snap, "\n") + fmt.Sprintf("\x1b[%d;%dH", curY+1, curX+1)
+	// it so absolute-addressed deltas line up. capture-pane separates rows
+	// with bare LF, which a terminal renders as move-down-keep-column — the
+	// staircase effect — so rows are joined with CRLF.
+	screen := strings.ReplaceAll(strings.TrimRight(snap, "\n"), "\n", "\r\n")
+	frame := "\x1b[2J\x1b[H" + screen + fmt.Sprintf("\x1b[%d;%dH", curY+1, curX+1)
 	sse(w, flusher, "full", encodeChunk(frame))
 
 	keepalive := time.NewTicker(20 * time.Second)
