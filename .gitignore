@@ -32,3 +32,7 @@ bin/
 
 # Local config (may contain secrets)
 config.local.yaml
+
+# Local working notes (not part of ox)
+DM2.0/
+linkedin-video-ad-template.html
