@@ -1,54 +1,29 @@
 package cli
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
-	"github.com/ashvinbhat/ox/internal/dashboard"
-	"github.com/ashvinbhat/ox/internal/yokecli"
+	"github.com/ashvinbhat/ox/internal/cockpit"
 )
 
 var dashboardPort int
 
 var dashboardCmd = &cobra.Command{
 	Use:   "dashboard",
-	Short: "Start the Ox web dashboard",
-	Long:  `Start a web-based dashboard for managing tasks, workspaces, and learnings.`,
+	Short: "Open the live mission cockpit",
+	Long: `Serves the ox cockpit on localhost: every open mission with phase, spend,
+workers, and jobs — plus a live streaming terminal for any agent and an input
+bar to talk to it directly.
+
+Streams ride tmux control mode (real-time push, not polling); messages go
+through the same hardened delivery path the harness itself uses.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadConfig()
-		if err != nil {
-			return err
-		}
-
-		yokePath := yokecli.BinaryPath()
-
-		// Find ox binary (self)
-		oxPath, err := os.Executable()
-		if err != nil {
-			oxPath = "ox"
-		}
-
-		server := dashboard.NewServer(dashboardPort, cfg.OxHome, yokePath, oxPath)
-		return server.Start()
+		cfg := requireConfig()
+		return cockpit.New(cfg, dashboardPort).Start()
 	},
 }
 
-func loadConfig() (*Config, error) {
-	home := os.Getenv("HOME")
-	oxHome := filepath.Join(home, ".ox")
-
-	return &Config{
-		OxHome: oxHome,
-	}, nil
-}
-
-type Config struct {
-	OxHome string
-}
-
 func init() {
-	dashboardCmd.Flags().IntVarP(&dashboardPort, "port", "p", 8080, "Port to run the dashboard on")
+	dashboardCmd.Flags().IntVarP(&dashboardPort, "port", "p", 8080, "Port to serve on")
 	rootCmd.AddCommand(dashboardCmd)
 }

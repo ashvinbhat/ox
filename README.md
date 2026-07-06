@@ -152,19 +152,16 @@ ox learnings --category gotcha            # Filter by category
 ox done --learn "insight"                 # Capture learning on completion
 ```
 
-### Dashboard
+### Cockpit
 ```bash
-ox dashboard                   # Start web dashboard on port 8080
-ox dashboard -p 3000           # Start on custom port
+ox dashboard                   # Live mission cockpit on localhost:8080
+ox budgets on|off              # Toggle spend enforcement (tracking always on)
 ```
 
-The dashboard provides a visual interface for:
-- **Task list** - All tasks with status, priority, tags
-- **Task tree** - Hierarchical view showing parent/child relationships
-- **Ready tasks** - Tasks with no blockers, ready to work on
-- **Workspaces** - Active workspaces and git worktrees
-- **Learnings** - Captured insights and gotchas
-- **Task creation** - Add tasks with title, tags, priority, parent
+The cockpit shows every open mission (phase, spend, budget, PRs, recent
+events) with its orchestrator, watcher, workers, and jobs — click any session
+to stream its terminal live (tmux control mode, real-time push) and type to
+the agent from the input bar.
 
 ### Task Management (yoke)
 

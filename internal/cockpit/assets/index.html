@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ox cockpit</title>
+<link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@5.5.0/css/xterm.css">
+<style>
+  :root {
+    --bg: #1e1e2e; --panel: #181825; --border: #313244; --fg: #cdd6f4;
+    --dim: #6c7086; --accent: #89b4fa; --green: #a6e3a1; --red: #f38ba8;
+    --yellow: #f9e2af; --mauve: #cba6f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 13px/1.45 "SF Mono", ui-monospace, Menlo, monospace;
+         display: flex; height: 100vh; overflow: hidden; }
+
+  #sidebar { width: 320px; min-width: 320px; background: var(--panel);
+             border-right: 1px solid var(--border); overflow-y: auto; padding: 10px; }
+  #sidebar h1 { font-size: 14px; margin: 4px 6px 12px; color: var(--accent); }
+  #sidebar h1 small { color: var(--dim); font-weight: normal; float: right; }
+
+  .mission { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+  .mhead { padding: 8px 10px; background: #232336; cursor: default; }
+  .mhead .id { color: var(--mauve); font-weight: bold; }
+  .mhead .phase { color: var(--yellow); }
+  .mhead .goal { display: block; color: var(--fg); white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .mhead .money { color: var(--dim); font-size: 12px; }
+  .frozen { color: var(--red); }
+
+  .sess { padding: 6px 10px; cursor: pointer; display: flex; gap: 8px; align-items: center;
+          border-top: 1px solid var(--border); }
+  .sess:hover { background: #26263a; }
+  .sess.active { background: #2b2b45; border-left: 3px solid var(--accent); padding-left: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.live { background: var(--green); }
+  .sess .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess .meta { color: var(--dim); font-size: 11px; }
+
+  .jobs { padding: 4px 10px 8px; border-top: 1px solid var(--border); }
+  .job { color: var(--dim); font-size: 11px; }
+  .job .done { color: var(--green); } .job .failed { color: var(--red); } .job .running { color: var(--yellow); }
+
+  .evs { padding: 4px 10px 8px; border-top: 1px dashed var(--border); color: var(--dim); font-size: 11px; }
+  .prs a { color: var(--accent); font-size: 11px; }
+
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #termhead { padding: 8px 14px; border-bottom: 1px solid var(--border);
+              display: flex; align-items: center; gap: 10px; }
+  #termhead .target { color: var(--accent); font-weight: bold; }
+  #termhead .state { color: var(--dim); font-size: 12px; }
+  #paused { display: none; color: var(--yellow); cursor: pointer; }
+  #term { flex: 1; padding: 6px 4px 0 10px; min-height: 0; }
+
+  #inputbar { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border);
+              background: var(--panel); }
+  #msg { flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+         border-radius: 6px; padding: 8px 10px; font: inherit; }
+  #msg:focus { outline: 1px solid var(--accent); }
+  button { background: var(--accent); color: #11111b; border: 0; border-radius: 6px;
+           padding: 8px 14px; font: inherit; font-weight: bold; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+  #empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+</style>
+</head>
+<body>
+  <div id="sidebar">
+    <h1>ox cockpit <small id="clock"></small></h1>
+    <div id="missions"></div>
+  </div>
+  <div id="main">
+    <div id="termhead">
+      <span class="target" id="curtarget">—</span>
+      <span class="state" id="streamstate"></span>
+      <span id="paused">⏸ scrolled up — click for live</span>
+    </div>
+    <div id="empty">select a session on the left</div>
+    <div id="term" style="display:none"></div>
+    <div id="inputbar" style="display:none">
+      <input id="msg" placeholder="type to the agent… (Enter sends · it lands exactly like typing in tmux)" autocomplete="off">
+      <button id="send">Send</button>
+      <button id="btw" class="ghost" title="context only — doesn't consume the agent's turn">/btw</button>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://unpkg.com/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let term = null, fit = null, es = null, current = null, atBottom = true;
+
+function b64(s) {
+  const bin = atob(s), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function ensureTerm(cols, rows) {
+  if (term) term.dispose();
+  term = new Terminal({
+    cols, rows, scrollback: 8000, fontSize: 12,
+    theme: { background: '#1e1e2e', foreground: '#cdd6f4' },
+    convertEol: false, disableStdin: true,
+  });
+  fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open($('#term'));
+  term.onScroll(() => {
+    atBottom = term.buffer.active.viewportY + term.rows >= term.buffer.active.length;
+    $('#paused').style.display = atBottom ? 'none' : 'inline';
+  });
+  $('#paused').onclick = () => { term.scrollToBottom(); atBottom = true; $('#paused').style.display = 'none'; };
+}
+
+function openStream(target) {
+  if (es) es.close();
+  current = target;
+  $('#curtarget').textContent = target;
+  $('#streamstate').textContent = 'connecting…';
+  $('#empty').style.display = 'none';
+  $('#term').style.display = 'block';
+  $('#inputbar').style.display = 'flex';
+  document.querySelectorAll('.sess').forEach(el =>
+    el.classList.toggle('active', el.dataset.target === target));
+
+  es = new EventSource('/api/stream?target=' + encodeURIComponent(target));
+  es.addEventListener('meta', e => {
+    const m = JSON.parse(e.data);
+    ensureTerm(m.cols, m.rows);
+  });
+  es.addEventListener('full', e => { term.reset(); term.write(b64(e.data)); term.scrollToBottom();
+                                     $('#streamstate').textContent = 'live'; });
+  es.addEventListener('out', e => { term.write(b64(e.data)); if (atBottom) term.scrollToBottom(); });
+  es.addEventListener('err', e => { $('#streamstate').textContent = e.data; });
+  es.onerror = () => { $('#streamstate').textContent = 'reconnecting…'; };
+}
+
+async function send(background) {
+  const text = $('#msg').value.trim();
+  if (!text || !current) return;
+  $('#msg').value = '';
+  const res = await fetch('/api/send', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: current, text, background }),
+  });
+  if (!res.ok) $('#streamstate').textContent = 'send failed: ' + await res.text();
+}
+$('#send').onclick = () => send(false);
+$('#btw').onclick = () => send(true);
+$('#msg').addEventListener('keydown', e => { if (e.key === 'Enter') send(false); });
+
+function sessRow(s) {
+  const meta = [s.status, s.model, s.spend].filter(Boolean).join(' · ');
+  return `<div class="sess ${s.target === current ? 'active' : ''}" data-target="${s.target}">
+    <span class="dot ${s.live ? 'live' : ''}"></span>
+    <span class="label">${s.label}</span>
+    <span class="meta">${meta}</span>
+  </div>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/state');
+    const data = await r.json();
+    $('#clock').textContent = data.now;
+    const html = (data.missions || []).map(m => `
+      <div class="mission">
+        <div class="mhead">
+          <span class="id">${m.id}</span>
+          <span class="phase">${m.type}/${m.phase}</span>
+          ${m.task_seq ? '<span class="meta">#' + m.task_seq + '</span>' : ''}
+          <span class="money" style="float:right">${m.spend} / ${m.budget}${m.frozen ? ' <span class=frozen>FROZEN</span>' : ''}</span>
+          <span class="goal" title="${m.goal}">${m.goal}</span>
+        </div>
+        ${m.sessions.map(sessRow).join('')}
+        ${m.jobs && m.jobs.length ? `<div class="jobs">${m.jobs.map(j =>
+          `<div class="job"><span class="${j.status}">●</span> ${j.id} ${j.status} ${j.cost}</div>`).join('')}</div>` : ''}
+        ${m.events && m.events.length ? `<div class="evs">${m.events.slice(-3).join('<br>')}</div>` : ''}
+        ${m.prs && m.prs.length ? `<div class="evs prs">${m.prs.map(u => `<a href="${u}" target="_blank">${u.split('/').slice(-3).join('/')}</a>`).join('<br>')}</div>` : ''}
+      </div>`).join('');
+    $('#missions').innerHTML = html || '<div style="color:var(--dim);padding:8px">no open missions — <code>ox go &lt;task&gt;</code></div>';
+    document.querySelectorAll('.sess').forEach(el =>
+      el.onclick = () => openStream(el.dataset.target));
+  } catch (e) { /* server restarting */ }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
