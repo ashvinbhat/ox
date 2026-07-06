@@ -32,6 +32,29 @@ type Defaults struct {
 	Persona string `yaml:"persona,omitempty"`
 }
 
+// EmbeddingsConfig selects the provider for memory embeddings. The API key is
+// named by env var, never stored in the file.
+type EmbeddingsConfig struct {
+	Provider   string `yaml:"provider,omitempty"`    // voyage | openai | ollama | none
+	Model      string `yaml:"model,omitempty"`       // provider default when empty
+	Dimensions int    `yaml:"dimensions,omitempty"`  // provider default when 0
+	APIKeyEnv  string `yaml:"api_key_env,omitempty"` // env var holding the key
+	BaseURL    string `yaml:"base_url,omitempty"`    // ollama host / proxy override
+}
+
+// MemoryConfig configures the long-term memory store.
+type MemoryConfig struct {
+	Embeddings EmbeddingsConfig `yaml:"embeddings,omitempty"`
+}
+
+// ModelsConfig routes roles to model tiers for the harness.
+type ModelsConfig struct {
+	Orchestrator   string            `yaml:"orchestrator,omitempty"`    // default opus
+	SessionDefault string            `yaml:"session_default,omitempty"` // default sonnet
+	JobDefault     string            `yaml:"job_default,omitempty"`     // default haiku
+	Personas       map[string]string `yaml:"personas,omitempty"`        // per-persona overrides
+}
+
 // Config represents the ox.yaml configuration file.
 type Config struct {
 	Agent            string                 `yaml:"agent,omitempty"`
@@ -43,7 +66,39 @@ type Config struct {
 	SlackWebhookURL  string                 `yaml:"slack_webhook_url,omitempty"`
 	FeedbackPassword string                 `yaml:"feedback_password,omitempty"`
 	Multi            MultiConfig            `yaml:"multi,omitempty"`
+	Memory           MemoryConfig           `yaml:"memory,omitempty"`
+	Models           ModelsConfig           `yaml:"models,omitempty"`
 	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
+}
+
+// OrchestratorModel resolves the orchestrator model tier.
+func (c *Config) OrchestratorModel() string {
+	if c.Models.Orchestrator != "" {
+		return c.Models.Orchestrator
+	}
+	if c.Multi.CaptainModel != "" {
+		return c.Multi.CaptainModel
+	}
+	return "opus"
+}
+
+// SessionModel resolves the session-worker model tier.
+func (c *Config) SessionModel() string {
+	if c.Models.SessionDefault != "" {
+		return c.Models.SessionDefault
+	}
+	if c.Multi.DefaultModel != "" {
+		return c.Multi.DefaultModel
+	}
+	return "sonnet"
+}
+
+// JobModel resolves the headless-job model tier.
+func (c *Config) JobModel() string {
+	if c.Models.JobDefault != "" {
+		return c.Models.JobDefault
+	}
+	return "haiku"
 }
 
 // DefaultConfig returns a Config with sensible defaults.

@@ -119,6 +119,9 @@ func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD 
 	if err := harness.WriteOrchestratorFiles(oxHome, m, taskMD); err != nil {
 		return err
 	}
+	if err := harness.WriteMCPConfig(m); err != nil {
+		return err
+	}
 	linkYokeDocs(m.Dir())
 
 	fmt.Printf("Mission %s created: %s\n", m.ID, m.Goal)
@@ -140,6 +143,17 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 	}
 
 	session := m.TmuxSession()
+
+	// Regenerate wiring that older missions may predate (and pick up prompt/
+	// playbook changes) — cheap and idempotent.
+	if err := harness.WriteMCPConfig(m); err != nil {
+		return err
+	}
+	if _, err := os.Stat(m.Dir() + "/orchestrator-prompt.md"); err != nil {
+		if err := harness.WriteOrchestratorFiles(oxHome, m, ""); err != nil {
+			return err
+		}
+	}
 
 	// Windows are targeted by name, not index — user tmux configs often set
 	// base-index 1, so ":0" is not a safe target.
@@ -189,7 +203,9 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 // pre-assigned but claude never ran).
 func orchestratorCmd(m *mission.Mission, resume bool) string {
 	promptFile := m.Dir() + "/orchestrator-prompt.md"
-	base := fmt.Sprintf("claude --dangerously-skip-permissions --model %s --append-system-prompt \"$(cat '%s')\"", m.Orchestrator.Model, promptFile)
+	mcpFile := m.Dir() + "/.mcp.json"
+	base := fmt.Sprintf("claude --dangerously-skip-permissions --model %s --append-system-prompt \"$(cat '%s')\" --mcp-config '%s' --strict-mcp-config",
+		m.Orchestrator.Model, promptFile, mcpFile)
 
 	fresh := fmt.Sprintf("%s --session-id %s", base, m.Orchestrator.SessionID)
 	if !resume {
