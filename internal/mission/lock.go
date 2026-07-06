@@ -16,6 +16,11 @@ func WithLock(oxHome, id string, fn func() error) error {
 	return withFileLock(dir+"/.lock", fn)
 }
 
+// WithFileLock serializes fn across processes on an arbitrary lock file.
+func WithFileLock(path string, fn func() error) error {
+	return withFileLock(path, fn)
+}
+
 func withFileLock(path string, fn func() error) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {

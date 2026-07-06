@@ -2,10 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/agent"
+	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/harness"
+	"github.com/ashvinbhat/ox/internal/mission"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
 	"github.com/spf13/cobra"
 )
@@ -26,12 +30,17 @@ func runAgents(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 	mgr := agent.NewManager(cfg.Home, cfg)
 
+	printedWorkers := printMissionWorkers(cfg, args)
+
 	var registries []*agent.AgentRegistry
 
 	if len(args) > 0 {
 		// Filter by task
 		reg, err := findRegistryByRef(mgr, args[0])
 		if err != nil {
+			if printedWorkers {
+				return nil
+			}
 			return err
 		}
 		registries = []*agent.AgentRegistry{reg}
@@ -44,7 +53,9 @@ func runAgents(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(registries) == 0 {
-		fmt.Println("No agents running. Use 'ox spawn' to create one.")
+		if !printedWorkers {
+			fmt.Println("No agents running. Use 'ox go' to start a mission.")
+		}
 		return nil
 	}
 
@@ -88,6 +99,73 @@ func runAgents(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// printMissionWorkers lists harness mission workers; returns whether any
+// mission section was printed.
+func printMissionWorkers(cfg *config.Config, args []string) bool {
+	missions, err := mission.List(cfg.Home)
+	if err != nil {
+		return false
+	}
+
+	printed := false
+	for _, m := range missions {
+		if !m.Open() {
+			continue
+		}
+		if len(args) > 0 && args[0] != m.ID {
+			continue
+		}
+		reg, err := harness.LoadRegistry(m)
+		if err != nil || len(reg.Workers) == 0 {
+			continue
+		}
+
+		fmt.Printf("Mission %s [%s/%s]: %s\n", m.ID, m.Type, m.Phase, m.Goal)
+		ids := make([]string, 0, len(reg.Workers))
+		for id := range reg.Workers {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			w := reg.Workers[id]
+			live := ""
+			if w.Status == harness.WorkerRunning && tmuxutil.HasSession(w.TmuxSession) {
+				live = " (live)"
+			}
+			duration := time.Since(w.SpawnedAt).Truncate(time.Second)
+			if w.FinishedAt != nil {
+				duration = w.FinishedAt.Sub(w.SpawnedAt).Truncate(time.Second)
+			}
+			fmt.Printf("  %s %-20s [%-11s] %-8s %-8s %s%s\n",
+				workerIcon(w.Status), w.ID, w.Status, w.Persona, w.Model, duration, live)
+		}
+		fmt.Println()
+		printed = true
+	}
+	return printed
+}
+
+func workerIcon(status string) string {
+	switch status {
+	case harness.WorkerRunning:
+		return "●"
+	case harness.WorkerDone:
+		return "✓"
+	case harness.WorkerFailed:
+		return "✗"
+	case harness.WorkerKilled:
+		return "⊘"
+	case harness.WorkerPending:
+		return "○"
+	case harness.WorkerBlocked:
+		return "■"
+	case harness.WorkerInterrupted:
+		return "◌"
+	default:
+		return "?"
+	}
 }
 
 func statusIcon(status agent.AgentStatus) string {

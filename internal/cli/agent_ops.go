@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/ashvinbhat/ox/internal/agent"
+	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
 	"github.com/spf13/cobra"
 )
@@ -69,42 +71,50 @@ Examples:
 	RunE: runMsg,
 }
 
+// findAnyAgentSession resolves an agent id to its tmux session, checking
+// mission workers first, then the legacy agent registry.
+func findAnyAgentSession(cfg *config.Config, id string) (session string, isWorker bool, err error) {
+	if _, w, werr := harness.FindWorker(cfg.Home, id); werr == nil {
+		return w.TmuxSession, true, nil
+	}
+	mgr := agent.NewManager(cfg.Home, cfg)
+	a, _, aerr := mgr.FindAgent(id)
+	if aerr != nil {
+		return "", false, fmt.Errorf("no agent or worker %q", id)
+	}
+	return a.TmuxSession, false, nil
+}
+
 func runAttach(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
-
-	a, _, err := mgr.FindAgent(args[0])
+	session, _, err := findAnyAgentSession(cfg, args[0])
 	if err != nil {
 		return err
 	}
-
-	if !tmuxutil.HasSession(a.TmuxSession) {
-		return fmt.Errorf("agent %q session is not running", a.ID)
+	if !tmuxutil.HasSession(session) {
+		return fmt.Errorf("agent %q session is not running", args[0])
 	}
 
-	fmt.Printf("Attaching to %s... (Ctrl-B then D to detach)\n", a.TmuxSession)
-	return tmuxutil.Attach(a.TmuxSession)
+	fmt.Printf("Attaching to %s... (Ctrl-B then D to detach)\n", session)
+	return tmuxutil.Attach(session)
 }
 
 func runPeek(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
-
-	a, _, err := mgr.FindAgent(args[0])
+	session, _, err := findAnyAgentSession(cfg, args[0])
 	if err != nil {
 		return err
 	}
-
-	if !tmuxutil.HasSession(a.TmuxSession) {
-		return fmt.Errorf("agent %q session is not running (status: %s)", a.ID, a.Status)
+	if !tmuxutil.HasSession(session) {
+		return fmt.Errorf("agent %q session is not running", args[0])
 	}
 
-	output, err := tmuxutil.CapturePane(a.TmuxSession, 50)
+	output, err := tmuxutil.CapturePane(session, 50)
 	if err != nil {
 		return fmt.Errorf("capture pane: %w", err)
 	}
 
-	fmt.Printf("── %s (%s) ──\n", a.ID, a.TmuxSession)
+	fmt.Printf("── %s (%s) ──\n", args[0], session)
 	fmt.Print(output)
 	fmt.Printf("── end ──\n")
 
@@ -113,8 +123,16 @@ func runPeek(cmd *cobra.Command, args []string) error {
 
 func runKill(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
 
+	if m, w, err := harness.FindWorker(cfg.Home, args[0]); err == nil {
+		if err := harness.KillWorker(cfg, m, w, "cli"); err != nil {
+			return err
+		}
+		fmt.Printf("Killed worker %q (mission %s)\n", w.ID, m.ID)
+		return nil
+	}
+
+	mgr := agent.NewManager(cfg.Home, cfg)
 	a, taskID, err := mgr.FindAgent(args[0])
 	if err != nil {
 		return err
@@ -139,8 +157,16 @@ func runKill(cmd *cobra.Command, args []string) error {
 
 func runRespawn(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
 
+	if m, w, err := harness.FindWorker(cfg.Home, args[0]); err == nil {
+		if err := harness.RespawnWorker(cfg, m, w, ""); err != nil {
+			return err
+		}
+		fmt.Printf("Worker %q respawned (mission %s) — previous conversation resumed where possible.\n", w.ID, m.ID)
+		return nil
+	}
+
+	mgr := agent.NewManager(cfg.Home, cfg)
 	a, taskID, err := mgr.FindAgent(args[0])
 	if err != nil {
 		return err
@@ -168,25 +194,23 @@ func runRespawn(cmd *cobra.Command, args []string) error {
 
 func runMsg(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
 
 	agentID := args[0]
 	message := strings.Join(args[1:], " ")
 
-	a, _, err := mgr.FindAgent(agentID)
+	session, _, err := findAnyAgentSession(cfg, agentID)
 	if err != nil {
 		return err
 	}
-
-	if !tmuxutil.HasSession(a.TmuxSession) {
-		return fmt.Errorf("agent %q session is not running", a.ID)
+	if !tmuxutil.HasSession(session) {
+		return fmt.Errorf("agent %q session is not running", agentID)
 	}
 
-	if err := tmuxutil.SendKeys(a.TmuxSession, message); err != nil {
+	if err := tmuxutil.SendKeys(session, message); err != nil {
 		return fmt.Errorf("send message: %w", err)
 	}
 
-	fmt.Printf("Sent to %s: %s\n", a.ID, message)
+	fmt.Printf("Sent to %s: %s\n", agentID, message)
 	return nil
 }
 
@@ -208,26 +232,24 @@ Examples:
 
 func runBtw(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	mgr := agent.NewManager(cfg.Home, cfg)
 
 	agentID := args[0]
 	message := strings.Join(args[1:], " ")
 
-	a, _, err := mgr.FindAgent(agentID)
+	session, _, err := findAnyAgentSession(cfg, agentID)
 	if err != nil {
 		return err
 	}
-
-	if !tmuxutil.HasSession(a.TmuxSession) {
-		return fmt.Errorf("agent %q session is not running", a.ID)
+	if !tmuxutil.HasSession(session) {
+		return fmt.Errorf("agent %q session is not running", agentID)
 	}
 
 	btwMsg := "/btw " + message
-	if err := tmuxutil.SendKeys(a.TmuxSession, btwMsg); err != nil {
+	if err := tmuxutil.SendKeys(session, btwMsg); err != nil {
 		return fmt.Errorf("send btw: %w", err)
 	}
 
-	fmt.Printf("Sent /btw to %s: %s\n", a.ID, message)
+	fmt.Printf("Sent /btw to %s: %s\n", agentID, message)
 	return nil
 }
 

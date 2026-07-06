@@ -8,6 +8,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/checkpoint"
 	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/memory"
 	"github.com/ashvinbhat/ox/internal/memory/embed"
 	"github.com/ashvinbhat/ox/internal/mission"
@@ -50,6 +52,7 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 	s.registerCommon(srv)
 	if role == RoleOrchestrator {
 		s.registerOrchestrator(srv)
+		s.registerAgentTools(srv)
 	} else {
 		s.registerWorker(srv)
 	}
@@ -391,15 +394,40 @@ func (s *Server) registerOrchestrator(srv *mcp.Server) {
 	})
 }
 
-// registerWorker adds worker-only tools. report_done/report_blocker land in M3
-// together with the worker runtime; scratch/checkpoint/recall/remember from
-// the common set are already everything a worker needs to communicate.
-func (s *Server) registerWorker(srv *mcp.Server) {}
+func (s *Server) registerWorker(srv *mcp.Server) {
+	s.registerWorkerTools(srv)
+}
 
-// agentSummaries and runningAgents read the worker registry; until M3 moves
-// the registry into the mission dir they report an empty roster.
-func (s *Server) agentSummaries(m *mission.Mission) []agentSummary { return nil }
-func (s *Server) runningAgents(m *mission.Mission) []string        { return nil }
+func (s *Server) agentSummaries(m *mission.Mission) []agentSummary {
+	reg, err := harness.LoadRegistry(m)
+	if err != nil {
+		return nil
+	}
+	var out []agentSummary
+	for _, w := range reg.Workers {
+		out = append(out, agentSummary{
+			ID: w.ID, Status: w.Status, Persona: w.Persona, Model: w.Model,
+			Repo: w.Repo, Detail: w.Summary, Finished: w.Finished(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+func (s *Server) runningAgents(m *mission.Mission) []string {
+	reg, err := harness.LoadRegistry(m)
+	if err != nil {
+		return nil
+	}
+	var running []string
+	for _, w := range reg.Workers {
+		if w.Status == harness.WorkerRunning || w.Status == harness.WorkerBlocked {
+			running = append(running, w.ID)
+		}
+	}
+	sort.Strings(running)
+	return running
+}
 
 func appendDecision(dir, actor, content string) {
 	path := dir + "/decisions.md"
