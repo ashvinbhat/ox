@@ -8,7 +8,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/checkpoint"
 	"github.com/ashvinbhat/ox/internal/gitutil"
-	"github.com/ashvinbhat/ox/internal/learning"
+	"github.com/ashvinbhat/ox/internal/memory"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 	"github.com/spf13/cobra"
@@ -96,23 +96,25 @@ func runDone(cmd *cobra.Command, args []string) error {
 			fmt.Println("Task marked as done in yoke")
 		}
 
-		// Capture learning if provided (uses yoke seq even when no workspace)
+		// Capture learning if provided (uses task scope even when no workspace)
 		if doneLearn != "" {
-			store, lerr := learning.NewStore(cfg.Home)
-			if lerr != nil {
-				fmt.Printf("Warning: failed to save learning: %v\n", lerr)
+			if store, lerr := openMemoryStore(); lerr != nil {
+				fmt.Printf("Warning: failed to save memory: %v\n", lerr)
 			} else {
-				defer store.Close()
-				var repos []string
-				if ws != nil {
-					repos = ws.Repos
+				scope := fmt.Sprintf("task:%d", t.Seq)
+				var tags []string
+				if ws != nil && len(ws.Repos) > 0 {
+					scope = "repo:" + ws.Repos[0]
+					tags = ws.Repos
 				}
-				taskSeq := t.Seq
-				l, lerr := store.Add(doneLearn, learning.CategoryGeneral, repos, &taskSeq)
+				res, lerr := store.Remember(cmd.Context(), memory.RememberInput{
+					Content: doneLearn, Kind: "learning", Scope: scope, Tags: tags, Source: "user",
+				})
+				store.Close()
 				if lerr != nil {
-					fmt.Printf("Warning: failed to save learning: %v\n", lerr)
+					fmt.Printf("Warning: failed to save memory: %v\n", lerr)
 				} else {
-					fmt.Printf("Learning captured (#%d)\n", l.ID)
+					fmt.Printf("Remembered (%s)\n", res.UID)
 				}
 			}
 		}

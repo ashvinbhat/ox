@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ashvinbhat/ox/internal/context"
+	oxcontext "github.com/ashvinbhat/ox/internal/context"
 	"github.com/ashvinbhat/ox/internal/gitutil"
-	"github.com/ashvinbhat/ox/internal/learning"
+	"github.com/ashvinbhat/ox/internal/memory"
 	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/workspace"
 	"github.com/ashvinbhat/ox/internal/yokecli"
@@ -182,8 +183,8 @@ func runPickup(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Warning: failed to load task context: %v\n", err)
 	}
 
-	gen := context.NewGenerator(cfg.Home)
-	taskCtx := &context.TaskContext{
+	gen := oxcontext.NewGenerator(cfg.Home)
+	taskCtx := &oxcontext.TaskContext{
 		TaskMarkdown: taskMD,
 		Title:        t.Title,
 		Tags:         t.Tags,
@@ -242,30 +243,35 @@ func linkYokeDocs(workspacePath string) {
 	}
 }
 
-// surfaceRelevantLearnings shows learnings matching task tags or repos.
+// surfaceRelevantLearnings shows memories matching task tags or repos.
 func surfaceRelevantLearnings(oxHome string, taskTags, repos []string) {
-	store, err := learning.NewStore(oxHome)
+	store, err := openMemoryStore()
 	if err != nil {
 		return
 	}
 	defer store.Close()
 
-	// Combine task tags and repo names for search
-	searchTags := append([]string{}, taskTags...)
-	searchTags = append(searchTags, repos...)
+	var scopes []string
+	for _, r := range repos {
+		scopes = append(scopes, "repo:"+r)
+	}
+	query := strings.Join(taskTags, " ")
+	if query == "" {
+		query = strings.Join(repos, " ")
+	}
 
-	learnings, err := store.SearchByTags(searchTags, 5)
-	if err != nil || len(learnings) == 0 {
+	mems, _, err := store.Search(context.Background(), query, memory.SearchOptions{Scopes: scopes, K: 5})
+	if err != nil || len(mems) == 0 {
 		return
 	}
 
-	fmt.Println("\nRelevant learnings:")
-	for _, l := range learnings {
-		content := l.Content
+	fmt.Println("\nRelevant memories:")
+	for _, m := range mems {
+		content := m.Content
 		if len(content) > 60 {
 			content = content[:57] + "..."
 		}
-		fmt.Printf("  [%s] %s\n", l.Category, content)
+		fmt.Printf("  [%s] %s\n", m.Kind, content)
 	}
 }
 

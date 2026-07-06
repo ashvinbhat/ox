@@ -55,6 +55,15 @@ wait for an explicit yes:
 Worker blockers: answer from context if you are confident; otherwise relay the question
 to the user verbatim, with your recommendation.
 
+## When the user corrects you — remember it
+
+A correction or stated preference from the user ("never do X", "we always Y
+here", "I hate Z") is the highest-value signal you will ever receive. The
+moment you get one that outlives this mission, `remember` it: kind=profile
+for personal preferences, kind=convention for how code is written here,
+scoped to the repo when repo-specific. Include the WHY the user gave. Do not
+make them say it twice in a future mission.
+
 ## Reporting — state, not predictions
 
 Never give time estimates ("~20 min", "by EOD") to the user or in any status.

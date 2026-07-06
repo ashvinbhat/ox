@@ -2,9 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/ashvinbhat/ox/internal/learning"
+	"github.com/ashvinbhat/ox/internal/memory"
 	"github.com/spf13/cobra"
 )
 
@@ -55,103 +54,109 @@ var (
 	learningsLimit    int
 )
 
+// legacyKind maps the old learning categories onto memory kinds.
+var legacyKind = map[string]string{
+	"approach": "learning",
+	"gotcha":   "gotcha",
+	"tool":     "tool",
+	"pattern":  "convention",
+	"general":  "learning",
+	"":         "learning",
+}
+
 func runLearn(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 	content := args[0]
 
-	store, err := learning.NewStore(cfg.Home)
+	store, err := openMemoryStore()
 	if err != nil {
-		return fmt.Errorf("open learning store: %w", err)
+		return fmt.Errorf("open memory store: %w", err)
 	}
 	defer store.Close()
 
-	// Determine category
-	category := learning.Category(learnCategory)
-	if category == "" {
-		category = learning.CategoryGeneral
+	kind := legacyKind[learnCategory]
+	if kind == "" {
+		kind = learnCategory // allow memory-native kinds directly
 	}
 
-	// Collect tags
 	tags := learnTags
-
-	// If in a workspace, auto-add task tags and get task seq
-	var taskSeq *int
+	scope := "global"
 	if ws, err := getCurrentWorkspace(cfg.Home); err == nil {
-		taskSeq = &ws.TaskSeq
-
-		// Add repo names as tags
 		for _, repo := range ws.Repos {
 			tags = append(tags, repo)
+			if scope == "global" {
+				scope = "repo:" + repo
+			}
 		}
 	}
 
-	l, err := store.Add(content, category, tags, taskSeq)
+	res, err := store.Remember(cmd.Context(), memory.RememberInput{
+		Content: content, Kind: kind, Scope: scope, Tags: tags, Source: "user",
+	})
 	if err != nil {
-		return fmt.Errorf("save learning: %w", err)
+		return fmt.Errorf("save memory: %w", err)
 	}
 
-	fmt.Printf("Learning captured (#%d)\n", l.ID)
-	fmt.Printf("  Category: %s\n", l.Category)
-	if len(l.Tags) > 0 {
-		fmt.Printf("  Tags: %s\n", strings.Join(l.Tags, ", "))
+	switch {
+	case res.Status == "created":
+		fmt.Printf("Remembered (%s, %s, %s)\n", res.UID, kind, scope)
+	default:
+		fmt.Printf("Memory %s (%s)\n", res.Status, res.UID)
 	}
-	if l.TaskSeq != nil {
-		fmt.Printf("  Task: #%d\n", *l.TaskSeq)
-	}
-
 	return nil
 }
 
 func runLearnings(cmd *cobra.Command, args []string) error {
-	cfg := requireConfig()
-
-	store, err := learning.NewStore(cfg.Home)
+	store, err := openMemoryStore()
 	if err != nil {
-		return fmt.Errorf("open learning store: %w", err)
+		return fmt.Errorf("open memory store: %w", err)
 	}
 	defer store.Close()
 
-	opts := learning.ListOptions{
-		Category: learning.Category(learningsCategory),
-		Tag:      learningsTag,
-		Limit:    learningsLimit,
+	query := learningsTag
+	if query == "" {
+		query = learningsCategory
 	}
-
-	learnings, err := store.List(opts)
-	if err != nil {
-		return fmt.Errorf("list learnings: %w", err)
-	}
-
-	if len(learnings) == 0 {
-		fmt.Println("No learnings captured yet.")
-		fmt.Println("Use 'ox learn \"your insight\"' to capture one.")
+	if query == "" {
+		counts, err := store.Count()
+		if err != nil {
+			return err
+		}
+		if len(counts) == 0 {
+			fmt.Println("No memories yet. Use 'ox learn \"your insight\"' to capture one.")
+			return nil
+		}
+		fmt.Println("Memory counts by scope (use 'ox memory recall <query>' to search):")
+		total := 0
+		for scope, n := range counts {
+			fmt.Printf("  %-30s %d\n", scope, n)
+			total += n
+		}
+		fmt.Printf("  %-30s %d\n", "TOTAL", total)
 		return nil
 	}
 
-	count, _ := store.Count()
-	if opts.Category != "" || opts.Tag != "" {
-		fmt.Printf("Learnings (showing %d of %d):\n\n", len(learnings), count)
-	} else {
-		fmt.Printf("Learnings (%d total):\n\n", count)
+	var kinds []string
+	if k := legacyKind[learningsCategory]; learningsCategory != "" && k != "" {
+		kinds = []string{k}
 	}
-
-	for _, l := range learnings {
-		// Truncate content for display
-		content := l.Content
-		if len(content) > 70 {
-			content = content[:67] + "..."
-		}
-
-		fmt.Printf("  #%d [%s] %s\n", l.ID, l.Category, content)
-		if len(l.Tags) > 0 {
-			fmt.Printf("      Tags: %s\n", strings.Join(l.Tags, ", "))
-		}
-		if l.TaskSeq != nil {
-			fmt.Printf("      From task #%d\n", *l.TaskSeq)
-		}
-		fmt.Println()
+	k := learningsLimit
+	if k == 0 {
+		k = 10
 	}
-
+	mems, degraded, err := store.Search(cmd.Context(), query, memory.SearchOptions{Kinds: kinds, K: k})
+	if err != nil {
+		return err
+	}
+	if degraded {
+		fmt.Println("(FTS-only — embeddings unavailable)")
+	}
+	for _, m := range mems {
+		fmt.Printf("  [%s] %s (%s)\n      %s\n", m.Kind, m.Title, m.Scope, m.Content)
+	}
+	if len(mems) == 0 {
+		fmt.Println("No matches")
+	}
 	return nil
 }
 
