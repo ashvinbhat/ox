@@ -1,4 +1,4 @@
-package review
+package ghreview
 
 import "strings"
 
@@ -81,4 +81,24 @@ func mergeGroup(group []Finding) Finding {
 	// If multiple titles, keep the base's title; titles are short labels and
 	// concatenating them tends to make worse copy than picking one.
 	return merged
+}
+
+var severityOrder = map[Severity]int{
+	SeverityBlocker: 0,
+	SeverityIssue:   1,
+	SeveritySuggest: 2,
+	SeverityNit:     3,
+}
+
+// SortBySeverity orders findings blocker-first, then by file/line.
+func SortBySeverity(findings []Finding) {
+	for i := 0; i < len(findings); i++ {
+		for j := i + 1; j < len(findings); j++ {
+			si, sj := severityOrder[findings[i].Severity], severityOrder[findings[j].Severity]
+			if sj < si || (sj == si && (findings[j].File < findings[i].File ||
+				(findings[j].File == findings[i].File && findings[j].Line < findings[i].Line))) {
+				findings[i], findings[j] = findings[j], findings[i]
+			}
+		}
+	}
 }

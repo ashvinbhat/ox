@@ -195,8 +195,7 @@ comment.
 - yoke tree  # See task hierarchy
 - ox done  # Complete current task and clean up the workspace
 
-### Code Review & Ship
-- ox review  # AI code review before shipping
+### Ship
 - ox ship  # Push and create PR
 `
 
@@ -275,12 +274,10 @@ You are in REVIEWER mode. Your job is to ensure QUALITY.
 4. **Feedback** - Provide constructive feedback
 
 ### Key Commands for Reviewers
-- ox review  # Run AI code review
 - ox skill inject writing-tests  # Load test expertise
 - ox checkpoint --done "Reviewed X" --next "Verify Y"
 
 ### Reviewer Rules
-- DO run ox review before approving
 - DO check for edge cases
 - DO verify tests exist and pass
 - DO look for security issues
@@ -300,7 +297,6 @@ You are in BUILDER mode. Your job is to SHIP working code.
 4. **Ship** - Commit and push
 
 ### Key Commands for Builders
-- ox review  # Review before shipping
 - ox ship  # Push and create PR
 - ox checkpoint --done "Implemented X" --next "Test Y"
 - ox skill inject <name>  # Load expertise as needed
@@ -309,7 +305,6 @@ You are in BUILDER mode. Your job is to SHIP working code.
 - DO follow existing patterns in the codebase
 - DO write tests for new functionality
 - DO keep changes focused and reviewable
-- DO use ox review before shipping
 - AVOID over-engineering - keep it simple
 `
 	}

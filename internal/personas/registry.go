@@ -2,6 +2,7 @@
 package personas
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,13 +11,51 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Persona represents a persona definition with metadata for auto-selection.
+//go:embed defaults/*.md
+var defaultFS embed.FS
+
+// EnsureEmbeddedDefaults writes embedded persona files (reviewer panel etc.)
+// into the personas dir when missing — user edits always win.
+func EnsureEmbeddedDefaults(oxHome string) error {
+	dir := filepath.Join(oxHome, "personas")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	entries, err := defaultFS.ReadDir("defaults")
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		dst := filepath.Join(dir, e.Name())
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		data, err := defaultFS.ReadFile("defaults/" + e.Name())
+		if err != nil {
+			continue
+		}
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Persona represents a persona definition with metadata for auto-selection
+// and (v2) harness spawn defaults.
 type Persona struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
 	Role        string   `yaml:"role"`               // Short role description
 	Triggers    []string `yaml:"triggers,omitempty"` // Tags that trigger this persona
 	Content     string   `yaml:"-"`                  // Loaded from markdown body
+
+	// Harness v2 spawn defaults (all optional).
+	Kind         string  `yaml:"kind,omitempty"`          // session | job | any
+	DefaultModel string  `yaml:"default_model,omitempty"` // haiku | sonnet | opus
+	MaxTurns     int     `yaml:"max_turns,omitempty"`
+	MaxBudgetUSD float64 `yaml:"max_budget_usd,omitempty"`
+	Output       string  `yaml:"output,omitempty"` // findings_json | output_md | rca_md
 }
 
 // Registry holds all registered personas.

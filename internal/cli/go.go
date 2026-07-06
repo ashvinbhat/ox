@@ -14,6 +14,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/mission"
+	"github.com/ashvinbhat/ox/internal/personas"
 	"github.com/ashvinbhat/ox/internal/tmuxutil"
 	"github.com/ashvinbhat/ox/internal/watcher"
 	"github.com/ashvinbhat/ox/internal/yokecli"
@@ -49,11 +50,15 @@ Playbooks define the mission type (task, debug, ...). Add your own at
 
 var missionIDRe = regexp.MustCompile(`^m\d+$`)
 
+var prURLRe = regexp.MustCompile(`^https://github\.com/[^/]+/[^/]+/pull/\d+/?$`)
+
 func runGo(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
 	if !tmuxutil.IsAvailable() {
 		return fmt.Errorf("tmux is required for missions")
 	}
+
+	personas.EnsureEmbeddedDefaults(cfg.Home)
 
 	ref := strings.TrimSpace(strings.Join(args, " "))
 
@@ -70,6 +75,9 @@ func runGo(cmd *cobra.Command, args []string) error {
 
 	case isAllDigits(ref):
 		return goYokeTask(cfg.Home, ref)
+
+	case prURLRe.MatchString(ref):
+		return createMission(cfg.Home, "review", "Review PR "+ref, nil, "PR to review: "+ref)
 
 	default:
 		return createMission(cfg.Home, goPlaybook, ref, nil, "")

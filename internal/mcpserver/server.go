@@ -56,6 +56,7 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 		s.registerAgentTools(srv)
 		s.registerJobTools(srv)
 		s.registerIntegrateTools(srv)
+		s.registerReviewTools(srv)
 	} else {
 		s.registerWorker(srv)
 	}

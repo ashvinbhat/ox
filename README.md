@@ -102,9 +102,7 @@ ox claude 18                     # Start Claude in a legacy task workspace
 ox pickup <id> --repos <repo>    # Create workspace for task
 ox status                        # Current task and workspace
 ox open                          # Open workspace in IDE
-ox review [task-id] [repo]       # AI code review with Mycroft
-ox review --local                # Review current directory (any git repo)
-ox review --dir ~/path           # Review specific directory
+ox go <pr-url>                   # Review a PR (review playbook: panel → discuss → post)
 ox ship                          # Push and create PR
 ox done [id]                     # Complete task, cleanup
 ```

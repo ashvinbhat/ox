@@ -9,11 +9,13 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/job"
 	"github.com/ashvinbhat/ox/internal/mission"
+	"github.com/ashvinbhat/ox/internal/personas"
 )
 
 type runJobIn struct {
 	ID           string   `json:"id,omitempty" jsonschema:"optional job id; auto-generated when empty"`
 	Prompt       string   `json:"prompt" jsonschema:"the complete self-contained prompt; the job has no mission context beyond this"`
+	Persona      string   `json:"persona,omitempty" jsonschema:"prepend this persona's instructions and inherit its model/output contract (e.g. reviewer-security)"`
 	Model        string   `json:"model,omitempty" jsonschema:"haiku (default) | sonnet | opus"`
 	CWD          string   `json:"cwd,omitempty" jsonschema:"'repo:<name>' runs in the base clone; absolute path; default mission dir"`
 	AddDirs      []string `json:"add_dirs,omitempty" jsonschema:"extra directories the job may read"`
@@ -66,7 +68,7 @@ func (s *Server) registerJobTools(srv *mcp.Server) {
 		if err != nil {
 			return nil, jobState{}, err
 		}
-		j, err := job.Start(s.cfg, m, startInput(in, ""))
+		j, err := job.Start(s.cfg, m, s.startInput(in, ""))
 		if err != nil {
 			return nil, jobState{}, err
 		}
@@ -99,7 +101,7 @@ func (s *Server) registerJobTools(srv *mcp.Server) {
 			if spec.ID == "" {
 				spec.ID = fmt.Sprintf("%s-%d", panelID, i+1)
 			}
-			j, err := job.Start(s.cfg, m, startInput(spec, panelID))
+			j, err := job.Start(s.cfg, m, s.startInput(spec, panelID))
 			if err != nil {
 				return nil, runPanelOut{}, fmt.Errorf("job %s: %w", spec.ID, err)
 			}
@@ -199,9 +201,30 @@ func (s *Server) awaitJob(ctx context.Context, m *mission.Mission, j *job.Job, t
 	return j
 }
 
-func startInput(in runJobIn, panelID string) job.StartInput {
+func (s *Server) startInput(in runJobIn, panelID string) job.StartInput {
+	prompt := in.Prompt
+	if in.Persona != "" {
+		personas.EnsureEmbeddedDefaults(s.oxHome)
+		if reg, err := personas.LoadRegistry(s.oxHome); err == nil {
+			if p, ok := reg.Get(in.Persona); ok {
+				prompt = p.Content + "\n\n---\n\n" + in.Prompt
+				if in.Model == "" {
+					in.Model = p.DefaultModel
+				}
+				if in.MaxTurns == 0 && p.MaxTurns > 0 {
+					in.MaxTurns = p.MaxTurns
+				}
+				if in.MaxBudgetUSD == 0 && p.MaxBudgetUSD > 0 {
+					in.MaxBudgetUSD = p.MaxBudgetUSD
+				}
+				if p.Output == "findings_json" {
+					in.ExpectJSON = true
+				}
+			}
+		}
+	}
 	return job.StartInput{
-		ID: in.ID, PanelID: panelID, Prompt: in.Prompt, Model: in.Model, CWD: in.CWD,
+		ID: in.ID, PanelID: panelID, Prompt: prompt, Model: in.Model, CWD: in.CWD,
 		AddDirs: in.AddDirs, MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD, ExpectJSON: in.ExpectJSON,
 	}
 }

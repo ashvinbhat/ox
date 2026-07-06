@@ -1,6 +1,6 @@
 // Package review implements the PR review workflow: resolve PR, create
 // review worktree, run reviewer agents, collect findings, render and post.
-package review
+package ghreview
 
 // Severity classifies a finding's importance.
 type Severity string
@@ -86,4 +86,24 @@ type Addressing struct {
 type AgentOutput struct {
 	Findings   []Finding    `json:"findings"`
 	Addressing []Addressing `json:"addressing,omitempty"`
+}
+
+// Event mirrors the GitHub review event enum.
+type Event string
+
+const (
+	EventComment        Event = "COMMENT"
+	EventApprove        Event = "APPROVE"
+	EventRequestChanges Event = "REQUEST_CHANGES"
+)
+
+// Selection is what gets posted: which findings as inline comments, the
+// review event, an optional global comment, and (follow-up rounds) which
+// addressing verdicts go out as replies on prior comment threads.
+type Selection struct {
+	Findings      []Finding
+	Event         Event
+	GlobalComment string
+	Addressing    []Addressing
+	PriorByRef    map[string]Finding // ref → prior finding (incl. CommentID) for reply posting
 }
