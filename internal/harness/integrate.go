@@ -50,6 +50,7 @@ func BindRepos(cfg *config.Config, m *mission.Mission, names []string) error {
 			for _, file := range rc.CopyFiles {
 				copyPathHelper(filepath.Join(repoPath, file), filepath.Join(worktree, file))
 			}
+			runPostSetup(rc, worktree)
 		}
 
 		link := filepath.Join(m.Dir(), name)

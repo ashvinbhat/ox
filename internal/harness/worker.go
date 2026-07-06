@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -392,7 +393,7 @@ func ensureWorktree(cfg *config.Config, w *Worker) error {
 
 	// Base-clone git operations are serialized per repo: concurrent worktree
 	// adds/fetches from two missions race on .git locks otherwise.
-	return withRepoLock(cfg.Home, w.Repo, func() error {
+	if err := withRepoLock(cfg.Home, w.Repo, func() error {
 		if err := gitutil.Fetch(repoPath); err != nil {
 			return fmt.Errorf("fetch %s: %w", w.Repo, err)
 		}
@@ -403,7 +404,37 @@ func ensureWorktree(cfg *config.Config, w *Worker) error {
 			copyPathHelper(filepath.Join(repoPath, file), filepath.Join(w.WorktreePath, file))
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Outside the repo lock: npm install and friends are slow and only touch
+	// the new worktree.
+	return runPostSetup(rc, w.WorktreePath)
+}
+
+// runPostSetup runs the repo's configured setup command in a fresh worktree.
+// Output goes to setup.log in the worktree — stdout is off-limits here, the
+// MCP server owns it for JSON-RPC. Failure is surfaced but non-fatal, like
+// the legacy paths.
+func runPostSetup(rc *config.RepoConfig, worktree string) error {
+	if rc == nil || rc.PostSetup == "" {
+		return nil
+	}
+	logF, err := os.Create(filepath.Join(worktree, ".ox-setup.log"))
+	if err != nil {
+		return nil
+	}
+	defer logF.Close()
+
+	cmd := exec.Command("sh", "-c", rc.PostSetup)
+	cmd.Dir = worktree
+	cmd.Stdout = logF
+	cmd.Stderr = logF
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: post-setup (%s) failed in %s: %v — see .ox-setup.log\n", rc.PostSetup, worktree, err)
+	}
+	return nil
 }
 
 func writeWorkerFiles(cfg *config.Config, m *mission.Mission, w *Worker) error {
