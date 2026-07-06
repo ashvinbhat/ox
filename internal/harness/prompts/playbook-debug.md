@@ -16,6 +16,9 @@ access paths (log commands, dashboards, repro steps) you don't already have.
 - Spawn a debugger session agent only for hands-on work: instrumenting code, bisecting,
   building a repro harness.
 - File every finding on the scratchpad as you go; the trail is part of the deliverable.
+- Environmental blockers (VPN, auth, missing data) are gaps to diagnose, not caveats to
+  footnote — a check that silently didn't run is the worst outcome. Fix the blocker or
+  surface it loudly for a decision.
 
 ## closed
 Write the RCA into the mission dir (`findings.md`) and post it to the task tracker via

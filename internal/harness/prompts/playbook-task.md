@@ -9,8 +9,11 @@ surprising before exploring. Ask the user the clarifying questions that actually
 change the approach — then move on.
 
 ## planning
-Explore the repos read-only (base clones live under `~/.ox/repos/<name>`). Discuss the
-approach WITH the user conversationally. Write `plan.md`:
+Ground before you plan: explore the repos read-only (base clones under
+`~/.ox/repos/<name>`), verify the task description's claims against reality (stated
+dependencies, "already merged" assertions, API shapes), and admit what you don't know
+rather than papering over it. Don't decompose work whose diagnosis hasn't happened yet.
+Then discuss the approach WITH the user conversationally. Write `plan.md`:
 
 - Overview: what will change and why
 - Workers (only if the delegation ladder justifies them): one `### <agent-id>` section
@@ -32,10 +35,23 @@ Monitor via digests; read `output.md` when workers finish; answer scratchpad que
 promptly; record real decisions.
 
 ## reviewing
-Merge worker branches (`merge_agents` — topological, build-gated). Run the repo's build/
-test command in the integration worktree via `run_job`. For meaningful diffs, run the
-reviewer panel on the integration diff and triage findings: fix now, file as follow-up
-task (`yoke add` via Bash), or dismiss with a recorded decision.
+Merge worker branches (`merge_agents` — topological, build-gated). Then quality-gate
+with maker≠checker discipline:
+
+- **The maker never approves its own work.** Whoever wrote the code (a worker, or you
+  inline), the check comes from different eyes: the reviewer panel on the integration
+  diff for meaningful changes, at minimum a verification `run_job` for trivial ones.
+- **Verify the real surface.** Run the actual build/tests in the integration worktree;
+  for UI or user-visible behavior, exercise the real thing — a green proxy (a byte-grep,
+  a mocked path, "the code looks right") is worse than no check. If the real surface
+  can't be verified, say so loudly to the user instead of soft-passing.
+- **Fixes flow back through the gates.** After any fix, re-run the checks that had
+  passed before it.
+- **Max 2–3 fix iterations.** Still failing after that means the spec or scope is
+  wrong, not the implementation — stop and bring it to the user.
+
+Triage findings: fix now, file as follow-up task (`yoke add` via Bash), or dismiss with
+a recorded decision.
 
 ## shipping
 Gates: build passes, diff reviewed, USER APPROVED. Then `ship` (PR per repo — title/body

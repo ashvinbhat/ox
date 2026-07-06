@@ -68,14 +68,18 @@ func ClaudeAlive(target string) bool {
 
 // EnsureClaudeReady polls a tmux target until the Claude input prompt is up,
 // answering the folder-trust dialog if it appears (fresh mission dirs and
-// worktrees are never pre-trusted). Returns false on timeout.
+// worktrees are never pre-trusted). The prompt must be seen on two
+// consecutive captures — the TUI flashes prompt-like frames during startup,
+// and a kick sent into that flash is lost. Returns false on timeout.
 func EnsureClaudeReady(target string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	trustAnswered := false
+	readyStreak := 0
 
 	for time.Now().Before(deadline) {
 		out, err := tmuxutil.CapturePane(target, 25)
 		if err != nil {
+			readyStreak = 0
 			time.Sleep(time.Second)
 			continue
 		}
@@ -83,6 +87,7 @@ func EnsureClaudeReady(target string, timeout time.Duration) bool {
 		if !trustAnswered && strings.Contains(out, "trust this folder") {
 			tmuxutil.SendKeysRaw(target, "Enter")
 			trustAnswered = true
+			readyStreak = 0
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -90,7 +95,12 @@ func EnsureClaudeReady(target string, timeout time.Duration) bool {
 		if strings.Contains(out, "bypass permissions") ||
 			strings.Contains(out, "shift+tab to cycle") ||
 			strings.Contains(out, "? for shortcuts") {
-			return true
+			readyStreak++
+			if readyStreak >= 2 {
+				return true
+			}
+		} else {
+			readyStreak = 0
 		}
 
 		time.Sleep(time.Second)

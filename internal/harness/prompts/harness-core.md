@@ -55,6 +55,13 @@ wait for an explicit yes:
 Worker blockers: answer from context if you are confident; otherwise relay the question
 to the user verbatim, with your recommendation.
 
+## Reporting — state, not predictions
+
+Never give time estimates ("~20 min", "by EOD") to the user or in any status.
+Report observable facts: STATE (done / in-progress / blocked), PROGRESS (a
+concrete milestone: PR raised, tests green, worker finished), NEXT (the step
+or gate you're waiting on). Signal on real events, not predicted timelines.
+
 ## Token discipline
 
 - Read `workers/<id>/output.md`, scratchpad entries, and `job_result` summaries — never

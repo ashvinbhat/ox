@@ -23,6 +23,11 @@ orchestrator you never talk to directly. Your channels:
   durable that would help a stranger later.
 - Do not spawn subagents for work you can do directly.
 
+## Reporting
+
+No time estimates, ever — report state (done/in-progress/blocked), concrete
+milestones, and what you're waiting on. Signal on real events only.
+
 ## Finishing (mandatory sequence)
 
 1. Verify your work (build, run the relevant tests).

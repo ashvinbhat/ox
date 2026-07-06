@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // NewSession creates a new detached tmux session with the given name and working directory.
@@ -27,17 +28,55 @@ func HasSession(name string) bool {
 }
 
 // SendKeys sends text to a tmux session followed by Enter.
+//
+// Hardening (each guards a real observed failure mode in TUI targets):
+//   - a stuck copy-mode pane silently swallows input → cancel it first
+//   - large -l sends drop characters under PTY typeahead → paste via buffer
+//   - Enter fired in the same burst as the text gets absorbed by the TUI's
+//     paste detection → send it separately after a settle delay
 func SendKeys(session, text string) error {
-	cmd := exec.Command("tmux", "send-keys", "-t", session, "-l", text)
+	exec.Command("tmux", "send-keys", "-t", session, "-X", "cancel").Run()
+
+	if len(text) > 800 {
+		if err := pasteViaBuffer(session, text); err != nil {
+			return err
+		}
+	} else {
+		cmd := exec.Command("tmux", "send-keys", "-t", session, "-l", text)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("tmux send-keys (text): %w\n%s", err, output)
+		}
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	cmd := exec.Command("tmux", "send-keys", "-t", session, "Enter")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("tmux send-keys (text): %w\n%s", err, output)
-	}
-	// Send Enter separately to avoid interpretation issues
-	cmd = exec.Command("tmux", "send-keys", "-t", session, "Enter")
-	output, err = cmd.CombinedOutput()
-	if err != nil {
 		return fmt.Errorf("tmux send-keys (enter): %w\n%s", err, output)
+	}
+	return nil
+}
+
+// pasteViaBuffer delivers large text through tmux's paste buffer (bracketed
+// paste), which survives sizes that character-by-character send-keys drops.
+func pasteViaBuffer(session, text string) error {
+	f, err := os.CreateTemp("", "ox-paste-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(text); err != nil {
+		f.Close()
+		return err
+	}
+	f.Close()
+
+	if output, err := exec.Command("tmux", "load-buffer", "-b", "oxpaste", f.Name()).CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux load-buffer: %w\n%s", err, output)
+	}
+	if output, err := exec.Command("tmux", "paste-buffer", "-p", "-d", "-b", "oxpaste", "-t", session).CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux paste-buffer: %w\n%s", err, output)
 	}
 	return nil
 }

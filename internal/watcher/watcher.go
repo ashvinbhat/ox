@@ -48,12 +48,14 @@ type Watcher struct {
 
 	paneHash   map[string]uint64
 	paneChange map[string]time.Time
+	deadMisses map[string]int
 }
 
 func New(cfg *config.Config, missionID string) *Watcher {
 	return &Watcher{
 		cfg: cfg, missionID: missionID,
 		paneHash: map[string]uint64{}, paneChange: map[string]time.Time{},
+		deadMisses: map[string]int{},
 	}
 }
 
@@ -263,12 +265,20 @@ func (w *Watcher) reconcileWorkers(m *mission.Mission) {
 		}
 		alive := tmuxutil.HasSession(worker.TmuxSession) && harness.ClaudeAlive(worker.TmuxSession)
 		if alive {
+			w.deadMisses[worker.ID] = 0
 			continue
 		}
 		// Grace: claude may be between launch and first paint.
 		if time.Since(worker.SpawnedAt) < 2*time.Minute {
 			continue
 		}
+		// Two consecutive dead ticks before flipping: transient tmux server
+		// hiccups and mid-render captures read as dead for a single tick.
+		w.deadMisses[worker.ID]++
+		if w.deadMisses[worker.ID] < 2 {
+			continue
+		}
+		w.deadMisses[worker.ID] = 0
 		id := worker.ID
 		harness.UpdateRegistry(w.cfg.Home, m, func(reg *harness.Registry) error {
 			if cur := reg.Workers[id]; cur != nil &&
