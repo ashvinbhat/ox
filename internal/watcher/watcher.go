@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,18 +28,20 @@ const (
 	slowEvery     = 6 // heartbeat every 6th tick
 	batchInterval = 3 * time.Minute
 	idleAfter     = 10 * time.Minute
+	prEvery       = 36 // PR polling every 36th tick (~3 min)
 )
 
 type state struct {
-	HeartbeatAt     time.Time        `json:"heartbeat_at"`
-	EventCursor     int64            `json:"event_cursor"`
-	LastInjectionAt time.Time        `json:"last_injection_at"`
-	PanelsNotified  map[string]bool  `json:"panels_notified,omitempty"`
-	IdleNotified    map[string]bool  `json:"idle_notified,omitempty"`
-	Offsets         map[string]int64 `json:"transcript_offsets,omitempty"` // session id → byte offset
-	WorkerWarned    map[string]bool  `json:"worker_warned,omitempty"`
-	WorkerGraceAt   map[string]int64 `json:"worker_grace_at,omitempty"` // unix — wrap-up notice sent
-	ContextWarned   bool             `json:"context_warned,omitempty"`
+	HeartbeatAt     time.Time         `json:"heartbeat_at"`
+	EventCursor     int64             `json:"event_cursor"`
+	LastInjectionAt time.Time         `json:"last_injection_at"`
+	PanelsNotified  map[string]bool   `json:"panels_notified,omitempty"`
+	IdleNotified    map[string]bool   `json:"idle_notified,omitempty"`
+	Offsets         map[string]int64  `json:"transcript_offsets,omitempty"` // session id → byte offset
+	WorkerWarned    map[string]bool   `json:"worker_warned,omitempty"`
+	WorkerGraceAt   map[string]int64  `json:"worker_grace_at,omitempty"` // unix — wrap-up notice sent
+	ContextWarned   bool              `json:"context_warned,omitempty"`
+	PRStates        map[string]string `json:"pr_states,omitempty"` // url → last seen state signature
 }
 
 type Watcher struct {
@@ -95,8 +98,66 @@ func (w *Watcher) Run() error {
 			w.st.HeartbeatAt = time.Now()
 			w.saveState(m)
 		}
+		if n%prEvery == 0 {
+			w.trackPRs(m)
+		}
 		time.Sleep(tick)
 	}
+}
+
+// trackPRs polls linked PRs while the mission is in a shipped state and
+// surfaces review activity: the orchestrator stays responsible for the PR
+// until it merges.
+func (w *Watcher) trackPRs(m *mission.Mission) {
+	if m.Phase != "shipping" && m.Phase != "reviewing" {
+		return
+	}
+	if w.st.PRStates == nil {
+		w.st.PRStates = map[string]string{}
+	}
+	for _, pr := range m.PRs {
+		out, err := exec.Command("gh", "pr", "view", pr.URL, "--json", "state,reviewDecision,comments,reviews").Output()
+		if err != nil {
+			continue
+		}
+		var info struct {
+			State          string `json:"state"`
+			ReviewDecision string `json:"reviewDecision"`
+			Comments       []any  `json:"comments"`
+			Reviews        []any  `json:"reviews"`
+		}
+		if json.Unmarshal(out, &info) != nil {
+			continue
+		}
+		sig := fmt.Sprintf("%s/%s/c%d/r%d", info.State, info.ReviewDecision, len(info.Comments), len(info.Reviews))
+		if w.st.PRStates[pr.URL] == sig {
+			continue
+		}
+		first := w.st.PRStates[pr.URL] == ""
+		w.st.PRStates[pr.URL] = sig
+		w.saveState(m)
+		if first {
+			continue // baseline, not news
+		}
+
+		switch {
+		case info.State == "MERGED":
+			m.AppendEvent("pr_merged", "system", map[string]any{"url": pr.URL})
+		case info.ReviewDecision == "CHANGES_REQUESTED":
+			m.AppendEvent("pr_changes_requested", "system", map[string]any{"url": pr.URL})
+		default:
+			m.AppendEvent("pr_activity", "system", map[string]any{
+				"url": pr.URL, "detail": fmt.Sprintf("%d comments, %d reviews, decision %s", len(info.Comments), len(info.Reviews), orDash(info.ReviewDecision)),
+			})
+		}
+	}
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 // trackCosts tails every interactive transcript (orchestrator + workers) and
@@ -426,16 +487,19 @@ func (w *Watcher) checkIdle(m *mission.Mission) {
 
 // event classification for the digest pump.
 var priorityEvents = map[string]bool{
-	"agent_done":        true,
-	"agent_blocker":     true,
-	"agent_interrupted": true,
-	"panel_done":        true,
-	"job_failed":        true,
-	"budget_exceeded":   true,
-	"merge_failed":      true,
+	"pr_merged":            true,
+	"pr_changes_requested": true,
+	"agent_done":           true,
+	"agent_blocker":        true,
+	"agent_interrupted":    true,
+	"panel_done":           true,
+	"job_failed":           true,
+	"budget_exceeded":      true,
+	"merge_failed":         true,
 }
 
 var batchedEvents = map[string]bool{
+	"pr_activity":    true,
 	"job_done":       true,
 	"deps_unblocked": true,
 	"budget_warning": true,
@@ -563,6 +627,12 @@ func eventLine(ev mission.Event) string {
 		return fmt.Sprintf("BUDGET EXCEEDED: %v", ev.Data["detail"])
 	case "merge_failed":
 		return fmt.Sprintf("merge FAILED: %v", ev.Data["detail"])
+	case "pr_merged":
+		return fmt.Sprintf("PR MERGED: %v — wrap up (yoke done + close)", ev.Data["url"])
+	case "pr_changes_requested":
+		return fmt.Sprintf("PR CHANGES REQUESTED: %v — address the review", ev.Data["url"])
+	case "pr_activity":
+		return fmt.Sprintf("PR activity: %v (%v)", ev.Data["url"], ev.Data["detail"])
 	}
 	return ev.Type
 }

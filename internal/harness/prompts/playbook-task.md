@@ -55,12 +55,24 @@ a recorded decision.
 
 ## shipping
 Gates: build passes, diff reviewed, USER APPROVED. Then `ship` (PR per repo — title/body
-describe the change, nothing about tooling), link PRs, `yoke done` with an outcome via
-Bash.
+describe the change, nothing about tooling) and link PRs.
+
+**Shipping is NOT done.** The task stays open and the mission stays in `shipping`
+until the PR actually merges:
+
+- Note "PR raised, awaiting review" on the task (`yoke note`) — do NOT `yoke done` yet.
+- Tell the user the mission is parked: they can close this session freely and resume
+  with `ox go <task>` when review feedback lands — you keep full context.
+- While the session is alive, the watcher tracks the PR and tells you about reviews
+  and merges. On "changes requested" or review comments: address them (fix in the
+  integration worktree, push — same branch updates the PR), reply where useful, and
+  re-run the checks that had passed.
 
 ## closed
-Confirm with the user, final `checkpoint`, then close via `update_mission`. Leftover
-workers are killed and the mission is distilled into long-term memory automatically.
+Only after the PR merges (or the user explicitly decides to stop): `yoke done` with the
+outcome, final `checkpoint`, confirm with the user, then close via `update_mission`.
+Leftover workers are killed and the mission is distilled into long-term memory
+automatically.
 
 ## Budget
 At 70% of budget: tell the user, propose how to spend the remainder. At 100%: spawning
