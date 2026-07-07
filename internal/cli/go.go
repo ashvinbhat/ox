@@ -168,6 +168,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 	// base-index 1, so ":0" is not a safe target.
 	orcTarget := session + ":orc"
 
+	freshStart := false
 	if !tmuxutil.HasSession(session) {
 		if err := tmuxutil.NewSession(session, m.Dir()); err != nil {
 			return fmt.Errorf("create tmux session: %w", err)
@@ -177,6 +178,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 		if err := tmuxutil.SendKeys(orcTarget, orchestratorCmd(m, resume)); err != nil {
 			return fmt.Errorf("launch orchestrator: %w", err)
 		}
+		freshStart = !resume
 		m.AppendEvent("orchestrator_launched", "system", map[string]any{"resume": resume})
 	} else if !tmuxutil.HasWindow(session, "orc") {
 		if err := tmuxutil.NewWindow(session, "orc", m.Dir(), ""); err != nil {
@@ -197,6 +199,11 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 
 	if !harness.EnsureClaudeReady(orcTarget, 45*time.Second) {
 		fmt.Println("Warning: orchestrator did not reach the input prompt in time — check the tmux window")
+	} else if freshStart {
+		// A brand-new mission needs no human prompt to get moving — kick the
+		// orchestrator into its playbook the same way workers get kicked.
+		harness.SendMessageEnsured(orcTarget,
+			"Mission started. Read AGENTS.md, then begin your playbook now — open with a one-line read of the goal and proceed (ask the user only what the playbook says needs asking).")
 	}
 
 	if goNoAttach {
