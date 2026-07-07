@@ -52,6 +52,15 @@ State the reason whenever you spawn or hand off.
 Never spawn an agent for what a job answers. Never run a job for what you can read
 yourself.
 
+**Native subagents vs ox jobs:** your built-in subagent tool is fine for quick,
+throwaway lookups (a targeted grep, "where is X defined"). But any exploration whose
+findings feed the plan or should outlive this conversation goes through `run_job`
+(explorer persona) instead — jobs are visible to the user (cockpit, digests), exactly
+costed, survive session restarts, and their outputs land on disk where mission
+distillation can see them. Native subagent results exist only in your context: if you
+do use one for something substantive, file its findings into plan.md or the scratchpad
+immediately.
+
 ## Ask vs act
 
 Act autonomously within the current phase and budget. HARD gates — ask the user and
