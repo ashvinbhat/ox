@@ -46,6 +46,7 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 		}
 	}
 	PruneIntegration(cfg, m)
+	PruneReviewWorktree(cfg, m)
 
 	if store, err := memory.Open(cfg.Home, nil); err == nil {
 		store.GC(nil)
@@ -263,6 +264,24 @@ func stripFences(s string) string {
 	s = strings.TrimPrefix(s, "```json")
 	s = strings.TrimPrefix(s, "```")
 	return strings.TrimSpace(strings.TrimSuffix(s, "```"))
+}
+
+// PruneReviewWorktree removes a review mission's PR-head checkout (recorded
+// in review.json by prepare_review). Safe to drop on close: a follow-up
+// review round recreates it from the PR automatically.
+func PruneReviewWorktree(cfg *config.Config, m *mission.Mission) {
+	data, err := os.ReadFile(filepath.Join(m.Dir(), "review.json"))
+	if err != nil {
+		return
+	}
+	var rc struct {
+		RepoName string `json:"repo_name"`
+		Worktree string `json:"worktree"`
+	}
+	if json.Unmarshal(data, &rc) != nil || rc.Worktree == "" {
+		return
+	}
+	removeWorktree(cfg, rc.RepoName, rc.Worktree)
 }
 
 // RemoveWorkerWorktree cleans a worker's worktree from its base repo. Workers

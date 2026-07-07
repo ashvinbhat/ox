@@ -120,6 +120,7 @@ var missionsPruneCmd = &cobra.Command{
 			for _, repo := range harness.PruneIntegration(cfg, m) {
 				fmt.Printf("Removed integration worktree for %s (%s — PRs merged/closed)\n", repo, m.ID)
 			}
+			harness.PruneReviewWorktree(cfg, m)
 		}
 		fmt.Println("Prune complete")
 		return nil
