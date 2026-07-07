@@ -49,8 +49,25 @@ func WriteMCPConfig(m *mission.Mission) error {
 	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
 		return err
 	}
-	settings := []byte("{\n  \"enableAllProjectMcpServers\": true\n}\n")
-	return os.WriteFile(filepath.Join(settingsDir, "settings.local.json"), settings, 0o644)
+	// The UserPromptSubmit hook is the event-delivery channel: unread mission
+	// events ride invisibly on the user's own messages instead of being typed
+	// into the conversation.
+	settings := map[string]any{
+		"enableAllProjectMcpServers": true,
+		"hooks": map[string]any{
+			"UserPromptSubmit": []map[string]any{{
+				"hooks": []map[string]any{{
+					"type":    "command",
+					"command": fmt.Sprintf("'%s' events attach --mission %s", oxBinary(), m.ID),
+				}},
+			}},
+		},
+	}
+	data, err = json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(settingsDir, "settings.local.json"), data, 0o644)
 }
 
 // WriteWorkerMCPConfig generates a worker-scoped config at

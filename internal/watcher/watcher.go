@@ -26,8 +26,7 @@ import (
 const (
 	tick          = 5 * time.Second
 	slowEvery     = 6 // heartbeat every 6th tick
-	batchInterval = 3 * time.Minute
-	idleAfter     = 10 * time.Minute
+	idleAfter = 10 * time.Minute
 	prEvery       = 36 // PR polling every 36th tick (~3 min)
 )
 
@@ -42,6 +41,7 @@ type state struct {
 	WorkerGraceAt   map[string]int64  `json:"worker_grace_at,omitempty"` // unix — wrap-up notice sent
 	ContextWarned   bool              `json:"context_warned,omitempty"`
 	PRStates        map[string]string `json:"pr_states,omitempty"` // url → last seen state signature
+	OrcLastUserAt   time.Time         `json:"orc_last_user_at,omitempty"`
 }
 
 type Watcher struct {
@@ -170,11 +170,15 @@ func (w *Watcher) trackCosts(m *mission.Mission) {
 	total := 0.0
 	// Orchestrator: transcript lives under the mission dir cwd.
 	if sid := m.Orchestrator.SessionID; sid != "" {
-		if cost, ctxTokens := w.tailSession(m.Dir(), sid, m.Orchestrator.Model); cost > 0 {
+		cost, ctxTokens, lastUser := w.tailSession(m.Dir(), sid, m.Orchestrator.Model)
+		if !lastUser.IsZero() {
+			w.st.OrcLastUserAt = lastUser
+		}
+		if cost > 0 {
 			total += cost
 			appendLedger(m, "orchestrator", "orchestrator", m.Orchestrator.Model, cost)
-			w.adviseCompaction(m, ctxTokens)
-		} else if ctxTokens > 0 {
+		}
+		if ctxTokens > 0 {
 			w.adviseCompaction(m, ctxTokens)
 		}
 	}
@@ -184,7 +188,7 @@ func (w *Watcher) trackCosts(m *mission.Mission) {
 		for _, worker := range reg.Workers {
 			workerCost := 0.0
 			for _, sid := range worker.SessionIDs {
-				cost, _ := w.tailSession(worker.WorktreePath, sid, worker.Model)
+				cost, _, _ := w.tailSession(worker.WorktreePath, sid, worker.Model)
 				workerCost += cost
 			}
 			if workerCost > 0 {
@@ -209,14 +213,14 @@ func (w *Watcher) trackCosts(m *mission.Mission) {
 	}
 }
 
-func (w *Watcher) tailSession(cwd, sessionID, model string) (float64, int64) {
+func (w *Watcher) tailSession(cwd, sessionID, model string) (float64, int64, time.Time) {
 	path := costs.TranscriptPath(cwd, sessionID)
-	delta, ctxTokens, newOffset, err := costs.Tail(path, w.st.Offsets[sessionID])
+	delta, ctxTokens, lastUserAt, newOffset, err := costs.Tail(path, w.st.Offsets[sessionID])
 	if err != nil {
-		return 0, 0
+		return 0, 0, time.Time{}
 	}
 	w.st.Offsets[sessionID] = newOffset
-	return delta.CostUSD(model), ctxTokens
+	return delta.CostUSD(model), ctxTokens, lastUserAt
 }
 
 // adviseCompaction nudges the orchestrator once when its context grows past
@@ -498,75 +502,66 @@ var priorityEvents = map[string]bool{
 	"merge_failed":         true,
 }
 
-var batchedEvents = map[string]bool{
-	"pr_activity":    true,
-	"job_done":       true,
-	"deps_unblocked": true,
-	"budget_warning": true,
-	"agent_idle":     true,
-}
 
-// pumpDigests reads new events past the cursor and injects them into the
-// orchestrator pane: priority events as a real message (needs a turn),
-// batched ones as /btw context at most every batchInterval. Single-injector
-// rule: nothing else ever send-keys into the orc window.
+// pumpDigests wakes the orchestrator when there are unhandled action-needed
+// events AND the user is away. Event content is never typed into the
+// conversation — the UserPromptSubmit hook attaches it invisibly to whatever
+// message arrives next (including our wake-up line, which counts as a prompt).
+// A user who is present is never interrupted: their own next message delivers
+// everything.
 func (w *Watcher) pumpDigests(m *mission.Mission) {
 	events, err := m.EventsSince(w.st.EventCursor)
 	if err != nil || len(events) == 0 {
 		return
 	}
 
-	var priority, batched []string
+	needsAction := 0
 	maxN := w.st.EventCursor
 	for _, ev := range events {
 		if ev.N > maxN {
 			maxN = ev.N
 		}
-		switch {
-		case priorityEvents[ev.Type]:
-			priority = append(priority, eventLine(ev))
-		case batchedEvents[ev.Type]:
-			batched = append(batched, eventLine(ev))
+		if priorityEvents[ev.Type] {
+			needsAction++
 		}
 	}
 
-	if len(priority) == 0 && (len(batched) == 0 || time.Since(w.st.LastInjectionAt) < batchInterval) {
-		// Nothing urgent; leave batched items for a later flush by NOT
-		// advancing the cursor past them only if we have none to send now.
-		if len(batched) == 0 {
-			w.st.EventCursor = maxN
-			w.saveState(m)
-		}
+	if needsAction == 0 {
+		// Informational only — the hook will deliver on the next turn.
+		w.st.EventCursor = maxN
+		w.saveState(m)
+		return
+	}
+
+	if !w.userAway() {
+		// User active: their next message (any minute now) carries the events;
+		// interrupting a present human is the one thing we never do.
 		return
 	}
 
 	target := m.TmuxSession() + ":orc"
 	if !injectSafe(target) {
-		fmt.Println("watcher: orchestrator busy — digest deferred")
 		return
 	}
 
-	var msg string
-	all := append(priority, batched...)
-	line := fmt.Sprintf("[ox %s] %s", m.ID, strings.Join(all, " · "))
-	if len(priority) > 0 {
-		msg = line
-	} else {
-		msg = "/btw " + line
-	}
-
+	msg := fmt.Sprintf("⚡ ox: %d mission event(s) need attention — review the attached events and act per your playbook.", needsAction)
 	if err := harness.SendMessageEnsured(target, msg); err != nil {
-		fmt.Printf("watcher: inject failed: %v\n", err)
+		fmt.Printf("watcher: wake-up failed: %v\n", err)
 		return
 	}
-	fmt.Printf("watcher: injected %d event(s)\n", len(all))
+	fmt.Printf("watcher: woke orchestrator (%d action event(s))\n", needsAction)
 	w.st.EventCursor = maxN
 	w.st.LastInjectionAt = time.Now()
 	w.saveState(m)
-	m.AppendEvent("digest_injected", "system", map[string]any{"events": len(all)})
-	// The digest event itself must not re-trigger.
-	w.st.EventCursor++
-	w.saveState(m)
+}
+
+// userAway reports whether the human has been quiet long enough that a
+// wake-up is help rather than interruption.
+func (w *Watcher) userAway() bool {
+	if w.st.OrcLastUserAt.IsZero() {
+		return true
+	}
+	return time.Since(w.st.OrcLastUserAt) > 10*time.Minute
 }
 
 // injectSafe: claude prompt is up, nothing streaming, input line empty (the
@@ -597,6 +592,9 @@ func injectSafe(target string) bool {
 	}
 	return false
 }
+
+// EventLine renders one event as a user-facing line ("" = internal only).
+func EventLine(ev mission.Event) string { return eventLine(ev) }
 
 func eventLine(ev mission.Event) string {
 	id, _ := ev.Data["id"].(string)

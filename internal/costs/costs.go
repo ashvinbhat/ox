@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Price is USD per million tokens.
@@ -71,8 +72,9 @@ func TranscriptPath(cwd, sessionID string) string {
 }
 
 type transcriptLine struct {
-	Type    string `json:"type"`
-	Message struct {
+	Type      string `json:"type"`
+	Timestamp string `json:"timestamp"`
+	Message   struct {
 		Model string `json:"model"`
 		Usage struct {
 			InputTokens         int64 `json:"input_tokens"`
@@ -85,24 +87,25 @@ type transcriptLine struct {
 
 // Tail parses transcript lines past offset. Returns the usage delta, an
 // estimate of the current context size (last assistant turn's total input),
-// and the new offset to persist.
-func Tail(path string, offset int64) (delta Usage, contextTokens int64, newOffset int64, err error) {
+// the time of the last user message seen in the delta (zero when none), and
+// the new offset to persist.
+func Tail(path string, offset int64) (delta Usage, contextTokens int64, lastUserAt time.Time, newOffset int64, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return Usage{}, 0, offset, err
+		return Usage{}, 0, time.Time{}, offset, err
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil {
-		return Usage{}, 0, offset, err
+		return Usage{}, 0, time.Time{}, offset, err
 	}
 	// Truncated/rotated file: start over.
 	if offset > info.Size() {
 		offset = 0
 	}
 	if _, err := f.Seek(offset, 0); err != nil {
-		return Usage{}, 0, offset, err
+		return Usage{}, 0, time.Time{}, offset, err
 	}
 
 	sc := bufio.NewScanner(f)
@@ -115,17 +118,23 @@ func Tail(path string, offset int64) (delta Usage, contextTokens int64, newOffse
 		if json.Unmarshal(raw, &line) != nil {
 			continue
 		}
-		if line.Type != "assistant" {
-			continue
+		switch line.Type {
+		case "user":
+			if t, terr := time.Parse(time.RFC3339, line.Timestamp); terr == nil {
+				lastUserAt = t
+			} else {
+				lastUserAt = time.Now()
+			}
+		case "assistant":
+			u := line.Message.Usage
+			delta = delta.Add(Usage{
+				InputTokens:      u.InputTokens,
+				OutputTokens:     u.OutputTokens,
+				CacheWriteTokens: u.CacheCreationTokens,
+				CacheReadTokens:  u.CacheReadTokens,
+			})
+			contextTokens = u.InputTokens + u.CacheCreationTokens + u.CacheReadTokens
 		}
-		u := line.Message.Usage
-		delta = delta.Add(Usage{
-			InputTokens:      u.InputTokens,
-			OutputTokens:     u.OutputTokens,
-			CacheWriteTokens: u.CacheCreationTokens,
-			CacheReadTokens:  u.CacheReadTokens,
-		})
-		contextTokens = u.InputTokens + u.CacheCreationTokens + u.CacheReadTokens
 	}
-	return delta, contextTokens, newOffset, sc.Err()
+	return delta, contextTokens, lastUserAt, newOffset, sc.Err()
 }
