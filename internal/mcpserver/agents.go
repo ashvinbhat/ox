@@ -118,6 +118,7 @@ type spawnAgentIn struct {
 	Brief        string   `json:"brief" jsonschema:"full subtask brief: goal, owned files, integration contract, done criteria"`
 	Persona      string   `json:"persona,omitempty" jsonschema:"default builder"`
 	Model        string   `json:"model,omitempty" jsonschema:"haiku|sonnet|opus; default from config"`
+	Cwd          string   `json:"cwd,omitempty" jsonschema:"run in this EXISTING directory (e.g. the review worktree) instead of creating a worktree — no branch, dir never cleaned up; use for interactive reviewers or debugging in place"`
 	Files        []string `json:"files,omitempty" jsonschema:"file globs this worker owns exclusively"`
 	DependsOn    []string `json:"depends_on,omitempty" jsonschema:"worker ids that must finish first (auto-spawns when they do)"`
 	MaxTurns     int      `json:"max_turns,omitempty"`
@@ -172,7 +173,7 @@ func (s *Server) registerAgentTools(srv *mcp.Server) {
 		}
 		w, err := harness.SpawnWorker(s.cfg, m, harness.SpawnInput{
 			ID: in.ID, Repo: in.Repo, Brief: in.Brief, Persona: in.Persona, Model: in.Model,
-			Files: in.Files, DependsOn: in.DependsOn, MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD,
+			Cwd: in.Cwd, Files: in.Files, DependsOn: in.DependsOn, MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD,
 		})
 		if err != nil {
 			return nil, spawnAgentOut{}, err

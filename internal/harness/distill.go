@@ -42,7 +42,7 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 
 	if reg != nil {
 		for _, w := range reg.Workers {
-			removeWorktree(cfg, w.Repo, w.WorktreePath)
+			RemoveWorkerWorktree(cfg, w)
 		}
 	}
 	PruneIntegration(cfg, m)
@@ -265,8 +265,12 @@ func stripFences(s string) string {
 	return strings.TrimSpace(strings.TrimSuffix(s, "```"))
 }
 
-// RemoveWorkerWorktree cleans a worker's worktree from its base repo.
+// RemoveWorkerWorktree cleans a worker's worktree from its base repo. Workers
+// running in a shared directory never own it — nothing to remove.
 func RemoveWorkerWorktree(cfg *config.Config, w *Worker) {
+	if w.SharedCwd {
+		return
+	}
 	removeWorktree(cfg, w.Repo, w.WorktreePath)
 }
 

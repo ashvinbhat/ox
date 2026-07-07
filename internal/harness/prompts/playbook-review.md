@@ -20,6 +20,10 @@ perspective, each with `persona` set and `cwd` = the review worktree:
   for addressing verdicts.
 - Skip perspectives that obviously don't apply (pure-docs diff → correctness+design
   only). Say why.
+- If the user wants to watch or converse with reviewers, run them as session agents
+  instead: `spawn_agent` with the reviewer persona and `cwd` = the review worktree
+  (one per perspective, no depends_on). Costlier than jobs but attachable and
+  interruptible; they write their findings JSON to a file and report_done.
 
 ## synthesize
 Parse each job's findings JSON. Then edit ruthlessly:

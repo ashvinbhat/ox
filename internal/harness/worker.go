@@ -42,6 +42,7 @@ type Worker struct {
 	WorktreePath string     `json:"worktree_path"`
 	BranchName   string     `json:"branch_name"`
 	SessionIDs   []string   `json:"session_ids"`
+	SharedCwd    bool       `json:"shared_cwd,omitempty"` // runs in a dir it doesn't own: no branch, never cleaned up
 	Files        []string   `json:"files,omitempty"`
 	DependsOn    []string   `json:"depends_on,omitempty"`
 	MaxTurns     int        `json:"max_turns,omitempty"`
@@ -119,6 +120,7 @@ type SpawnInput struct {
 	Brief        string
 	Persona      string
 	Model        string
+	Cwd          string // existing directory to run in (e.g. a review worktree); skips worktree/branch creation
 	Files        []string
 	DependsOn    []string
 	MaxTurns     int
@@ -160,6 +162,14 @@ func SpawnWorker(cfg *config.Config, m *mission.Mission, in SpawnInput) (*Worker
 		WorktreePath: filepath.Join(cfg.Home, "worktrees", in.Repo, fmt.Sprintf("%s-%s", m.ID, in.ID)),
 		BranchName:   fmt.Sprintf("ox/%s-%s", m.ID, in.ID),
 		SpawnedAt:    time.Now(),
+	}
+	if in.Cwd != "" {
+		if _, err := os.Stat(in.Cwd); err != nil {
+			return nil, fmt.Errorf("cwd %s does not exist", in.Cwd)
+		}
+		w.WorktreePath = in.Cwd
+		w.BranchName = ""
+		w.SharedCwd = true
 	}
 
 	if err := UpdateRegistry(cfg.Home, m, func(reg *Registry) error {
@@ -206,8 +216,10 @@ func SpawnWorker(cfg *config.Config, m *mission.Mission, in SpawnInput) (*Worker
 // StartWorker materializes worktree + tmux + claude for a registered worker.
 // Also the path the watcher uses when dependencies unblock.
 func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
-	if err := ensureWorktree(cfg, w); err != nil {
-		return err
+	if !w.SharedCwd {
+		if err := ensureWorktree(cfg, w); err != nil {
+			return err
+		}
 	}
 	if err := writeWorkerFiles(cfg, m, w); err != nil {
 		return err
@@ -242,8 +254,14 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 		return err
 	}
 
+	briefRef := "AGENTS.md"
+	doneVerb := "commit, call report_done"
+	if w.SharedCwd {
+		briefRef = workerFile(m, w.ID, "AGENTS.md")
+		doneVerb = "call report_done"
+	}
 	go kickWorker(w.TmuxSession,
-		fmt.Sprintf("You are worker '%s'. Read AGENTS.md for your brief, then BEGIN IMMEDIATELY. When completely done: commit, call report_done, then /exit. Do not ask for confirmation.", w.ID))
+		fmt.Sprintf("You are worker '%s'. Read %s for your brief, then BEGIN IMMEDIATELY. When completely done: %s, then /exit. Do not ask for confirmation.", w.ID, briefRef, doneVerb))
 
 	m.AppendEvent("agent_started", "system", map[string]any{"id": w.ID, "session": sessionID})
 	return nil
@@ -465,12 +483,21 @@ func writeWorkerFiles(cfg *config.Config, m *mission.Mission, w *Worker) error {
 		agents.WriteString("\n")
 	}
 
-	if err := os.WriteFile(filepath.Join(w.WorktreePath, "AGENTS.md"), []byte(agents.String()), 0o644); err != nil {
+	// Shared-cwd workers (several may run in the same directory, e.g. a
+	// review worktree) keep their AGENTS.md in the mission's worker dir —
+	// writing into the shared dir would collide and litter it.
+	agentsPath := filepath.Join(w.WorktreePath, "AGENTS.md")
+	if w.SharedCwd {
+		agentsPath = workerFile(m, w.ID, "AGENTS.md")
+	}
+	if err := os.WriteFile(agentsPath, []byte(agents.String()), 0o644); err != nil {
 		return err
 	}
-	claudePath := filepath.Join(w.WorktreePath, "CLAUDE.md")
-	os.Remove(claudePath)
-	os.Symlink("AGENTS.md", claudePath)
+	if !w.SharedCwd {
+		claudePath := filepath.Join(w.WorktreePath, "CLAUDE.md")
+		os.Remove(claudePath)
+		os.Symlink("AGENTS.md", claudePath)
+	}
 
 	if _, err := WriteWorkerMCPConfig(m, w.ID); err != nil {
 		return err

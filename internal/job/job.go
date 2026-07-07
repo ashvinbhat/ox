@@ -161,9 +161,14 @@ func launch(cfg *config.Config, m *mission.Mission, j *Job) error {
 		"--output-format", "json",
 		"--model", j.Model,
 		"--max-turns", fmt.Sprintf("%d", j.MaxTurns),
-		"--max-budget-usd", fmt.Sprintf("%.2f", j.MaxBudgetUSD),
 		"--session-id", j.SessionID,
 		"--strict-mcp-config",
+	}
+	// The native headless budget flag is part of budget ENFORCEMENT — it
+	// obeys the same global switch as the watcher's checks. Tracking (exact
+	// cost from the result JSON) happens regardless.
+	if cfg.Budgets.Enforce && j.MaxBudgetUSD > 0 {
+		args = append(args, "--max-budget-usd", fmt.Sprintf("%.2f", j.MaxBudgetUSD))
 	}
 	for _, d := range j.AddDirs {
 		args = append(args, "--add-dir", d)

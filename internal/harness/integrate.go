@@ -95,7 +95,7 @@ func MergeWorkers(cfg *config.Config, m *mission.Mission, only, skip []string) (
 
 	var results []MergeResult
 	for _, w := range ordered {
-		if w.Status != WorkerDone {
+		if w.Status != WorkerDone || w.BranchName == "" {
 			continue
 		}
 		if skipSet[w.ID] || (len(onlySet) > 0 && !onlySet[w.ID]) {
