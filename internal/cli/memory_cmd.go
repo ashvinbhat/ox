@@ -2,8 +2,13 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/ashvinbhat/ox/internal/harness"
+	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -156,6 +161,73 @@ var memoryRecallCmd = &cobra.Command{
 	},
 }
 
+var memoryBootstrapCmd = &cobra.Command{
+	Use:   "bootstrap <repo>",
+	Short: "Generate a repo's initial knowledge doc with a one-shot explorer",
+	Long: `Runs a headless explorer over the repo's base clone and saves the result as
+~/.ox/memory/repos/<repo>.md — the living doc workers get in their briefs and
+the distiller keeps current. Without a bootstrap the doc builds up slowly
+across missions; this jumpstarts it.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := requireConfig()
+		repo := args[0]
+		if _, ok := cfg.Repos[repo]; !ok {
+			return fmt.Errorf("repo %q not registered", repo)
+		}
+		repoPath := filepath.Join(cfg.Home, "repos", repo)
+
+		prompt := fmt.Sprintf(`Explore this repository (%s) and write its working-knowledge document —
+the orientation a senior engineer would give a new teammate in 10 minutes.
+
+Structure (exactly these sections, hard caps):
+# %s — working knowledge
+## Architecture        (what the system is, its modules and how they relate; <= 80 lines)
+## Conventions         (how code is actually written here — patterns you verified in multiple places; <= 80 lines)
+## Build, test, run    (exact commands that work, verified from build files; <= 40 lines)
+## Gotchas             (non-obvious footguns you can evidence from the code; <= 60 lines)
+## Key files           (path -> one-line purpose, the 15-25 files that matter most; <= 40 lines)
+
+Rules: <= 300 lines total. Every claim grounded in code you actually read — no guesses.
+Prefer specific ("handlers return apperr.E") over generic ("has error handling").
+Your final reply must be ONLY the document itself — no preamble, no code fences around it.`, repo, repo)
+
+		fmt.Printf("Exploring %s (this takes a few minutes)...\n", repo)
+		c := exec.Command("claude", "-p", "--dangerously-skip-permissions",
+			"--output-format", "json", "--model", "sonnet", "--max-turns", "50", "--strict-mcp-config")
+		c.Dir = repoPath
+		c.Stdin = strings.NewReader(prompt)
+		out, err := c.Output()
+		if err != nil {
+			return fmt.Errorf("explorer failed: %w", err)
+		}
+
+		var res struct {
+			IsError      bool    `json:"is_error"`
+			Result       string  `json:"result"`
+			TotalCostUSD float64 `json:"total_cost_usd"`
+		}
+		if err := json.Unmarshal(out, &res); err != nil {
+			return fmt.Errorf("parse result: %w", err)
+		}
+		if res.IsError {
+			return fmt.Errorf("explorer error: %.300s", res.Result)
+		}
+
+		doc := strings.TrimSpace(res.Result)
+		doc = strings.TrimPrefix(doc, "```markdown")
+		doc = strings.TrimPrefix(doc, "```")
+		doc = strings.TrimSpace(strings.TrimSuffix(doc, "```"))
+
+		if err := harness.WriteRepoDoc(cfg.Home, repo, doc, "bootstrap"); err != nil {
+			return err
+		}
+		fmt.Printf("Saved ~/.ox/memory/repos/%s.md (%d lines, $%.2f)\n",
+			repo, strings.Count(doc, "\n")+1, res.TotalCostUSD)
+		return nil
+	},
+}
+
 func openMemoryStore() (*memory.Store, error) {
 	cfg := requireConfig()
 	return memory.Open(cfg.Home, embed.New(cfg.Memory.Embeddings))
@@ -163,6 +235,6 @@ func openMemoryStore() (*memory.Store, error) {
 
 func init() {
 	memoryBackfillCmd.Flags().BoolVar(&backfillReembed, "re-embed", false, "Re-embed everything (after provider/model change)")
-	memoryCmd.AddCommand(memoryMigrateCmd, memoryBackfillCmd, memoryGCCmd, memoryStatsCmd, memoryRecallCmd)
+	memoryCmd.AddCommand(memoryMigrateCmd, memoryBackfillCmd, memoryGCCmd, memoryStatsCmd, memoryRecallCmd, memoryBootstrapCmd)
 	rootCmd.AddCommand(memoryCmd)
 }
