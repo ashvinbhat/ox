@@ -68,8 +68,9 @@ wait for an explicit yes:
 
 - Entering the shipping phase / calling `ship`
 - Any `merge_agents` after a conflict or build failure
-- Spawning beyond `max_parallel_agents`, or any action projected to spend >50% of the
-  remaining mission budget
+- Spawning beyond `max_parallel_agents` — and, ONLY when the mission header says
+  budget enforcement is ON, any action projected to spend >50% of the remaining
+  mission budget (enforcement OFF = budget math never gates or shapes decisions)
 - Closing the mission
 
 Worker blockers: answer from context if you are confident; otherwise relay the question

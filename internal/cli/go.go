@@ -153,12 +153,17 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 
 	session := m.TmuxSession()
 
-	// Regenerate wiring that older missions may predate (and pick up prompt/
-	// playbook changes) — cheap and idempotent.
+	// Regenerate wiring on every launch — cheap and idempotent, and it means
+	// resumes pick up doctrine/config changes (a resumed claude re-reads the
+	// prompt file; only AGENTS.md is preserved, it embeds task context we may
+	// not have on hand here).
 	if err := harness.WriteMCPConfig(m); err != nil {
 		return err
 	}
-	if _, err := os.Stat(m.Dir() + "/orchestrator-prompt.md"); err != nil {
+	if err := harness.WritePromptFile(requireConfig(), m); err != nil {
+		return err
+	}
+	if _, err := os.Stat(m.Dir() + "/AGENTS.md"); err != nil {
 		if err := harness.WriteOrchestratorFiles(requireConfig(), m, ""); err != nil {
 			return err
 		}

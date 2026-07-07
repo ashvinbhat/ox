@@ -47,9 +47,10 @@ func PlaybookExists(oxHome, typ string) bool {
 
 // BuildOrchestratorPrompt assembles the orchestrator's --append-system-prompt:
 // harness core + hygiene + playbook + a generated mission header. It must stay
-// byte-stable for a given mission so prompt caching holds across resumes.
-func BuildOrchestratorPrompt(oxHome string, m *mission.Mission) (string, error) {
-	playbook, err := PlaybookBody(oxHome, m.Type)
+// byte-stable within a session so prompt caching holds; it is regenerated on
+// resume so doctrine and config changes reach long-lived missions.
+func BuildOrchestratorPrompt(cfg *config.Config, m *mission.Mission) (string, error) {
+	playbook, err := PlaybookBody(cfg.Home, m.Type)
 	if err != nil {
 		return "", err
 	}
@@ -61,13 +62,13 @@ func BuildOrchestratorPrompt(oxHome string, m *mission.Mission) (string, error) 
 	sb.WriteString("\n---\n\n")
 	sb.WriteString(playbook)
 	sb.WriteString("\n---\n\n")
-	sb.WriteString(missionHeader(m))
+	sb.WriteString(missionHeader(cfg, m))
 	return sb.String(), nil
 }
 
 // missionHeader is the small mission-specific block. It is also mirrored into
 // AGENTS.md so a compacted/restarted orchestrator can re-read it from disk.
-func missionHeader(m *mission.Mission) string {
+func missionHeader(cfg *config.Config, m *mission.Mission) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "# Mission %s: %s\n\n", m.ID, m.Goal)
 	fmt.Fprintf(&sb, "- Mission dir: %s (plan.md, decisions.md, scratchpad.md, workers/, jobs/)\n", m.Dir())
@@ -77,11 +78,28 @@ func missionHeader(m *mission.Mission) string {
 		sb.WriteString("- No linked task — freeform mission\n")
 	}
 	fmt.Fprintf(&sb, "- Playbook: %s · phase at launch: %s\n", m.Type, m.Phase)
-	fmt.Fprintf(&sb, "- Budget: $%.2f mission / $%.2f per agent / $%.2f per job\n",
-		m.Budgets.MissionUSD, m.Budgets.PerAgentUSD, m.Budgets.PerJobUSD)
+	if cfg.Budgets.Enforce {
+		fmt.Fprintf(&sb, "- Budget enforcement ON: $%.2f mission / $%.2f per agent / $%.2f per job\n",
+			m.Budgets.MissionUSD, m.Budgets.PerAgentUSD, m.Budgets.PerJobUSD)
+	} else {
+		sb.WriteString("- Budget enforcement OFF: costs are tracked for reporting only. Do NOT let\n" +
+			"  budget math drive tool choices, self-limit delegation, or warn the user about\n" +
+			"  spend — pick the right tool for the work.\n")
+	}
 	fmt.Fprintf(&sb, "- Max parallel agents: %d\n", m.Approvals.MaxParallelAgents)
 	sb.WriteString("- Base repo clones (read-only exploration): ~/.ox/repos/<name>\n")
 	return sb.String()
+}
+
+// WritePromptFile refreshes only the launch prompt — safe to run on every
+// launch/resume (unlike AGENTS.md, which embeds task context we may not have
+// on hand).
+func WritePromptFile(cfg *config.Config, m *mission.Mission) error {
+	prompt, err := BuildOrchestratorPrompt(cfg, m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(m.Dir(), "orchestrator-prompt.md"), []byte(prompt), 0o644)
 }
 
 // WriteOrchestratorFiles materializes the mission-dir documents the
@@ -89,7 +107,7 @@ func missionHeader(m *mission.Mission) string {
 // consumed at launch, AGENTS.md (mission header + task context + prior
 // knowledge), and the CLAUDE.md symlink.
 func WriteOrchestratorFiles(cfg *config.Config, m *mission.Mission, taskContextMD string) error {
-	prompt, err := BuildOrchestratorPrompt(cfg.Home, m)
+	prompt, err := BuildOrchestratorPrompt(cfg, m)
 	if err != nil {
 		return err
 	}
@@ -98,7 +116,7 @@ func WriteOrchestratorFiles(cfg *config.Config, m *mission.Mission, taskContextM
 	}
 
 	var agents strings.Builder
-	agents.WriteString(missionHeader(m))
+	agents.WriteString(missionHeader(cfg, m))
 	if taskContextMD != "" {
 		agents.WriteString("\n---\n\n")
 		agents.WriteString(taskContextMD)
