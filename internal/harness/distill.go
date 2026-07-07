@@ -267,21 +267,44 @@ func stripFences(s string) string {
 }
 
 // PruneReviewWorktree removes a review mission's PR-head checkout (recorded
-// in review.json by prepare_review). Safe to drop on close: a follow-up
-// review round recreates it from the PR automatically.
+// in review.json by prepare_review). Review worktrees are keyed by PR, not
+// mission — two missions on the same PR share one — so the checkout is only
+// dropped when no OPEN mission still references it. A follow-up round
+// recreates it from the PR automatically anyway.
 func PruneReviewWorktree(cfg *config.Config, m *mission.Mission) {
-	data, err := os.ReadFile(filepath.Join(m.Dir(), "review.json"))
-	if err != nil {
+	rc, ok := reviewContextOf(m)
+	if !ok {
 		return
 	}
-	var rc struct {
-		RepoName string `json:"repo_name"`
-		Worktree string `json:"worktree"`
-	}
-	if json.Unmarshal(data, &rc) != nil || rc.Worktree == "" {
-		return
+	missions, err := mission.List(cfg.Home)
+	if err == nil {
+		for _, other := range missions {
+			if !other.Open() || other.ID == m.ID {
+				continue
+			}
+			if orc, ok := reviewContextOf(other); ok && orc.Worktree == rc.Worktree {
+				return // an open mission is still reviewing this PR
+			}
+		}
 	}
 	removeWorktree(cfg, rc.RepoName, rc.Worktree)
+}
+
+type reviewRef struct {
+	RepoName string `json:"repo_name"`
+	Worktree string `json:"worktree"`
+}
+
+func reviewContextOf(m *mission.Mission) (reviewRef, bool) {
+	data, err := os.ReadFile(filepath.Join(m.Dir(), "review.json"))
+	if err != nil {
+		return reviewRef{}, false
+	}
+	var rc reviewRef
+	if json.Unmarshal(data, &rc) != nil || rc.Worktree == "" {
+		return reviewRef{}, false
+	}
+	return rc, true
 }
 
 // RemoveWorkerWorktree cleans a worker's worktree from its base repo. Workers
