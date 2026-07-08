@@ -24,10 +24,11 @@ import (
 )
 
 const (
-	tick          = 5 * time.Second
-	slowEvery     = 6 // heartbeat every 6th tick
+	tick      = 5 * time.Second
+	slowEvery = 6 // heartbeat every 6th tick
 	idleAfter = 10 * time.Minute
-	prEvery       = 36 // PR polling every 36th tick (~3 min)
+	prEvery   = 36 // PR polling every 36th tick (~3 min)
+	reapGrace = 30 * time.Minute
 )
 
 type state struct {
@@ -91,6 +92,7 @@ func (w *Watcher) Run() error {
 
 		n++
 		if n%slowEvery == 0 {
+			w.reapIdleWorkers(m)
 			w.trackCosts(m)
 			if w.cfg.Budgets.Enforce {
 				w.enforceBudgets(m)
@@ -359,6 +361,44 @@ func (w *Watcher) reconcileWorkers(m *mission.Mission) {
 	}
 }
 
+// reapIdleWorkers closes tmux sessions of finished workers after an idle
+// grace. The conversation survives on disk — respawn_agent revives it with
+// full context — so a parked session costs RAM and tree noise for nothing.
+func (w *Watcher) reapIdleWorkers(m *mission.Mission) {
+	reg, err := harness.LoadRegistry(m)
+	if err != nil {
+		return
+	}
+	for _, worker := range reg.Workers {
+		if !worker.Finished() || !tmuxutil.HasSession(worker.TmuxSession) {
+			continue
+		}
+		idle := time.Since(lastWorkerActivity(worker))
+		if idle < reapGrace {
+			continue
+		}
+		tmuxutil.KillSession(worker.TmuxSession)
+		fmt.Printf("watcher: reaped %s session (%s, idle %dm)\n", worker.ID, worker.Status, int(idle.Minutes()))
+		m.AppendEvent("agent_reaped", "system", map[string]any{"id": worker.ID, "status": worker.Status})
+	}
+}
+
+// lastWorkerActivity is the newest transcript write across the worker's
+// sessions — a finished worker the orchestrator re-engaged for a fix round
+// keeps writing its transcript and must not be reaped mid-edit.
+func lastWorkerActivity(worker *harness.Worker) time.Time {
+	last := worker.SpawnedAt
+	if worker.FinishedAt != nil && worker.FinishedAt.After(last) {
+		last = *worker.FinishedAt
+	}
+	for _, sid := range worker.SessionIDs {
+		if fi, err := os.Stat(costs.TranscriptPath(worker.WorktreePath, sid)); err == nil && fi.ModTime().After(last) {
+			last = fi.ModTime()
+		}
+	}
+	return last
+}
+
 // harvestJobs finalizes finished jobs, auto-applies the retry/escalation
 // ladder to failures, and emits panel_done when a whole panel lands.
 func (w *Watcher) harvestJobs(m *mission.Mission) {
@@ -502,7 +542,6 @@ var priorityEvents = map[string]bool{
 	"merge_failed":         true,
 }
 
-
 // pumpDigests wakes the orchestrator when there are unhandled action-needed
 // events AND the user is away. Event content is never typed into the
 // conversation — the UserPromptSubmit hook attaches it invisibly to whatever
@@ -606,6 +645,8 @@ func eventLine(ev mission.Event) string {
 		return fmt.Sprintf("%s BLOCKED: %q", id, q)
 	case "agent_interrupted":
 		return fmt.Sprintf("%s INTERRUPTED (worktree intact — respawn_agent to resume)", id)
+	case "agent_reaped":
+		return fmt.Sprintf("%s session closed (finished, idle) — respawn_agent revives it with full context", id)
 	case "agent_idle":
 		mins, _ := ev.Data["idle_min"].(float64)
 		return fmt.Sprintf("%s idle %dm", id, int(mins))
