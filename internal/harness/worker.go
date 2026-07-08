@@ -233,6 +233,7 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 	if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
 		return fmt.Errorf("worker tmux session: %w", err)
 	}
+	tmuxutil.RenameWindow(w.TmuxSession, w.ID)
 	tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
 	tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
 
@@ -288,6 +289,7 @@ func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraConte
 		if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
 			return fmt.Errorf("worker tmux session: %w", err)
 		}
+		tmuxutil.RenameWindow(w.TmuxSession, w.ID)
 		tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
 		tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
 	}
