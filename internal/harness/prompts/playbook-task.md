@@ -84,5 +84,6 @@ Leftover workers are killed and the mission is distilled into long-term memory
 automatically.
 
 ## Budget
-At 70% of budget: tell the user, propose how to spend the remainder. At 100%: spawning
-freezes — ask the user to raise it or wrap up.
+Only when the mission header says enforcement is ON: at 70% tell the user and propose
+how to spend the remainder; at 100% spawning freezes — ask. When enforcement is OFF,
+budget math must not influence any decision.
