@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/config"
@@ -170,7 +171,30 @@ func apiKey(cfg config.EmbeddingsConfig, defaultEnv string) string {
 	if env == "" {
 		env = defaultEnv
 	}
-	return os.Getenv(env)
+	if v := os.Getenv(env); v != "" {
+		return v
+	}
+	// Fall back to ~/.ox/secrets.env — daemons, tmux windows, and hooks don't
+	// reliably inherit shell-sourced env.
+	return secretsEnv(env)
+}
+
+func secretsEnv(name string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(home + "/.ox/secrets.env")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
+		if val, ok := strings.CutPrefix(line, name+"="); ok {
+			return strings.Trim(strings.TrimSpace(val), `"'`)
+		}
+	}
+	return ""
 }
 
 func defaultStr(v, d string) string {
