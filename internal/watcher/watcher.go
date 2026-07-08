@@ -600,7 +600,7 @@ func (w *Watcher) userAway() bool {
 	if w.st.OrcLastUserAt.IsZero() {
 		return true
 	}
-	return time.Since(w.st.OrcLastUserAt) > 10*time.Minute
+	return time.Since(w.st.OrcLastUserAt) > 3*time.Minute
 }
 
 // injectSafe: claude prompt is up, nothing streaming, input line empty (the

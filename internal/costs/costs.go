@@ -74,9 +74,13 @@ func TranscriptPath(cwd, sessionID string) string {
 type transcriptLine struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
+	IsMeta    bool   `json:"isMeta"`
 	Message   struct {
 		Model string `json:"model"`
-		Usage struct {
+		// Raw because human prompts are strings while tool results are
+		// structured blocks — only the former counts as user presence.
+		Content json.RawMessage `json:"content"`
+		Usage   struct {
 			InputTokens         int64 `json:"input_tokens"`
 			OutputTokens        int64 `json:"output_tokens"`
 			CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
@@ -120,6 +124,15 @@ func Tail(path string, offset int64) (delta Usage, contextTokens int64, lastUser
 		}
 		switch line.Type {
 		case "user":
+			if line.IsMeta {
+				continue
+			}
+			// Tool results ride user-role lines; a busy orchestrator must not
+			// read as a present human. Watcher wake-ups aren't humans either.
+			var text string
+			if json.Unmarshal(line.Message.Content, &text) != nil || strings.HasPrefix(text, "⚡ ox:") {
+				continue
+			}
 			if t, terr := time.Parse(time.RFC3339, line.Timestamp); terr == nil {
 				lastUserAt = t
 			} else {
