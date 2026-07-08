@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -549,7 +550,15 @@ var priorityEvents = map[string]bool{
 // A user who is present is never interrupted: their own next message delivers
 // everything.
 func (w *Watcher) pumpDigests(m *mission.Mission) {
-	events, err := m.EventsSince(w.st.EventCursor)
+	// The hook delivers events on every orchestrator turn and advances its
+	// own cursor; anything at or below it has already been seen. Without
+	// this, a wake-up could re-announce events the hook just delivered.
+	base := w.st.EventCursor
+	if hc := hookCursor(m); hc > base {
+		base = hc
+		w.st.EventCursor = hc
+	}
+	events, err := m.EventsSince(base)
 	if err != nil || len(events) == 0 {
 		return
 	}
@@ -592,6 +601,20 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 	w.st.EventCursor = maxN
 	w.st.LastInjectionAt = time.Now()
 	w.saveState(m)
+}
+
+// hookCursor is the highest event n the UserPromptSubmit hook has already
+// attached to an orchestrator turn (see `ox events attach`).
+func hookCursor(m *mission.Mission) int64 {
+	data, err := os.ReadFile(filepath.Join(m.Dir(), "hook-cursor"))
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // userAway reports whether the human has been quiet long enough that a
