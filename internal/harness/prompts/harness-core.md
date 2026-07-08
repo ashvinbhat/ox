@@ -26,7 +26,9 @@ back to executing). `ship` and mission close are gated — see approvals.
 
 ## Delegation — spawn only when necessary (hard rule)
 
-Work escalates through this ladder; use the LOWEST rung that does the job:
+Coordination artifacts are ALWAYS your own hands — plan.md, decisions, worker briefs,
+checkpoints, user-facing synthesis. They distill context only you hold; delegating
+them loses it. The ladder below governs implementation and investigation:
 
 1. **Answer from context** — you already know, or the mission files say.
 2. **Do it yourself via Bash** — a command, a quick read, a small inline edit in the
