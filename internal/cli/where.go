@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -61,22 +62,50 @@ Scripting: --repo prints just that repo's integration path, so
 				name, b.IntegrationWorktree, b.IntegrationBranch)
 		}
 
+		unmerged := 0
 		if reg, err := harness.LoadRegistry(m); err == nil && len(reg.Workers) > 0 {
-			fmt.Println("  workers (in-flight, own branches):")
+			fmt.Println("  workers:")
 			for _, w := range reg.Workers {
 				loc := w.WorktreePath
 				if _, err := os.Stat(loc); err != nil {
 					loc += "  (pruned)"
 				}
 				branch := w.BranchName
+				merge := ""
 				if branch == "" {
 					branch = "shared dir"
+				} else if b, ok := m.Repos[w.Repo]; ok {
+					if branchMerged(b.IntegrationWorktree, w.BranchName) {
+						merge = "  merged✓"
+					} else {
+						merge = "  NOT merged"
+						unmerged++
+					}
 				}
-				fmt.Printf("    %-28s %-8s %s  [%s]\n", w.ID, w.Status, loc, branch)
+				fmt.Printf("    %-28s %-8s %s  [%s]%s\n", w.ID, w.Status, loc, branch, merge)
 			}
+		}
+
+		switch {
+		case len(m.Repos) == 0:
+		case unmerged > 0:
+			fmt.Printf("\n  ⚠ %d worker branch(es) not merged yet — integration is BEHIND the latest\n", unmerged)
+			fmt.Println("    work; test the worker worktree, or ask the orchestrator to merge first.")
+		default:
+			fmt.Println("\n  ✓ integration worktree is current — run and test there.")
 		}
 		return nil
 	},
+}
+
+// branchMerged reports whether branch is an ancestor of the integration
+// worktree's HEAD (i.e. its work is folded in).
+func branchMerged(integrationWorktree, branch string) bool {
+	if _, err := os.Stat(integrationWorktree); err != nil {
+		return false
+	}
+	return exec.Command("git", "-C", integrationWorktree,
+		"merge-base", "--is-ancestor", branch, "HEAD").Run() == nil
 }
 
 func init() {
