@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,6 +43,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/send", s.handleSend)
+	mux.HandleFunc("/api/missionfile", s.handleMissionFile)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	fmt.Printf("ox cockpit: http://%s\n", addr)
@@ -280,6 +283,46 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	screen := strings.ReplaceAll(strings.TrimRight(hist, "\n"), "\n", "\r\n")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"cols": cols, "data": encodeChunk(screen)})
+}
+
+// missionFileWhitelist bounds what the file endpoint may serve — review
+// artifacts only, never arbitrary paths.
+var missionFileWhitelist = map[string]bool{
+	"plan.md": true, "decisions.md": true, "findings.md": true,
+	"summary.md": true, "scratchpad.md": true,
+}
+
+func (s *Server) handleMissionFile(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("mission")
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "plan.md"
+	}
+	if !missionFileWhitelist[name] {
+		http.Error(w, "file not reviewable", 400)
+		return
+	}
+	m, err := mission.Open(s.cfg.Home, id)
+	if err != nil {
+		http.Error(w, err.Error(), 404)
+		return
+	}
+	path := filepath.Join(m.Dir(), name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("no %s yet for %s", name, id), 404)
+		return
+	}
+	info, _ := os.Stat(path)
+	updated := ""
+	if info != nil {
+		updated = info.ModTime().Format("15:04:05")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"mission": m.ID, "name": name, "path": path,
+		"content": string(data), "updated": updated,
+	})
 }
 
 // ---- input ----

@@ -63,6 +63,20 @@
   button.ghost { background: transparent; color: var(--mauve); border: 1px solid var(--mauve); }
   button.ghost:hover { background: #2b2b45; }
   #empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+
+  #planview { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #plantabs { padding: 6px 14px; border-bottom: 1px solid var(--border); }
+  #plantabs button { padding: 3px 10px; margin-right: 6px; font-weight: normal; }
+  #plantabs button.tab { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+  #plantabs button.tab.cur { color: var(--accent); border-color: var(--accent); }
+  #plantext { flex: 1; overflow: auto; margin: 0; padding: 14px 18px; white-space: pre-wrap;
+              font-size: 12.5px; line-height: 1.55; }
+  #reviewbar { border-top: 1px solid var(--border); background: var(--panel); padding: 10px 14px; }
+  #reviewtext { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+                border-radius: 6px; padding: 8px 10px; font: inherit; resize: vertical; }
+  #reviewbtns { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+  button.ok { background: var(--green); }
+  button.warn { background: var(--yellow); }
 </style>
 </head>
 <body>
@@ -78,10 +92,23 @@
     </div>
     <div id="empty">select a session on the left</div>
     <div id="term" style="display:none"></div>
+    <div id="planview" style="display:none">
+      <div id="plantabs"></div>
+      <pre id="plantext"></pre>
+    </div>
     <div id="inputbar" style="display:none">
       <input id="msg" placeholder="type to the agent… (Enter sends · it lands exactly like typing in tmux)" autocomplete="off">
       <button id="send">Send</button>
       <button id="btw" class="ghost" title="context only — doesn't consume the agent's turn">/btw</button>
+    </div>
+    <div id="reviewbar" style="display:none">
+      <textarea id="reviewtext" rows="3" placeholder="comments… (select text above and hit Quote to anchor a comment)"></textarea>
+      <div id="reviewbtns">
+        <button id="quotebtn" class="ghost">Quote selection</button>
+        <button id="commentbtn" class="ghost">Send comments</button>
+        <button id="changesbtn" class="warn">Request changes</button>
+        <button id="approvebtn" class="ok">Approve</button>
+      </div>
     </div>
   </div>
 
@@ -117,6 +144,8 @@ function openStream(target) {
   $('#curtarget').textContent = target;
   $('#streamstate').textContent = 'connecting…';
   $('#empty').style.display = 'none';
+  $('#planview').style.display = 'none';
+  $('#reviewbar').style.display = 'none';
   $('#term').style.display = 'block';
   $('#inputbar').style.display = 'flex';
   $('#histbtn').style.display = 'inline';
@@ -153,6 +182,64 @@ async function openHistory() {
 
 $('#histbtn').onclick = () => (mode === 'live' ? openHistory() : openStream(current));
 
+// ---- plan review ----
+let planMission = null, planFile = 'plan.md';
+
+async function openPlan(mid, name) {
+  planMission = mid; planFile = name || 'plan.md';
+  if (es) es.close();
+  current = 'ox-' + mid + ':orc';   // review actions talk to this mission's orc
+  $('#curtarget').textContent = mid + ' / ' + planFile;
+  $('#streamstate').textContent = 'review — actions go to the orchestrator';
+  $('#histbtn').style.display = 'none';
+  $('#empty').style.display = 'none';
+  $('#term').style.display = 'none';
+  $('#inputbar').style.display = 'none';
+  $('#planview').style.display = 'flex';
+  $('#reviewbar').style.display = 'block';
+
+  const files = ['plan.md', 'decisions.md', 'findings.md', 'scratchpad.md'];
+  $('#plantabs').innerHTML = files.map(f =>
+    `<button class="tab ${f === planFile ? 'cur' : ''}" data-f="${f}">${f}</button>`).join('');
+  document.querySelectorAll('#plantabs .tab').forEach(b => b.onclick = () => openPlan(mid, b.dataset.f));
+
+  const r = await fetch(`/api/missionfile?mission=${mid}&name=${planFile}`);
+  if (!r.ok) { $('#plantext').textContent = '(' + await r.text() + ')'; return; }
+  const d = await r.json();
+  $('#plantext').textContent = d.content;
+  $('#streamstate').textContent = `review — ${d.path} · updated ${d.updated}`;
+}
+
+async function sendReview(kind) {
+  const note = $('#reviewtext').value.trim();
+  let text;
+  if (kind === 'approve') {
+    text = `Plan review (cockpit): APPROVED — proceed per ${planFile}.` + (note ? `\nNotes: ${note}` : '');
+  } else if (kind === 'changes') {
+    if (!note) { $('#streamstate').textContent = 'write what should change first'; return; }
+    text = `Plan review (cockpit): CHANGES REQUESTED on ${planFile} — address each point, update the file, and re-request approval:\n${note}`;
+  } else {
+    if (!note) return;
+    text = `Plan review (cockpit) comments on ${planFile} (respond, update the file where you agree, do not proceed to build yet):\n${note}`;
+  }
+  const res = await fetch('/api/send', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: current, text }),
+  });
+  $('#streamstate').textContent = res.ok ? 'sent to orchestrator ✓' : 'send failed: ' + await res.text();
+  if (res.ok) $('#reviewtext').value = '';
+}
+$('#approvebtn').onclick = () => sendReview('approve');
+$('#changesbtn').onclick = () => sendReview('changes');
+$('#commentbtn').onclick = () => sendReview('comment');
+$('#quotebtn').onclick = () => {
+  const sel = window.getSelection().toString().trim();
+  if (!sel) return;
+  const quoted = sel.split('\n').map(l => '> ' + l).join('\n');
+  $('#reviewtext').value = ($('#reviewtext').value + '\n' + quoted + '\n').trimStart();
+  $('#reviewtext').focus();
+};
+
 async function send(background) {
   const text = $('#msg').value.trim();
   if (!text || !current) return;
@@ -187,8 +274,9 @@ async function refresh() {
           <span class="id">${m.id}</span>
           <span class="phase">${m.type}/${m.phase}</span>
           ${m.task_seq ? '<span class="meta">#' + m.task_seq + '</span>' : ''}
-          <span class="money" style="float:right">${m.spend} / ${m.budget}${m.frozen ? ' <span class=frozen>FROZEN</span>' : ''}</span>
+          <span class="money" style="float:right">${m.spend}${m.frozen ? ' <span class=frozen>FROZEN</span>' : ''}</span>
           <span class="goal" title="${m.goal}">${m.goal}</span>
+          <button class="tab planbtn" data-mid="${m.id}" style="margin-top:4px;padding:2px 8px;font-size:11px">📋 plan / review</button>
         </div>
         ${m.sessions.map(sessRow).join('')}
         ${m.jobs && m.jobs.length ? `<div class="jobs">${m.jobs.map(j =>
@@ -199,6 +287,8 @@ async function refresh() {
     $('#missions').innerHTML = html || '<div style="color:var(--dim);padding:8px">no open missions — <code>ox go &lt;task&gt;</code></div>';
     document.querySelectorAll('.sess').forEach(el =>
       el.onclick = () => openStream(el.dataset.target));
+    document.querySelectorAll('.planbtn').forEach(el =>
+      el.onclick = () => openPlan(el.dataset.mid));
   } catch (e) { /* server restarting */ }
 }
 

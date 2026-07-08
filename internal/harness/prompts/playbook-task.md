@@ -24,6 +24,13 @@ For plans touching >2 files or any schema/API: consider `run_panel` with the pla
 personas and fold CRITICALs in. **STOP — get explicit user approval of the plan before
 spawning any builder or writing any code.**
 
+When requesting approval, give the user their review routes: (a) discuss here in chat,
+(b) the cockpit's plan/review panel (its "APPROVED / CHANGES REQUESTED / comments"
+messages are authoritative review verdicts — treat cockpit APPROVED as the explicit
+go), or (c) edit plan.md directly — lines starting `> review:` are inline comments;
+when told the file was edited, re-read it, address every comment (change, or push back
+with reasoning), remove resolved markers, and re-request approval.
+
 ## executing
 First bind the repos the plan touches: `update_mission` with `repos: [...]` — this
 creates the integration worktree + branch per repo and symlinks them into the mission
