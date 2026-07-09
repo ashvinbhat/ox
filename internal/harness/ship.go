@@ -14,9 +14,10 @@ import (
 )
 
 type ShipResult struct {
-	Repo  string `json:"repo"`
-	PRURL string `json:"pr_url,omitempty"`
-	Error string `json:"error,omitempty"`
+	Repo   string `json:"repo"`
+	PRURL  string `json:"pr_url,omitempty"`
+	Polish string `json:"polish,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 // Ship pushes each bound repo's integration branch and opens a PR. Titles and
@@ -44,6 +45,8 @@ func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, ti
 			continue
 		}
 
+		polish := PreShipPolish(cfg, m, name, binding)
+
 		if err := gitutil.Push(binding.IntegrationWorktree, binding.IntegrationBranch); err != nil {
 			results = append(results, ShipResult{Repo: name, Error: "push: " + err.Error()})
 			continue
@@ -51,10 +54,10 @@ func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, ti
 
 		prURL, err := CreatePR(binding.IntegrationWorktree, title, body, draft)
 		if err != nil {
-			results = append(results, ShipResult{Repo: name, Error: "pr: " + err.Error()})
+			results = append(results, ShipResult{Repo: name, Error: "pr: " + err.Error(), Polish: polish})
 			continue
 		}
-		results = append(results, ShipResult{Repo: name, PRURL: prURL})
+		results = append(results, ShipResult{Repo: name, PRURL: prURL, Polish: polish})
 
 		LinkPR(m, name, prURL)
 	}

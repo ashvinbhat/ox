@@ -56,7 +56,7 @@ func (s *Server) registerIntegrateTools(srv *mcp.Server) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "ship",
-		Description: "Push integration branches and open PRs. HARD GATE: only after the user explicitly approved shipping, and only in a late phase.",
+		Description: "Push integration branches and open PRs. HARD GATE: only after the user explicitly approved shipping, and only in a late phase. Runs a blocking comment-polish gate per repo first (removes WHAT-comments and redundant javadocs the branch added; may add a chore commit and take a few minutes).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in shipIn) (*mcp.CallToolResult, shipOut, error) {
 		if !in.Confirm {
 			return nil, shipOut{}, fmt.Errorf("set confirm=true after the user approves shipping")

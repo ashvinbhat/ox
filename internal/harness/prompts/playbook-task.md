@@ -64,7 +64,9 @@ a recorded decision.
 
 ## shipping
 Gates: build passes, diff reviewed, USER APPROVED. Then `ship` (PR per repo — title/body
-describe the change, nothing about tooling) and link PRs.
+describe the change, nothing about tooling) and link PRs. `ship` runs a comment-polish
+gate first — added WHAT-comments and signature-restating javadocs are pruned into a
+chore commit automatically; the result field tells you what it did.
 
 **Shipping is NOT done.** The task stays open and the mission stays in `shipping`
 until the PR actually merges:
