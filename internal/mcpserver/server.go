@@ -43,7 +43,8 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 	if role != RoleOrchestrator && role != RoleWorker {
 		return fmt.Errorf("role must be %s or %s", RoleOrchestrator, RoleWorker)
 	}
-	if _, err := mission.Open(cfg.Home, missionID); err != nil {
+	m, err := mission.Open(cfg.Home, missionID)
+	if err != nil {
 		return err
 	}
 
@@ -56,7 +57,11 @@ func Run(cfg *config.Config, missionID, role, agentID string) error {
 		s.registerAgentTools(srv)
 		s.registerJobTools(srv)
 		s.registerIntegrateTools(srv)
-		s.registerReviewTools(srv)
+		// Tool schemas ride every turn; review tools only exist where the
+		// playbook can use them.
+		if m.Type == "review" {
+			s.registerReviewTools(srv)
+		}
 	} else {
 		s.registerWorker(srv)
 	}
