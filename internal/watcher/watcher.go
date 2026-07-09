@@ -54,6 +54,7 @@ type Watcher struct {
 	paneHash   map[string]uint64
 	paneChange map[string]time.Time
 	deadMisses map[string]int
+	holdLogged int64
 }
 
 func New(cfg *config.Config, missionID string) *Watcher {
@@ -589,6 +590,10 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 
 	target := m.TmuxSession() + ":orc"
 	if !injectSafe(target) {
+		if w.holdLogged != maxN {
+			w.holdLogged = maxN
+			fmt.Printf("watcher: wake-up held — orc pane not inject-safe (%d event(s) pending)\n", needsAction)
+		}
 		return
 	}
 
@@ -639,18 +644,16 @@ func injectSafe(target string) bool {
 	if !strings.Contains(out, "bypass permissions") && !strings.Contains(out, "shift+tab to cycle") {
 		return false
 	}
+	// The input prompt is the last ❯ on screen; whatever renders below it
+	// (statusline, hints, artifact chips) is footer chrome that comes and
+	// goes with claude releases — enumerating it is a losing game. Menus
+	// stay safe because their selection cursor puts text after the ❯.
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "─") || strings.HasPrefix(line, "\\") ||
-			strings.Contains(line, "bypass permissions") || strings.Contains(line, "for agents") {
-			continue
-		}
 		if strings.HasPrefix(line, "❯") {
 			return strings.TrimSpace(strings.TrimPrefix(line, "❯")) == ""
 		}
-		// Last meaningful line isn't the prompt — claude is mid-output.
-		return false
 	}
 	return false
 }

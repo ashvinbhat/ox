@@ -36,20 +36,16 @@ func SendMessageEnsured(target, msg string) error {
 }
 
 // inputHolds reports whether the prompt's input area still contains text.
+// The input is the last ❯ on screen — footer chrome below it (statusline,
+// hints, artifact chips) varies by claude release and must not end the walk.
 func inputHolds(pane, tail string) bool {
 	lines := strings.Split(strings.TrimRight(pane, "\n"), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "─") ||
-			strings.Contains(line, "bypass permissions") || strings.Contains(line, "for agents") ||
-			strings.HasPrefix(line, "\\") {
-			continue
-		}
 		if strings.HasPrefix(line, "❯") {
 			content := strings.TrimSpace(strings.TrimPrefix(line, "❯"))
 			return content != "" && (strings.Contains(pane, tail) || len(content) > 3)
 		}
-		return false
 	}
 	return false
 }
