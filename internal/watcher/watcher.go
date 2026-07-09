@@ -544,6 +544,20 @@ var priorityEvents = map[string]bool{
 	"merge_failed":         true,
 }
 
+// eventNeedsAction: priority types always wake; a standalone job finishing
+// wakes too — an orchestrator that launched a background job is usually
+// parked on its result. Panel members stay quiet (panel_done covers them).
+func eventNeedsAction(ev mission.Event) bool {
+	if priorityEvents[ev.Type] {
+		return true
+	}
+	if ev.Type == "job_done" {
+		panel, _ := ev.Data["panel"].(string)
+		return panel == ""
+	}
+	return false
+}
+
 // pumpDigests wakes the orchestrator when there are unhandled action-needed
 // events AND the user is away. Event content is never typed into the
 // conversation — the UserPromptSubmit hook attaches it invisibly to whatever
@@ -570,7 +584,7 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 		if ev.N > maxN {
 			maxN = ev.N
 		}
-		if priorityEvents[ev.Type] {
+		if eventNeedsAction(ev) {
 			needsAction++
 		}
 	}
