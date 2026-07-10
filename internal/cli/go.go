@@ -128,7 +128,7 @@ func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD 
 	if err := harness.WriteOrchestratorFiles(requireConfig(), m, taskMD); err != nil {
 		return err
 	}
-	if err := harness.WriteMCPConfig(m); err != nil {
+	if err := harness.WriteMCPConfig(cfg, m); err != nil {
 		return err
 	}
 	linkYokeDocs(m.Dir())
@@ -157,7 +157,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 	// resumes pick up doctrine/config changes (a resumed claude re-reads the
 	// prompt file; only AGENTS.md is preserved, it embeds task context we may
 	// not have on hand here).
-	if err := harness.WriteMCPConfig(m); err != nil {
+	if err := harness.WriteMCPConfig(cfg, m); err != nil {
 		return err
 	}
 	if err := harness.WritePromptFile(requireConfig(), m); err != nil {

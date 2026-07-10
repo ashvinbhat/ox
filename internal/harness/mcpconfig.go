@@ -6,11 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/mission"
 )
 
 type mcpConfig struct {
-	MCPServers map[string]mcpServerEntry `json:"mcpServers"`
+	MCPServers map[string]any `json:"mcpServers"`
 }
 
 type mcpServerEntry struct {
@@ -30,13 +31,21 @@ func oxBinary() string {
 // WriteMCPConfig generates the mission's MCP wiring: the orchestrator config
 // used via --mcp-config, and .claude/settings.local.json so a bare `claude`
 // typed by hand in the mission dir picks the server up without prompts.
-func WriteMCPConfig(m *mission.Mission) error {
-	cfg := mcpConfig{MCPServers: map[string]mcpServerEntry{
-		"ox": {
+// External servers from ox.yaml mcp.extra (Notion, Slack, ...) ride along for
+// the orchestrator only.
+func WriteMCPConfig(c *config.Config, m *mission.Mission) error {
+	cfg := mcpConfig{MCPServers: map[string]any{
+		"ox": mcpServerEntry{
 			Command: oxBinary(),
 			Args:    []string{"mcp", "--mission", m.ID, "--role", "orchestrator"},
 		},
 	}}
+	for name, entry := range c.MCP.Extra {
+		if name == "ox" {
+			continue
+		}
+		cfg.MCPServers[name] = entry
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -77,8 +86,8 @@ func WriteWorkerMCPConfig(m *mission.Mission, agentID string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	cfg := mcpConfig{MCPServers: map[string]mcpServerEntry{
-		"ox": {
+	cfg := mcpConfig{MCPServers: map[string]any{
+		"ox": mcpServerEntry{
 			Command: oxBinary(),
 			Args:    []string{"mcp", "--mission", m.ID, "--role", "worker", "--agent", agentID},
 		},

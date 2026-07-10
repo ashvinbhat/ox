@@ -54,6 +54,14 @@ type BudgetsConfig struct {
 	Enforce bool `yaml:"enforce"`
 }
 
+// MCPConfig adds external MCP servers to orchestrator sessions. Entries are
+// raw .mcp.json server objects passed through verbatim (e.g.
+// {type: http, url: https://mcp.notion.com/mcp}). Workers never get them —
+// their tool surface stays minimal by design.
+type MCPConfig struct {
+	Extra map[string]map[string]any `yaml:"extra,omitempty"`
+}
+
 // ModelsConfig routes roles to model tiers for the harness.
 type ModelsConfig struct {
 	Orchestrator   string            `yaml:"orchestrator,omitempty"`    // default opus
@@ -76,6 +84,7 @@ type Config struct {
 	Memory           MemoryConfig           `yaml:"memory,omitempty"`
 	Models           ModelsConfig           `yaml:"models,omitempty"`
 	Budgets          BudgetsConfig          `yaml:"budgets,omitempty"`
+	MCP              MCPConfig              `yaml:"mcp,omitempty"`
 	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
 }
 
