@@ -199,7 +199,7 @@ func runPickup(cmd *cobra.Command, args []string) error {
 	linkYokeDocs(ws.Path)
 
 	if t.Status != yokecli.StatusInProgress {
-		if err := yokecli.Start(t.ID); err != nil {
+		if err := yokecli.Start(fmt.Sprintf("%d", t.Seq)); err != nil {
 			fmt.Printf("Warning: failed to update task status: %v\n", err)
 		}
 	}

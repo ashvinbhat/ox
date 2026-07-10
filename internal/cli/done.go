@@ -90,7 +90,7 @@ func runDone(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		fmt.Printf("Warning: task not found in yoke: %v\n", err)
 	} else {
-		if err := yokecli.Done(t.ID, doneReason); err != nil {
+		if err := yokecli.Done(fmt.Sprintf("%d", t.Seq), doneReason); err != nil {
 			fmt.Printf("Warning: failed to mark task done: %v\n", err)
 		} else {
 			fmt.Println("Task marked as done in yoke")

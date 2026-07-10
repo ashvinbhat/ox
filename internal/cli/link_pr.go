@@ -51,7 +51,7 @@ func runLinkPR(cmd *cobra.Command, args []string) error {
 	}
 
 	// Dedupe against existing notes.
-	notes, _ := yokecli.Notes(t.ID)
+	notes, _ := yokecli.Notes(fmt.Sprintf("%d", t.Seq))
 	for _, n := range notes {
 		if strings.Contains(n.Content, prURL) {
 			fmt.Printf("PR already linked to task #%d (note already references %s)\n", t.Seq, prURL)
@@ -64,7 +64,7 @@ func runLinkPR(cmd *cobra.Command, args []string) error {
 		label = "pr"
 	}
 	note := fmt.Sprintf("PR (%s): %s", label, prURL)
-	if err := yokecli.AddNote(t.ID, note); err != nil {
+	if err := yokecli.AddNote(fmt.Sprintf("%d", t.Seq), note); err != nil {
 		return fmt.Errorf("add note to task: %w", err)
 	}
 	fmt.Printf("✓ Linked %s to task #%d (%s)\n", prURL, t.Seq, t.Title)

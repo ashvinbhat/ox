@@ -80,14 +80,14 @@ func LinkPR(m *mission.Mission, repo, prURL string) {
 	m.AppendEvent("pr_linked", "orchestrator", map[string]any{"repo": repo, "url": prURL})
 
 	if m.Yoke != nil {
-		if notes, err := yokecli.Notes(m.Yoke.ID); err == nil {
+		if notes, err := yokecli.Notes(fmt.Sprintf("%d", m.Yoke.Seq)); err == nil {
 			for _, n := range notes {
 				if strings.Contains(n.Content, prURL) {
 					return
 				}
 			}
 		}
-		yokecli.AddNote(m.Yoke.ID, fmt.Sprintf("PR (%s): %s", repo, prURL))
+		yokecli.AddNote(fmt.Sprintf("%d", m.Yoke.Seq), fmt.Sprintf("PR (%s): %s", repo, prURL))
 	}
 }
 

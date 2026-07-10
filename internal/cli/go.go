@@ -102,7 +102,7 @@ func goYokeTask(oxHome, ref string) error {
 	}
 
 	if t.Status != yokecli.StatusInProgress {
-		if err := yokecli.Start(t.ID); err != nil {
+		if err := yokecli.Start(fmt.Sprintf("%d", t.Seq)); err != nil {
 			fmt.Printf("Warning: failed to start task: %v\n", err)
 		}
 	}
@@ -138,7 +138,7 @@ func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD 
 	fmt.Printf("  Playbook: %s · Orchestrator: %s\n", m.Type, m.Orchestrator.Model)
 
 	if yoke != nil {
-		yokecli.AddNote(yoke.ID, fmt.Sprintf("[mission %s opened] playbook=%s", m.ID, m.Type))
+		yokecli.AddNote(fmt.Sprintf("%d", yoke.Seq), fmt.Sprintf("[mission %s opened] playbook=%s", m.ID, m.Type))
 	}
 
 	return launchMission(oxHome, m, false)

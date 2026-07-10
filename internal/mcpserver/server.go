@@ -207,7 +207,7 @@ func (s *Server) registerCommon(srv *mcp.Server) {
 		})
 		m.AppendEvent("checkpoint", s.actor(), map[string]any{"id": cp.ID, "done": in.Done})
 		if m.Yoke != nil {
-			yokecli.AddNote(m.Yoke.ID, cp.ToYokeNote())
+			yokecli.AddNote(fmt.Sprintf("%d", m.Yoke.Seq), cp.ToYokeNote())
 		}
 		return nil, checkpointOut{CheckpointID: cp.ID}, nil
 	})

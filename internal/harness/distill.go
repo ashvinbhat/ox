@@ -59,7 +59,7 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 		if _, err := os.Stat(summaryPath); err == nil {
 			note += " Summary: " + summaryPath
 		}
-		yokecli.AddNote(m.Yoke.ID, note)
+		yokecli.AddNote(fmt.Sprintf("%d", m.Yoke.Seq), note)
 	}
 
 	m.AppendEvent("mission_closed", "system", map[string]any{"outcome": m.Outcome})
