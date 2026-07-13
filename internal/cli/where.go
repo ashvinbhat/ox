@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -52,7 +56,7 @@ Scripting: --repo prints just that repo's integration path, so
 
 		fmt.Printf("Mission %s — %s\n", m.ID, m.Goal)
 		fmt.Printf("  dir:        %s\n", m.Dir())
-		fmt.Printf("  plan:       %s/plan.md\n", m.Dir())
+		printMissionFiles(m)
 
 		if len(m.Repos) == 0 {
 			fmt.Println("  repos:      (none bound yet)")
@@ -96,6 +100,76 @@ Scripting: --repo prints just that repo's integration path, so
 		}
 		return nil
 	},
+}
+
+// whereInfra is harness plumbing that would drown the actual deliverables.
+var whereInfra = map[string]bool{
+	"AGENTS.md": true, "orchestrator-prompt.md": true, "mission.yaml": true,
+	"events.jsonl": true, "ledger.jsonl": true, "agents.json": true,
+	"jobs.json": true, "watcher-state.json": true, "hook-cursor": true,
+}
+
+// printMissionFiles lists what the mission has produced — top-level artifacts
+// (plan, findings, decisions, anything ad-hoc) plus worker outputs, newest
+// first, so "where is the doc it wrote" has a one-command answer.
+func printMissionFiles(m *mission.Mission) {
+	type artifact struct {
+		name string
+		mod  time.Time
+		size int64
+	}
+	var files []artifact
+
+	entries, err := os.ReadDir(m.Dir())
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() || whereInfra[e.Name()] || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if info, err := e.Info(); err == nil {
+			files = append(files, artifact{e.Name(), info.ModTime(), info.Size()})
+		}
+	}
+	if reg, err := harness.LoadRegistry(m); err == nil {
+		for id := range reg.Workers {
+			rel := filepath.Join("workers", id, "output.md")
+			if info, err := os.Stat(filepath.Join(m.Dir(), rel)); err == nil {
+				files = append(files, artifact{rel, info.ModTime(), info.Size()})
+			}
+		}
+	}
+	if len(files) == 0 {
+		return
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
+
+	fmt.Println("  files (newest first):")
+	for _, f := range files {
+		fmt.Printf("    %-40s %7s   %s\n", f.name, humanSize(f.size), humanAge(f.mod))
+	}
+}
+
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1fMB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.0fKB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%dB", n)
+}
+
+func humanAge(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 }
 
 // branchMerged reports whether branch is an ancestor of the integration
