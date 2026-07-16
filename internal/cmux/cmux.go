@@ -164,6 +164,11 @@ func SyncMission(cfg *config.Config, m *mission.Mission) {
 	}
 
 	run("set-status", "phase", m.Phase, "--workspace", ws, "--icon", "gearshape", "--color", "#7aa2f7")
+	if reason := harness.PendingOnUser(m); reason != "" {
+		run("set-status", "attn", reason, "--workspace", ws, "--icon", "person.fill", "--color", "#e0af68", "--priority", "1")
+	} else {
+		run("clear-status", "attn", "--workspace", ws)
+	}
 
 	reg, err := harness.LoadRegistry(m)
 	if err != nil {
