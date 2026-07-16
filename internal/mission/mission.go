@@ -113,12 +113,27 @@ func Create(oxHome, typ, goal string, yoke *YokeRef, model, sessionID string) (*
 		return nil, fmt.Errorf("create missions root: %w", err)
 	}
 
-	seq, err := nextSeq(root)
-	if err != nil {
-		return nil, err
+	// Task-backed missions adopt the task's number (task #139 → m139) so the
+	// two ids never diverge; ad-hoc missions draw from the counter, skipping
+	// ids a task already claimed. Reopened tasks get a lettered suffix.
+	var id string
+	if yoke != nil && yoke.Seq > 0 {
+		id = fmt.Sprintf("m%d", yoke.Seq)
+		for suffix := 'b'; idTaken(root, id); suffix++ {
+			id = fmt.Sprintf("m%d%c", yoke.Seq, suffix)
+		}
+	} else {
+		for {
+			seq, err := nextSeq(root)
+			if err != nil {
+				return nil, err
+			}
+			id = fmt.Sprintf("m%d", seq)
+			if !idTaken(root, id) {
+				break
+			}
+		}
 	}
-
-	id := fmt.Sprintf("m%d", seq)
 	slug := slugify(goal)
 	dir := filepath.Join(root, id+"-"+slug)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -287,6 +302,13 @@ func findDir(oxHome, id string) (string, error) {
 func seqOf(id string) int {
 	n, _ := strconv.Atoi(strings.TrimPrefix(id, "m"))
 	return n
+}
+
+// idTaken reports whether a mission directory already claims this id — the
+// glob is anchored with "-" so m13 doesn't match m139's dir.
+func idTaken(root, id string) bool {
+	matches, _ := filepath.Glob(filepath.Join(root, id+"-*"))
+	return len(matches) > 0
 }
 
 // nextSeq increments the counter file under the root lock so concurrent
