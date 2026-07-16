@@ -31,6 +31,9 @@ const (
 	idleAfter = 10 * time.Minute
 	prEvery   = 36 // PR polling every 36th tick (~3 min)
 	reapGrace = 30 * time.Minute
+	// compactAdviseTokens is when the orchestrator's context is large enough
+	// to suggest compacting — ~80% of a 1M-token window. Advisory only.
+	compactAdviseTokens = 800_000
 )
 
 type state struct {
@@ -236,7 +239,7 @@ func (w *Watcher) tailSession(cwd, sessionID, model string) (float64, int64, tim
 // itself; that fights the user and the slash-command menu. The orc (or the
 // user) decides when.
 func (w *Watcher) adviseCompaction(m *mission.Mission, ctxTokens int64) {
-	if ctxTokens < 300_000 || w.st.ContextWarned {
+	if ctxTokens < compactAdviseTokens || w.st.ContextWarned {
 		return
 	}
 	w.st.ContextWarned = true
