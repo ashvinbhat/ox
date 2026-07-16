@@ -603,12 +603,16 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 
 	needsAction := 0
 	maxN := w.st.EventCursor
+	headline := ""
 	for _, ev := range events {
 		if ev.N > maxN {
 			maxN = ev.N
 		}
 		if eventNeedsAction(ev) {
 			needsAction++
+			if headline == "" {
+				headline = eventLine(ev)
+			}
 		}
 	}
 
@@ -634,13 +638,19 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 		return
 	}
 
-	msg := fmt.Sprintf("⚡ ox: %d mission event(s) need attention — review the attached events and act per your playbook.", needsAction)
+	if len(headline) > 110 {
+		headline = headline[:110] + "…"
+	}
+	if needsAction > 1 {
+		headline = fmt.Sprintf("%s (+%d more)", headline, needsAction-1)
+	}
+	msg := fmt.Sprintf("⚡ ox: %s — review the attached events and act per your playbook.", headline)
 	if err := harness.SendMessageEnsured(target, msg); err != nil {
 		fmt.Printf("watcher: wake-up failed: %v\n", err)
 		return
 	}
 	fmt.Printf("watcher: woke orchestrator (%d action event(s))\n", needsAction)
-	cmux.Notify(m, fmt.Sprintf("ox ⚡ %s needs attention", m.ID), fmt.Sprintf("%d mission event(s) — orchestrator woken", needsAction))
+	cmux.Notify(m, fmt.Sprintf("ox ⚡ %s needs attention", m.ID), headline)
 	w.st.EventCursor = maxN
 	w.st.LastInjectionAt = time.Now()
 	w.saveState(m)
