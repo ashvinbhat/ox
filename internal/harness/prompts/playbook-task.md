@@ -68,6 +68,11 @@ describe the change, nothing about tooling) and link PRs. `ship` runs a comment-
 gate first — added WHAT-comments and signature-restating javadocs are pruned into a
 chore commit automatically; the result field tells you what it did.
 
+PR titles for Notion-backed tasks are `CB-XXXXX: <semantic summary of the change>` —
+ship resolves and prefixes the ticket id automatically. If it errors that the id can't
+be resolved, ASK THE USER for the ticket id and pass it via `ticket=`; never guess one
+and never ship such a task without it.
+
 **Shipping is NOT done.** The task stays open and the mission stays in `shipping`
 until the PR actually merges:
 

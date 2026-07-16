@@ -22,8 +22,9 @@ type mergeAgentsOut struct {
 type shipIn struct {
 	Repos   []string `json:"repos,omitempty" jsonschema:"default: all bound repos"`
 	Draft   bool     `json:"draft,omitempty"`
-	Title   string   `json:"title,omitempty" jsonschema:"PR title — describe the change, never the tooling"`
+	Title   string   `json:"title,omitempty" jsonschema:"PR title — semantic summary of the change, never the tooling. Notion-backed tasks get their ticket id prefixed automatically"`
 	Body    string   `json:"body,omitempty" jsonschema:"PR body markdown — same rule"`
+	Ticket  string   `json:"ticket,omitempty" jsonschema:"external ticket id like CB-14817 — pass it when ship reports it cannot resolve one; ask the user, never guess"`
 	Confirm bool     `json:"confirm" jsonschema:"must be true — this pushes and opens PRs. Requires explicit user approval first."`
 }
 type shipOut struct {
@@ -68,7 +69,10 @@ func (s *Server) registerIntegrateTools(srv *mcp.Server) {
 		if !slices.Contains([]string{"reviewing", "shipping"}, m.Phase) {
 			return nil, shipOut{}, fmt.Errorf("ship is phase-gated: current phase %q — move to reviewing/shipping first (update_mission)", m.Phase)
 		}
-		results := harness.Ship(s.cfg, m, in.Repos, in.Draft, in.Title, in.Body)
+		results, err := harness.Ship(s.cfg, m, in.Repos, in.Draft, in.Title, in.Body, in.Ticket)
+		if err != nil {
+			return nil, shipOut{}, err
+		}
 		return nil, shipOut{Results: results}, nil
 	})
 

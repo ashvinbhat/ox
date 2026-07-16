@@ -22,12 +22,26 @@ type ShipResult struct {
 
 // Ship pushes each bound repo's integration branch and opens a PR. Titles and
 // bodies describe the change only — nothing about the tooling leaks out.
-func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, title, body string) []ShipResult {
+// Notion-backed tasks must carry their ticket id as the title prefix
+// ("CB-14817: ..."); ErrTicketUnknown asks the caller to get it from the user.
+func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, title, body, ticket string) ([]ShipResult, error) {
 	if title == "" {
 		title = m.Goal
 	}
 	if body == "" {
 		body = fmt.Sprintf("## Summary\n%s\n", m.Goal)
+	}
+
+	if ticket == "" {
+		ticket = ResolveTicket(m)
+	}
+	switch {
+	case ticket != "":
+		if !strings.HasPrefix(title, ticket+":") {
+			title = fmt.Sprintf("%s: %s", ticket, strings.TrimSpace(ticketRe.ReplaceAllString(title, "")))
+		}
+	case m.Yoke != nil && taskIsNotionLinked(m):
+		return nil, fmt.Errorf("this task is Notion-linked but its ticket id could not be resolved — ask the user for the ticket id (like CB-14817) and pass it as ticket=")
 	}
 
 	targets := repos
@@ -61,7 +75,16 @@ func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, ti
 
 		LinkPR(m, name, prURL)
 	}
-	return results
+	return results, nil
+}
+
+// taskIsNotionLinked reports whether the mission's task tracks a Notion page.
+func taskIsNotionLinked(m *mission.Mission) bool {
+	t, err := yokecli.Get(fmt.Sprintf("%d", m.Yoke.Seq))
+	if err != nil {
+		return false
+	}
+	return t.NotionURL != nil && *t.NotionURL != ""
 }
 
 // LinkPR records a PR on the mission and, when a task is linked, as a
