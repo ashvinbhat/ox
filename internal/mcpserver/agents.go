@@ -18,9 +18,10 @@ import (
 // ---- worker tools ----
 
 type reportDoneIn struct {
-	Summary string   `json:"summary" jsonschema:"what you did, files touched, how to verify, open items"`
-	Outputs []string `json:"outputs,omitempty" jsonschema:"paths of artifacts produced"`
-	Learned string   `json:"learned,omitempty" jsonschema:"one durable insight worth remembering, if any"`
+	Summary      string   `json:"summary" jsonschema:"what you did, files touched, open items"`
+	Verification string   `json:"verification" jsonschema:"proof it works: the exact build/test commands you ran and their results. 'not verifiable because <reason>' is acceptable; empty is not"`
+	Outputs      []string `json:"outputs,omitempty" jsonschema:"paths of artifacts produced"`
+	Learned      string   `json:"learned,omitempty" jsonschema:"one durable insight worth remembering, if any"`
 }
 type reportDoneOut struct {
 	OK bool `json:"ok"`
@@ -39,6 +40,9 @@ func (s *Server) registerWorkerTools(srv *mcp.Server) {
 		if strings.TrimSpace(in.Summary) == "" {
 			return nil, reportDoneOut{}, fmt.Errorf("summary required")
 		}
+		if strings.TrimSpace(in.Verification) == "" {
+			return nil, reportDoneOut{}, fmt.Errorf("verification required: run the repo's build/tests for what you changed and report the commands + results — or state explicitly why it isn't verifiable")
+		}
 		m, err := s.openMission()
 		if err != nil {
 			return nil, reportDoneOut{}, err
@@ -46,6 +50,8 @@ func (s *Server) registerWorkerTools(srv *mcp.Server) {
 
 		var out strings.Builder
 		out.WriteString(in.Summary)
+		out.WriteString("\n\n## Verification\n")
+		out.WriteString(in.Verification)
 		if len(in.Outputs) > 0 {
 			out.WriteString("\n\n## Outputs\n")
 			for _, p := range in.Outputs {

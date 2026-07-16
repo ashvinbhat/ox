@@ -49,7 +49,8 @@ with maker≠checker discipline:
 
 - **The maker never approves its own work.** Whoever wrote the code (a worker, or you
   inline), the check comes from different eyes: the reviewer panel on the integration
-  diff for meaningful changes, at minimum a verification `run_job` for trivial ones.
+  diff for meaningful changes; for small diffs a single `run_job` with the `verifier`
+  persona (adversarial — it tries to refute the change against its claims).
 - **Verify the real surface.** Run the actual build/tests in the integration worktree;
   for UI or user-visible behavior, exercise the real thing — a green proxy (a byte-grep,
   a mocked path, "the code looks right") is worse than no check. If the real surface

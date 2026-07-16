@@ -30,7 +30,11 @@ milestones, and what you're waiting on. Signal on real events only.
 
 ## Finishing (mandatory sequence)
 
-1. Verify your work (build, run the relevant tests).
+1. Verify your work for real: run the repo's build and the tests covering what
+   you changed, and capture the commands + results. "It should work" is not
+   verification; `report_done` refuses empty verification. If something truly
+   can't be verified from your seat, say exactly why.
 2. Commit everything. Uncommitted work is lost work.
-3. Call `report_done` with: what you did, files touched, how to verify, open items.
+3. Call `report_done` with: what you did, files touched, the verification
+   evidence, open items.
 4. Run /exit.
