@@ -45,7 +45,6 @@ type state struct {
 	ContextWarned   bool              `json:"context_warned,omitempty"`
 	PRStates        map[string]string `json:"pr_states,omitempty"` // url → last seen state signature
 	OrcLastUserAt   time.Time         `json:"orc_last_user_at,omitempty"`
-	CompactedPhase  string            `json:"compacted_phase,omitempty"` // auto-compact at most once per phase
 }
 
 type Watcher struct {
@@ -231,35 +230,19 @@ func (w *Watcher) tailSession(cwd, sessionID, model string) (float64, int64, tim
 	return delta.CostUSD(model), ctxTokens, lastUserAt
 }
 
-// adviseCompaction warns once when the orchestrator's context grows past the
-// comfortable zone, then compacts it directly — at most once per phase, only
-// when the pane is idle and the user away. Durable state lives in mission
-// files, so compaction loses color, not truth.
+// adviseCompaction advises the orchestrator ONCE, only when its context is
+// genuinely large, that it should checkpoint and /compact at a natural
+// boundary. Advisory only — the watcher never types /compact into the pane
+// itself; that fights the user and the slash-command menu. The orc (or the
+// user) decides when.
 func (w *Watcher) adviseCompaction(m *mission.Mission, ctxTokens int64) {
-	if ctxTokens < 140_000 {
+	if ctxTokens < 300_000 || w.st.ContextWarned {
 		return
 	}
-	if !w.st.ContextWarned {
-		w.st.ContextWarned = true
-		m.AppendEvent("budget_warning", "system", map[string]any{
-			"detail": fmt.Sprintf("orchestrator context ~%dk tokens — checkpoint state to disk; the watcher will compact when idle", ctxTokens/1000),
-		})
-		return // give the orc one slow tick to checkpoint before compacting
-	}
-	if w.st.CompactedPhase == m.Phase {
-		return
-	}
-	target := m.TmuxSession() + ":orc"
-	if !w.userAway() || !injectSafe(target) {
-		return
-	}
-	msg := "/compact Preserve: current phase and plan decisions, in-flight workers/jobs and their status, pending user questions, user preferences and corrections. Durable state lives in the mission files — keep only what continuing seamlessly requires."
-	if err := harness.SendMessageEnsured(target, msg); err != nil {
-		return
-	}
-	w.st.CompactedPhase = m.Phase
-	m.AppendEvent("auto_compact", "system", map[string]any{"ctx_tokens": ctxTokens})
-	fmt.Printf("watcher: auto-compacted orchestrator (~%dk tokens, phase %s)\n", ctxTokens/1000, m.Phase)
+	w.st.ContextWarned = true
+	m.AppendEvent("budget_warning", "system", map[string]any{
+		"detail": fmt.Sprintf("orchestrator context ~%dk tokens is large — consider checkpointing and /compact at the next phase boundary (durable state is in the mission files)", ctxTokens/1000),
+	})
 }
 
 // enforceBudgets warns at 80%% of a worker budget, then asks the worker to
@@ -721,8 +704,6 @@ func eventLine(ev mission.Event) string {
 		return fmt.Sprintf("%s INTERRUPTED (worktree intact — respawn_agent to resume)", id)
 	case "agent_reaped":
 		return fmt.Sprintf("%s session closed (finished, idle) — respawn_agent revives it with full context", id)
-	case "auto_compact":
-		return "your context was compacted by the watcher — mission files remain the durable truth; re-read plan.md/checkpoint if anything feels missing"
 	case "agent_idle":
 		mins, _ := ev.Data["idle_min"].(float64)
 		return fmt.Sprintf("%s idle %dm", id, int(mins))
