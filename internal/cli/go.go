@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/ashvinbhat/ox/internal/cmux"
 	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/mission"
 	"github.com/ashvinbhat/ox/internal/personas"
@@ -172,6 +173,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 	// Windows are targeted by name, not index — user tmux configs often set
 	// base-index 1, so ":0" is not a safe target.
 	orcTarget := session + ":orc"
+	defer cmux.SyncMission(cfg, m)
 
 	freshStart := false
 	if !tmuxutil.HasSession(session) {

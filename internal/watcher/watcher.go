@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ashvinbhat/ox/internal/cmux"
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/costs"
 	"github.com/ashvinbhat/ox/internal/harness"
@@ -83,6 +84,7 @@ func (w *Watcher) Run() error {
 		}
 		if !m.Open() {
 			fmt.Println("watcher: mission closed, exiting")
+			cmux.CloseMission(m)
 			return nil
 		}
 
@@ -95,6 +97,7 @@ func (w *Watcher) Run() error {
 		n++
 		if n%slowEvery == 0 {
 			w.reapIdleWorkers(m)
+			cmux.SyncMission(w.cfg, m)
 			w.trackCosts(m)
 			if w.cfg.Budgets.Enforce {
 				w.enforceBudgets(m)
@@ -617,6 +620,7 @@ func (w *Watcher) pumpDigests(m *mission.Mission) {
 		return
 	}
 	fmt.Printf("watcher: woke orchestrator (%d action event(s))\n", needsAction)
+	cmux.Notify(m, fmt.Sprintf("ox ⚡ %s needs attention", m.ID), fmt.Sprintf("%d mission event(s) — orchestrator woken", needsAction))
 	w.st.EventCursor = maxN
 	w.st.LastInjectionAt = time.Now()
 	w.saveState(m)
