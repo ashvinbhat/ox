@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,11 +27,11 @@ import (
 )
 
 const (
-	tick      = 5 * time.Second
-	slowEvery = 6 // heartbeat every 6th tick
-	idleAfter = 10 * time.Minute
-	prEvery   = 36 // PR polling every 36th tick (~3 min)
-	reapGrace = 30 * time.Minute
+	tick       = 5 * time.Second
+	slowEvery  = 6 // heartbeat every 6th tick
+	idleAfter  = 10 * time.Minute
+	prInterval = 90 * time.Second
+	reapGrace  = 30 * time.Minute
 	// compactAdviseTokens is when the orchestrator's context is large enough
 	// to suggest compacting — ~80% of a 1M-token window. Advisory only.
 	compactAdviseTokens = 800_000
@@ -47,6 +48,7 @@ type state struct {
 	WorkerGraceAt   map[string]int64  `json:"worker_grace_at,omitempty"` // unix — wrap-up notice sent
 	ContextWarned   bool              `json:"context_warned,omitempty"`
 	PRStates        map[string]string `json:"pr_states,omitempty"` // url → last seen state signature
+	LastPRPollAt    time.Time         `json:"last_pr_poll_at,omitempty"`
 	OrcLastUserAt   time.Time         `json:"orc_last_user_at,omitempty"`
 }
 
@@ -108,8 +110,12 @@ func (w *Watcher) Run() error {
 			w.st.HeartbeatAt = time.Now()
 			w.saveState(m)
 		}
-		if n%prEvery == 0 {
+		// Wall-clock gated, not tick-counted: a watcher restart resets n but
+		// not the clock, so PR polling stays on cadence across restarts.
+		if time.Since(w.st.LastPRPollAt) >= prInterval {
 			w.trackPRs(m)
+			w.st.LastPRPollAt = time.Now()
+			w.saveState(m)
 		}
 		time.Sleep(tick)
 	}
@@ -117,7 +123,9 @@ func (w *Watcher) Run() error {
 
 // trackPRs polls linked PRs while the mission is in a shipped state and
 // surfaces review activity: the orchestrator stays responsible for the PR
-// until it merges.
+// until it merges. Comment count spans BOTH the conversation tab and inline
+// review comments — the latter (code-line feedback) is what reviewers
+// actually leave and gh pr view omits it.
 func (w *Watcher) trackPRs(m *mission.Mission) {
 	if m.Phase != "shipping" && m.Phase != "reviewing" {
 		return
@@ -139,11 +147,15 @@ func (w *Watcher) trackPRs(m *mission.Mission) {
 		if json.Unmarshal(out, &info) != nil {
 			continue
 		}
-		sig := fmt.Sprintf("%s/%s/c%d/r%d", info.State, info.ReviewDecision, len(info.Comments), len(info.Reviews))
-		if w.st.PRStates[pr.URL] == sig {
+		comments := len(info.Comments) + prReviewCommentCount(pr.URL)
+		reviews := len(info.Reviews)
+		sig := fmt.Sprintf("%s/%s/c%d/r%d", info.State, info.ReviewDecision, comments, reviews)
+		prev := w.st.PRStates[pr.URL]
+		if prev == sig {
 			continue
 		}
-		first := w.st.PRStates[pr.URL] == ""
+		first := prev == ""
+		prevComments := parsePrevComments(prev)
 		w.st.PRStates[pr.URL] = sig
 		w.saveState(m)
 		if first {
@@ -155,9 +167,13 @@ func (w *Watcher) trackPRs(m *mission.Mission) {
 			m.AppendEvent("pr_merged", "system", map[string]any{"url": pr.URL})
 		case info.ReviewDecision == "CHANGES_REQUESTED":
 			m.AppendEvent("pr_changes_requested", "system", map[string]any{"url": pr.URL})
+		case comments > prevComments:
+			m.AppendEvent("pr_comments", "system", map[string]any{
+				"url": pr.URL, "detail": fmt.Sprintf("%d new comment(s) — now %d comments, %d reviews", comments-prevComments, comments, reviews),
+			})
 		default:
 			m.AppendEvent("pr_activity", "system", map[string]any{
-				"url": pr.URL, "detail": fmt.Sprintf("%d comments, %d reviews, decision %s", len(info.Comments), len(info.Reviews), orDash(info.ReviewDecision)),
+				"url": pr.URL, "detail": fmt.Sprintf("%d comments, %d reviews, decision %s", comments, reviews, orDash(info.ReviewDecision)),
 			})
 		}
 	}
@@ -168,6 +184,50 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// prReviewCommentCount returns the number of inline (code-line) review
+// comments — the kind gh pr view --json comments omits. Best-effort: 0 on any
+// failure, so detection degrades to conversation comments only.
+func prReviewCommentCount(url string) int {
+	owner, repo, num := parsePRURL(url)
+	if num == "" {
+		return 0
+	}
+	out, err := exec.Command("gh", "api", "--paginate",
+		fmt.Sprintf("repos/%s/%s/pulls/%s/comments", owner, repo, num), "--jq", "length").Output()
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, line := range strings.Fields(string(out)) { // --paginate emits one length per page
+		if n, err := strconv.Atoi(line); err == nil {
+			total += n
+		}
+	}
+	return total
+}
+
+var prURLRe2 = regexp.MustCompile(`github\.com/([^/]+)/([^/]+)/pull/(\d+)`)
+
+func parsePRURL(url string) (owner, repo, num string) {
+	if mm := prURLRe2.FindStringSubmatch(url); mm != nil {
+		return mm[1], mm[2], mm[3]
+	}
+	return "", "", ""
+}
+
+// parsePrevComments extracts the comment count from a prior signature
+// ("STATE/DECISION/cN/rM") so a rise can be told from a fall.
+func parsePrevComments(sig string) int {
+	for _, part := range strings.Split(sig, "/") {
+		if n, ok := strings.CutPrefix(part, "c"); ok {
+			if v, err := strconv.Atoi(n); err == nil {
+				return v
+			}
+		}
+	}
+	return 0
 }
 
 // trackCosts tails every interactive transcript (orchestrator + workers) and
@@ -544,6 +604,7 @@ func (w *Watcher) checkIdle(m *mission.Mission) {
 var priorityEvents = map[string]bool{
 	"pr_merged":            true,
 	"pr_changes_requested": true,
+	"pr_comments":          true,
 	"agent_done":           true,
 	"agent_blocker":        true,
 	"agent_interrupted":    true,
@@ -730,6 +791,8 @@ func eventLine(ev mission.Event) string {
 		return fmt.Sprintf("PR MERGED: %v — wrap up (yoke done + close)", ev.Data["url"])
 	case "pr_changes_requested":
 		return fmt.Sprintf("PR CHANGES REQUESTED: %v — address the review", ev.Data["url"])
+	case "pr_comments":
+		return fmt.Sprintf("PR COMMENTS: %v — %v; read them (gh pr view --comments / gh api) and address", ev.Data["url"], ev.Data["detail"])
 	case "pr_activity":
 		return fmt.Sprintf("PR activity: %v (%v)", ev.Data["url"], ev.Data["detail"])
 	}
