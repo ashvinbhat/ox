@@ -118,8 +118,13 @@ func Start(cfg *config.Config, m *mission.Mission, in StartInput) (*Job, error) 
 	if in.Model == "" {
 		in.Model = cfg.JobModel()
 	}
+	// Jobs that read real code die around 15 turns — the audit trail is a
+	// graveyard of error_max_turns at 8-25. Default generously; floor
+	// explicit lowballs so an orchestrator's anchor bias can't starve a job.
 	if in.MaxTurns == 0 {
-		in.MaxTurns = 15
+		in.MaxTurns = 40
+	} else if in.MaxTurns < 20 {
+		in.MaxTurns = 20
 	}
 	if in.MaxBudgetUSD == 0 {
 		in.MaxBudgetUSD = m.Budgets.PerJobUSD

@@ -19,7 +19,7 @@ type runJobIn struct {
 	Model        string   `json:"model,omitempty" jsonschema:"haiku (default) | sonnet | opus"`
 	CWD          string   `json:"cwd,omitempty" jsonschema:"'repo:<name>' runs in the base clone; absolute path; default mission dir"`
 	AddDirs      []string `json:"add_dirs,omitempty" jsonschema:"extra directories the job may read"`
-	MaxTurns     int      `json:"max_turns,omitempty" jsonschema:"default 15"`
+	MaxTurns     int      `json:"max_turns,omitempty" jsonschema:"default 40, floor 20 — omit unless deliberately constraining; jobs that read code need 30+"`
 	MaxBudgetUSD float64  `json:"max_budget_usd,omitempty"`
 	ExpectJSON   bool     `json:"expect_json,omitempty" jsonschema:"fail the job if the result is not JSON"`
 	Wait         bool     `json:"wait,omitempty" jsonschema:"block until the job finishes (includes auto retry/escalation)"`
