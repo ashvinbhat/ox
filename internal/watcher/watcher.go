@@ -733,24 +733,31 @@ func injectSafe(target string) bool {
 	if err != nil {
 		return false
 	}
-	if strings.Contains(out, "esc to interrupt") {
-		return false
-	}
 	if !strings.Contains(out, "bypass permissions") && !strings.Contains(out, "shift+tab to cycle") {
 		return false
 	}
+	// Streaming does NOT block: claude queues messages typed mid-turn and
+	// delivers them when the turn ends — better than holding a wake-up for
+	// the length of a long turn. The only true blocker is a non-empty input
+	// line (the user mid-typing, or a menu's selection cursor).
 	// The input prompt is the last ❯ on screen; whatever renders below it
 	// (statusline, hints, artifact chips) is footer chrome that comes and
-	// goes with claude releases — enumerating it is a losing game. Menus
-	// stay safe because their selection cursor puts text after the ❯.
+	// goes with claude releases — enumerating it is a losing game.
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(line, "❯") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "❯")) == ""
+			return inputLineEmpty(line)
 		}
 	}
 	return false
+}
+
+// inputLineEmpty treats claude's own input-box hints as empty — they render
+// on the prompt line but are not typed text.
+func inputLineEmpty(promptLine string) bool {
+	content := strings.TrimSpace(strings.TrimPrefix(promptLine, "❯"))
+	return content == "" || strings.HasPrefix(content, "Press up to edit queued messages")
 }
 
 // EventLine renders one event as a user-facing line ("" = internal only).

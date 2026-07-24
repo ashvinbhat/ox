@@ -24,9 +24,9 @@ func SendMessageEnsured(target, msg string) error {
 		if err != nil {
 			return nil
 		}
-		if strings.Contains(out, "esc to interrupt") {
-			return nil // submitted, response streaming
-		}
+		// Input check comes FIRST: during streaming a sent message queues,
+		// but a swallowed Enter still strands it in the input box — the
+		// streaming indicator alone doesn't prove submission.
 		if !inputHolds(out, tail) {
 			return nil
 		}
@@ -44,7 +44,10 @@ func inputHolds(pane, tail string) bool {
 		line := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(line, "❯") {
 			content := strings.TrimSpace(strings.TrimPrefix(line, "❯"))
-			return content != "" && (strings.Contains(pane, tail) || len(content) > 3)
+			if content == "" || strings.HasPrefix(content, "Press up to edit queued messages") {
+				return false // empty, or claude's own hint — not typed text
+			}
+			return strings.Contains(pane, tail) || len(content) > 3
 		}
 	}
 	return false
