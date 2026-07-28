@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -129,6 +130,61 @@ var missionsPruneCmd = &cobra.Command{
 
 func init() {
 	missionsCmd.PersistentFlags().BoolVarP(&missionsAll, "all", "a", false, "Include closed missions")
-	missionsCmd.AddCommand(missionsListCmd, missionsDistillCmd, missionsPruneCmd)
+	missionsCloseCmd.Flags().StringVar(&closeOutcome, "outcome", "", "Outcome to record")
+	missionsCmd.AddCommand(missionsListCmd, missionsDistillCmd, missionsPruneCmd, missionsCloseCmd)
 	rootCmd.AddCommand(missionsCmd)
+}
+
+var closeOutcome string
+
+var missionsCloseCmd = &cobra.Command{
+	Use:   "close <mission-id | task-ref>",
+	Short: "Close a mission from outside (no live orchestrator needed)",
+	Long: `The same close path the orchestrator uses — refuses while workers run,
+records the outcome, then distills memories and reaps worktrees/sessions.
+For when the orchestrator session is gone or you just want it done.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := requireConfig()
+		var m *mission.Mission
+		var err error
+		if isAllDigits(args[0]) {
+			seq, _ := strconv.Atoi(args[0])
+			m, err = mission.FindByYokeSeq(cfg.Home, seq)
+		} else {
+			m, err = mission.Open(cfg.Home, args[0])
+		}
+		if err != nil {
+			return err
+		}
+		if !m.Open() {
+			fmt.Printf("%s is already closed (%s)\n", m.ID, m.Outcome)
+			return nil
+		}
+		if reg, err := harness.LoadRegistry(m); err == nil {
+			for id, w := range reg.Workers {
+				if w.Status == harness.WorkerRunning || w.Status == harness.WorkerBlocked {
+					return fmt.Errorf("cannot close: worker %s is %s — kill it or let it finish first", id, w.Status)
+				}
+			}
+		}
+		outcome := closeOutcome
+		if outcome == "" {
+			outcome = "Closed by user via ox missions close"
+		}
+		if _, err := mission.Update(cfg.Home, m.ID, func(mm *mission.Mission) error {
+			mm.Outcome = outcome
+			mm.SetPhase(mission.PhaseClosed, "user")
+			return nil
+		}); err != nil {
+			return err
+		}
+		m, _ = mission.Open(cfg.Home, m.ID)
+		if err := harness.CloseMission(cfg, m); err != nil {
+			fmt.Printf("warning: close cleanup: %v\n", err)
+		}
+		tmuxutil.KillSession(m.TmuxSession())
+		fmt.Printf("%s closed: %s\n", m.ID, outcome)
+		return nil
+	},
 }
