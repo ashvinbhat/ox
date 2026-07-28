@@ -117,7 +117,7 @@ func LinkPR(m *mission.Mission, repo, prURL string) {
 // CreatePR opens a PR via gh from the given worktree, or returns the existing
 // one for the branch.
 func CreatePR(worktree, title, body string, draft bool) (string, error) {
-	args := []string{"pr", "create", "--title", title, "--body", body}
+	args := []string{"pr", "create", "--title", title, "--body", body, "--label", "ready-for-review"}
 	if draft {
 		args = append(args, "--draft")
 	}

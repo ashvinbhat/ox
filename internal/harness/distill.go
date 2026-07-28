@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/config"
@@ -35,9 +36,17 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 		}
 	}
 
-	if err := RunDistiller(cfg, m); err != nil {
-		fmt.Fprintf(os.Stderr, "distiller: %v\n", err)
+	// Distillation is a minutes-long headless model call — detached so the
+	// close returns in seconds. An interrupted close used to strand the
+	// whole teardown behind a spinner the user would kill.
+	distill := exec.Command(oxBinary(), "missions", "distill", m.ID)
+	distill.SysProcAttr = detachedProc()
+	distill.Stdout, distill.Stderr = nil, nil
+	if err := distill.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "distiller launch: %v\n", err)
 		m.AppendEvent("distill_failed", "system", map[string]any{"error": err.Error()})
+	} else {
+		go distill.Wait()
 	}
 
 	if reg != nil {
@@ -90,7 +99,7 @@ func RunDistiller(cfg *config.Config, m *mission.Mission) error {
 
 	prompt := distillerPrompt(m, evidence)
 	j, err := job.Start(cfg, m, job.StartInput{
-		ID: "distiller", Prompt: prompt, Model: cfg.JobModel(),
+		ID: fmt.Sprintf("distiller-%d", time.Now().Unix()), Prompt: prompt, Model: cfg.JobModel(),
 		MaxTurns: 8, MaxBudgetUSD: 1.0, ExpectJSON: true,
 	})
 	if err != nil {
@@ -366,4 +375,10 @@ func removeWorktree(cfg *config.Config, repo, worktreePath string) {
 		os.RemoveAll(worktreePath)
 		return nil
 	})
+}
+
+// detachedProc lets a spawned process outlive its parent — the detached
+// distiller must survive the MCP server that launched it.
+func detachedProc() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{Setsid: true}
 }
