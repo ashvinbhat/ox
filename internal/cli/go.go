@@ -24,6 +24,7 @@ import (
 var (
 	goPlaybook string
 	goModel    string
+	goReopen   bool
 	goNoAttach bool
 )
 
@@ -97,6 +98,24 @@ func goYokeTask(oxHome, ref string) error {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
+	// A done task, or a closed mission already on this task, means it was
+	// handled — don't silently fork a duplicate mission. Surface it and let
+	// the user decide with --reopen.
+	if !goReopen {
+		if closed := latestClosedMission(oxHome, seq); closed != nil {
+			fmt.Printf("Task #%d already ran as mission %s (closed: %s)\n", seq, closed.ID, firstLine(closed.Outcome))
+			for _, pr := range closed.PRs {
+				fmt.Printf("  PR (%s): %s\n", pr.Repo, pr.URL)
+			}
+			fmt.Printf("\nNothing to resume. Re-run `ox go %s --reopen` to start a fresh mission on this task.\n", ref)
+			return nil
+		}
+		if t.Status == yokecli.StatusDone {
+			fmt.Printf("Task #%d is already done — `ox go %s --reopen` to work it again.\n", seq, ref)
+			return nil
+		}
+	}
+
 	taskMD, err := yokecli.ContextMarkdown(ref)
 	if err != nil {
 		fmt.Printf("Warning: could not load task context: %v\n", err)
@@ -109,6 +128,30 @@ func goYokeTask(oxHome, ref string) error {
 	}
 
 	return createMission(oxHome, goPlaybook, t.Title, &mission.YokeRef{ID: t.ID, Seq: t.Seq}, taskMD)
+}
+
+// latestClosedMission returns the newest closed mission for a yoke seq, or nil.
+func latestClosedMission(oxHome string, seq int) *mission.Mission {
+	missions, err := mission.List(oxHome)
+	if err != nil {
+		return nil
+	}
+	var found *mission.Mission
+	for _, m := range missions {
+		if m.Yoke != nil && m.Yoke.Seq == seq && !m.Open() {
+			if found == nil || m.CreatedAt.After(found.CreatedAt) {
+				found = m
+			}
+		}
+	}
+	return found
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD string) error {
@@ -324,6 +367,7 @@ func isAllDigits(s string) bool {
 func init() {
 	goCmd.Flags().StringVar(&goPlaybook, "playbook", "task", "Mission type (task, debug, or a custom playbook)")
 	goCmd.Flags().StringVar(&goModel, "model", "", "Orchestrator model override")
+	goCmd.Flags().BoolVar(&goReopen, "reopen", false, "Start a fresh mission even if the task is done / already ran")
 	goCmd.Flags().BoolVar(&goNoAttach, "no-attach", false, "Create/resume without attaching")
 	rootCmd.AddCommand(goCmd)
 }
