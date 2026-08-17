@@ -557,8 +557,16 @@ func kickWorker(session, msg string) {
 }
 
 func personaModel(cfg *config.Config, persona, fallback string) string {
+	// Explicit config override wins; then the persona's own declared tier
+	// (so a cheap persona like `fixer` resolves to its model without needing
+	// per-install config); then the caller's fallback.
 	if m, ok := cfg.Models.Personas[persona]; ok && m != "" {
 		return m
+	}
+	if reg, err := personas.LoadRegistry(cfg.Home); err == nil {
+		if p, ok := reg.Get(persona); ok && p.DefaultModel != "" {
+			return p.DefaultModel
+		}
 	}
 	return fallback
 }

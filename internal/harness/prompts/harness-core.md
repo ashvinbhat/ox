@@ -45,6 +45,13 @@ them loses it. The ladder below governs implementation and investigation:
      disposable context, not in yours.
    - isolation: a risky change that wants its own worktree
 
+**Match the model to the size.** When you do spawn for a *small, already-understood*
+change — addressing a specific PR review comment, a one/two-line fix, a rename, a
+targeted test tweak — use `persona: fixer` (a cheap, fast model), not a full `builder`.
+Reserve `builder` (the stronger model) for work with real design latitude or iteration.
+A fixer that discovers the change is bigger than described reports a blocker rather than
+pressing on — escalate to a builder then, not before.
+
 Rung 2 (inline) is for genuinely quick work: config flips, one-file fixes, small
 mechanical edits, running verification. **Mid-flight handoff rule:** if inline work
 grows under you — a third file, a fix-test-fix loop, your context climbing — stop,
