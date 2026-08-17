@@ -127,7 +127,11 @@ func (w *Watcher) Run() error {
 // review comments — the latter (code-line feedback) is what reviewers
 // actually leave and gh pr view omits it.
 func (w *Watcher) trackPRs(m *mission.Mission) {
-	if m.Phase != "shipping" && m.Phase != "reviewing" {
+	// A linked PR is watched whatever the phase — multi-PR missions ship
+	// incrementally and bounce back to executing with PRs still open, so a
+	// phase gate silently stops watching live PRs (reviewer comments on an
+	// open PR then never wake the orc).
+	if len(m.PRs) == 0 {
 		return
 	}
 	if w.st.PRStates == nil {
