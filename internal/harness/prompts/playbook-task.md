@@ -83,7 +83,9 @@ until the PR actually merges:
 - While the session is alive, the watcher tracks the PR and tells you about reviews
   and merges. On "changes requested" or review comments: address them (fix in the
   integration worktree, push — same branch updates the PR), reply where useful, and
-  re-run the checks that had passed.
+  re-run the checks that had passed. Straightforward comment fixes are either inline
+  (rung 2) or a `fixer` (cheap model) — don't spin a full builder for a one-line
+  review nit.
 
 ## closed
 Only after the PR merges (or the user explicitly decides to stop): `yoke done` with the
