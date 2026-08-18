@@ -98,22 +98,34 @@ func goYokeTask(oxHome, ref string) error {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
-	// A done task, or a closed mission already on this task, means it was
-	// handled — don't silently fork a duplicate mission. Surface it and let
-	// the user decide with --reopen.
-	if !goReopen {
-		if closed := latestClosedMission(oxHome, seq); closed != nil {
+	// A closed mission on this task is the thing to reopen — resume its
+	// orchestrator conversation, don't fork a blank duplicate. Without
+	// --reopen, surface it and stop rather than silently starting fresh.
+	if closed := latestClosedMission(oxHome, seq); closed != nil {
+		if !goReopen {
 			fmt.Printf("Task #%d already ran as mission %s (closed: %s)\n", seq, closed.ID, firstLine(closed.Outcome))
 			for _, pr := range closed.PRs {
 				fmt.Printf("  PR (%s): %s\n", pr.Repo, pr.URL)
 			}
-			fmt.Printf("\nNothing to resume. Re-run `ox go %s --reopen` to start a fresh mission on this task.\n", ref)
+			fmt.Printf("\nNothing to resume. Re-run `ox go %s --reopen` to reopen that mission with its full context.\n", ref)
 			return nil
 		}
-		if t.Status == yokecli.StatusDone {
-			fmt.Printf("Task #%d is already done — `ox go %s --reopen` to work it again.\n", seq, ref)
-			return nil
+		if _, err := mission.Reopen(oxHome, closed.ID); err != nil {
+			return fmt.Errorf("reopen mission %s: %w", closed.ID, err)
 		}
+		yokecli.Start(fmt.Sprintf("%d", seq)) // best-effort: flip the task back to in-progress
+		m, err := mission.Open(oxHome, closed.ID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Reopened mission %s for task #%d — resuming orchestrator with full context\n", m.ID, seq)
+		return launchMission(oxHome, m, true)
+	}
+
+	// No closed mission, but the task itself is done: don't fork unless asked.
+	if t.Status == yokecli.StatusDone && !goReopen {
+		fmt.Printf("Task #%d is already done — `ox go %s --reopen` to work it again.\n", seq, ref)
+		return nil
 	}
 
 	taskMD, err := yokecli.ContextMarkdown(ref)

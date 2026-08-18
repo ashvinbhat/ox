@@ -216,6 +216,28 @@ func (m *Mission) SetPhase(phase, by string) {
 	}
 }
 
+// Reopen clears a mission's closed state and restores the phase it held
+// before closing, so `ox go <task> --reopen` can resume the same orchestrator
+// conversation instead of forking a fresh mission. No-op if already open.
+func Reopen(oxHome, id string) (*Mission, error) {
+	return Update(oxHome, id, func(m *Mission) error {
+		if m.Open() {
+			return nil
+		}
+		prev := PhaseGathering
+		for _, ph := range m.PhaseHistory {
+			if ph.Phase != PhaseClosed {
+				prev = ph.Phase
+			}
+		}
+		m.ClosedAt = nil
+		m.Outcome = ""
+		m.Phase = prev
+		m.PhaseHistory = append(m.PhaseHistory, PhaseChange{Phase: prev, At: time.Now(), By: "reopen"})
+		return nil
+	})
+}
+
 // Open loads a mission by ID (e.g. "m17").
 func Open(oxHome, id string) (*Mission, error) {
 	dir, err := findDir(oxHome, id)
