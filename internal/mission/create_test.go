@@ -47,3 +47,35 @@ func TestCreateAdoptsTaskSeq(t *testing.T) {
 		t.Errorf("collision ID = %s, want m140 (skipping taken m139)", skip.ID)
 	}
 }
+
+func TestReopenRestoresPriorPhase(t *testing.T) {
+	home := t.TempDir()
+	m, err := Create(home, "task", "reopen me", &YokeRef{ID: "z1", Seq: 55}, "opus", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.SetPhase("executing", "test")
+	m.SetPhase("shipping", "test")
+	m.SetPhase(PhaseClosed, "test")
+	m.Outcome = "shipped"
+	if err := m.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if m.Open() {
+		t.Fatal("expected closed before reopen")
+	}
+
+	re, err := Reopen(home, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !re.Open() {
+		t.Error("mission should be open after reopen")
+	}
+	if re.Phase != "shipping" {
+		t.Errorf("phase = %s, want shipping (last non-closed)", re.Phase)
+	}
+	if re.Outcome != "" {
+		t.Errorf("outcome should be cleared, got %q", re.Outcome)
+	}
+}
