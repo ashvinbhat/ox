@@ -18,7 +18,6 @@ import (
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/mission"
-	"github.com/ashvinbhat/ox/internal/tmuxutil"
 )
 
 const maxAutoSplits = 3
@@ -176,7 +175,10 @@ func SyncMission(cfg *config.Config, m *mission.Mission) {
 	}
 	live := map[string]string{} // worker id → tmux session
 	for id, w := range reg.Workers {
-		if tmuxutil.HasSession(w.TmuxSession) {
+		// Only session-mode workers get their own cmux split; paned workers
+		// already show inside the mission's own window (attach takes a
+		// session, not a pane id).
+		if w.Alive() && !w.Paned() {
 			live[id] = w.TmuxSession
 		}
 	}

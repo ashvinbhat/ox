@@ -39,6 +39,7 @@ type Worker struct {
 	Repo         string     `json:"repo"`
 	Status       string     `json:"status"`
 	TmuxSession  string     `json:"tmux_session"`
+	TmuxPane     string     `json:"tmux_pane,omitempty"` // set in pane layout: agent is a pane (%N) in the mission session, not its own session
 	WorktreePath string     `json:"worktree_path"`
 	BranchName   string     `json:"branch_name"`
 	SessionIDs   []string   `json:"session_ids"`
@@ -55,6 +56,39 @@ type Worker struct {
 
 func (w *Worker) Finished() bool {
 	return w.Status == WorkerDone || w.Status == WorkerFailed || w.Status == WorkerKilled
+}
+
+// Paned reports whether this worker lives as a pane in the mission session
+// (pane layout) rather than its own tmux session. The pane id's presence is
+// the mode flag — workers created before pane layout have none and stay
+// session-based, so the two models coexist safely.
+func (w *Worker) Paned() bool { return w.TmuxPane != "" }
+
+// Target is the tmux address for send-keys / capture-pane / etc.
+func (w *Worker) Target() string {
+	if w.Paned() {
+		return w.TmuxPane
+	}
+	return w.TmuxSession
+}
+
+// Alive reports whether the worker's tmux surface still exists.
+func (w *Worker) Alive() bool {
+	if w.Paned() {
+		return tmuxutil.PaneAlive(w.TmuxPane)
+	}
+	return tmuxutil.HasSession(w.TmuxSession)
+}
+
+// Teardown closes the worker's tmux surface: its pane, or its whole session.
+func (w *Worker) Teardown() {
+	if w.Paned() {
+		tmuxutil.KillPane(w.TmuxPane)
+		return
+	}
+	if tmuxutil.HasSession(w.TmuxSession) {
+		tmuxutil.KillSession(w.TmuxSession)
+	}
 }
 
 func (w *Worker) LastSessionID() string {
@@ -227,17 +261,33 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 
 	sessionID := uuid.NewString()
 
-	if tmuxutil.HasSession(w.TmuxSession) {
-		tmuxutil.KillSession(w.TmuxSession)
+	// Pane layout: the worker is a tiled pane in the mission session, so it
+	// sits on one screen beside the orchestrator. Session layout (default):
+	// its own session. The chosen surface's target then drives every
+	// downstream tmux call uniformly via w.Target().
+	pane := ""
+	if cfg.PaneLayout() && tmuxutil.HasSession(m.TmuxSession()) {
+		p, err := tmuxutil.EnsureAgentPane(m.TmuxSession(), "agents", w.WorktreePath)
+		if err != nil {
+			return fmt.Errorf("worker pane: %w", err)
+		}
+		pane = p
+		tmuxutil.SetPaneTitle(pane, w.ID)
+	} else {
+		if tmuxutil.HasSession(w.TmuxSession) {
+			tmuxutil.KillSession(w.TmuxSession)
+		}
+		if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
+			return fmt.Errorf("worker tmux session: %w", err)
+		}
+		tmuxutil.RenameWindow(w.TmuxSession, w.ID)
+		tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
+		tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
 	}
-	if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
-		return fmt.Errorf("worker tmux session: %w", err)
-	}
-	tmuxutil.RenameWindow(w.TmuxSession, w.ID)
-	tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
-	tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
+	w.TmuxPane = pane
+	target := w.Target()
 
-	if err := tmuxutil.SendKeys(w.TmuxSession, workerClaudeCmd(m, w, sessionID, "")); err != nil {
+	if err := tmuxutil.SendKeys(target, workerClaudeCmd(m, w, sessionID, "")); err != nil {
 		return fmt.Errorf("launch worker claude: %w", err)
 	}
 
@@ -247,6 +297,7 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 			return fmt.Errorf("worker %q vanished from registry", w.ID)
 		}
 		cur.Status = WorkerRunning
+		cur.TmuxPane = pane
 		cur.SessionIDs = append(cur.SessionIDs, sessionID)
 		cur.FinishedAt = nil
 		*w = *cur
@@ -261,7 +312,7 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 		briefRef = workerFile(m, w.ID, "AGENTS.md")
 		doneVerb = "call report_done"
 	}
-	go kickWorker(w.TmuxSession,
+	go kickWorker(target,
 		fmt.Sprintf("You are worker '%s'. Read %s for your brief, then BEGIN IMMEDIATELY. When completely done: %s, then /exit. Do not ask for confirmation.", w.ID, briefRef, doneVerb))
 
 	m.AppendEvent("agent_started", "system", map[string]any{"id": w.ID, "session": sessionID})
@@ -274,8 +325,8 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 // tmux session with a dead claude (worker ran /exit, shell survived) is
 // reused rather than treated as "already running".
 func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraContext string) error {
-	sessionAlive := tmuxutil.HasSession(w.TmuxSession)
-	if sessionAlive && ClaudeAlive(w.TmuxSession) {
+	surfaceAlive := w.Alive()
+	if surfaceAlive && ClaudeAlive(w.Target()) {
 		return fmt.Errorf("worker %q is already running", w.ID)
 	}
 	if _, err := os.Stat(w.WorktreePath); err != nil {
@@ -285,25 +336,40 @@ func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraConte
 	prev := w.LastSessionID()
 	fresh := uuid.NewString()
 
-	if !sessionAlive {
-		if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
-			return fmt.Errorf("worker tmux session: %w", err)
+	// A paned worker respawns as a fresh pane in the mission session; a
+	// session worker respawns as (or reuses) its session. A reused live
+	// surface keeps its target.
+	if !surfaceAlive {
+		if w.Paned() {
+			p, err := tmuxutil.EnsureAgentPane(m.TmuxSession(), "agents", w.WorktreePath)
+			if err != nil {
+				return fmt.Errorf("worker pane: %w", err)
+			}
+			w.TmuxPane = p
+			tmuxutil.SetPaneTitle(p, w.ID)
+		} else {
+			if err := tmuxutil.NewSession(w.TmuxSession, w.WorktreePath); err != nil {
+				return fmt.Errorf("worker tmux session: %w", err)
+			}
+			tmuxutil.RenameWindow(w.TmuxSession, w.ID)
+			tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
+			tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
 		}
-		tmuxutil.RenameWindow(w.TmuxSession, w.ID)
-		tmuxutil.SetEnv(w.TmuxSession, "OX_MISSION_ID", m.ID)
-		tmuxutil.SetEnv(w.TmuxSession, "OX_AGENT_ID", w.ID)
 	}
+	target := w.Target()
 
-	if err := tmuxutil.SendKeys(w.TmuxSession, workerClaudeCmd(m, w, fresh, prev)); err != nil {
+	if err := tmuxutil.SendKeys(target, workerClaudeCmd(m, w, fresh, prev)); err != nil {
 		return fmt.Errorf("relaunch worker claude: %w", err)
 	}
 
+	newPane := w.TmuxPane
 	if err := UpdateRegistry(cfg.Home, m, func(reg *Registry) error {
 		cur := reg.Workers[w.ID]
 		if cur == nil {
 			return fmt.Errorf("worker %q vanished from registry", w.ID)
 		}
 		cur.Status = WorkerRunning
+		cur.TmuxPane = newPane
 		cur.FinishedAt = nil
 		cur.SessionIDs = append(cur.SessionIDs, fresh)
 		*w = *cur
@@ -316,7 +382,7 @@ func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraConte
 	if extraContext != "" {
 		msg += " Additional context: " + extraContext
 	}
-	go kickWorker(w.TmuxSession, msg)
+	go kickWorker(target, msg)
 
 	m.AppendEvent("agent_started", "system", map[string]any{"id": w.ID, "resumed_from": prev})
 	return nil
@@ -324,9 +390,7 @@ func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraConte
 
 // KillWorker terminates a worker's session and releases its locks.
 func KillWorker(cfg *config.Config, m *mission.Mission, w *Worker, reason string) error {
-	if tmuxutil.HasSession(w.TmuxSession) {
-		tmuxutil.KillSession(w.TmuxSession)
-	}
+	w.Teardown()
 	if err := MarkWorkerFinished(cfg.Home, m, w.ID, WorkerKilled, ""); err != nil {
 		return err
 	}

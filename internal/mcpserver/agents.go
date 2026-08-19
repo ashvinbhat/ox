@@ -213,10 +213,10 @@ func (s *Server) registerAgentTools(srv *mcp.Server) {
 		if lines <= 0 {
 			lines = 50
 		}
-		if !tmuxutil.HasSession(w.TmuxSession) {
-			return nil, peekAgentOut{Status: w.Status, Pane: "(session not running)"}, nil
+		if !w.Alive() {
+			return nil, peekAgentOut{Status: w.Status, Pane: "(not running)"}, nil
 		}
-		pane, err := tmuxutil.CapturePane(w.TmuxSession, lines)
+		pane, err := tmuxutil.CapturePane(w.Target(), lines)
 		if err != nil {
 			return nil, peekAgentOut{}, err
 		}
@@ -231,14 +231,14 @@ func (s *Server) registerAgentTools(srv *mcp.Server) {
 		if err != nil {
 			return nil, emptyOut{}, err
 		}
-		if !tmuxutil.HasSession(w.TmuxSession) {
-			return nil, emptyOut{}, fmt.Errorf("worker %q session is not running (status %s)", w.ID, w.Status)
+		if !w.Alive() {
+			return nil, emptyOut{}, fmt.Errorf("worker %q is not running (status %s)", w.ID, w.Status)
 		}
 		text := in.Text
 		if in.Background {
 			text = "/btw " + text
 		}
-		if err := tmuxutil.SendKeys(w.TmuxSession, text); err != nil {
+		if err := tmuxutil.SendKeys(w.Target(), text); err != nil {
 			return nil, emptyOut{}, err
 		}
 		// An answered blocker goes back to running.

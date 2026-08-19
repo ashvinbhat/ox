@@ -336,8 +336,8 @@ func (w *Watcher) enforceBudgets(m *mission.Mission) {
 		case frac >= 1.0:
 			if graceAt, ok := w.st.WorkerGraceAt[worker.ID]; !ok {
 				w.st.WorkerGraceAt[worker.ID] = time.Now().Unix()
-				if injectSafe(worker.TmuxSession) {
-					tmuxutil.SendKeys(worker.TmuxSession,
+				if injectSafe(worker.Target()) {
+					tmuxutil.SendKeys(worker.Target(),
 						"Budget limit reached — commit what you have now, call report_done with the current state, and /exit.")
 				}
 				m.AppendEvent("budget_warning", "system", map[string]any{
@@ -407,7 +407,7 @@ func (w *Watcher) reconcileWorkers(m *mission.Mission) {
 		if worker.Status != harness.WorkerRunning && worker.Status != harness.WorkerBlocked {
 			continue
 		}
-		alive := tmuxutil.HasSession(worker.TmuxSession) && harness.ClaudeAlive(worker.TmuxSession)
+		alive := worker.Alive() && harness.ClaudeAlive(worker.Target())
 		if alive {
 			w.deadMisses[worker.ID] = 0
 			continue
@@ -445,14 +445,14 @@ func (w *Watcher) reapIdleWorkers(m *mission.Mission) {
 		return
 	}
 	for _, worker := range reg.Workers {
-		if !worker.Finished() || !tmuxutil.HasSession(worker.TmuxSession) {
+		if !worker.Finished() || !worker.Alive() {
 			continue
 		}
 		idle := time.Since(lastWorkerActivity(worker))
 		if idle < reapGrace {
 			continue
 		}
-		tmuxutil.KillSession(worker.TmuxSession)
+		worker.Teardown()
 		fmt.Printf("watcher: reaped %s session (%s, idle %dm)\n", worker.ID, worker.Status, int(idle.Minutes()))
 		m.AppendEvent("agent_reaped", "system", map[string]any{"id": worker.ID, "status": worker.Status})
 	}
@@ -574,10 +574,10 @@ func (w *Watcher) checkIdle(m *mission.Mission) {
 		if worker.Status != harness.WorkerRunning {
 			continue
 		}
-		if !tmuxutil.HasSession(worker.TmuxSession) {
+		if !worker.Alive() {
 			continue
 		}
-		pane, err := tmuxutil.CapturePane(worker.TmuxSession, 30)
+		pane, err := tmuxutil.CapturePane(worker.Target(), 30)
 		if err != nil {
 			continue
 		}

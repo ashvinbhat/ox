@@ -85,7 +85,8 @@ type Config struct {
 	Models           ModelsConfig           `yaml:"models,omitempty"`
 	Budgets          BudgetsConfig          `yaml:"budgets,omitempty"`
 	MCP              MCPConfig              `yaml:"mcp,omitempty"`
-	Home             string                 `yaml:"-"` // resolved OX_HOME (not persisted)
+	Layout           string                 `yaml:"layout,omitempty"` // "sessions" (default) | "panes"
+	Home             string                 `yaml:"-"`                // resolved OX_HOME (not persisted)
 }
 
 // OrchestratorModel resolves the orchestrator model tier.
@@ -117,6 +118,10 @@ func (c *Config) JobModel() string {
 	}
 	return "haiku"
 }
+
+// PaneLayout reports whether new missions lay agents out as tiled panes in
+// one session (layout: panes) rather than a session per worker (the default).
+func (c *Config) PaneLayout() bool { return c.Layout == "panes" }
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {

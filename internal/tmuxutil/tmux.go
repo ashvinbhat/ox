@@ -212,6 +212,83 @@ func RespawnWindow(target, command string) error {
 	return nil
 }
 
+// SplitPane splits the given window/pane target and runs an optional command
+// in the new pane, returning the new pane's stable id (%N). The layout is
+// re-tiled afterward so panes stay evenly sized as agents come and go.
+func SplitPane(target, dir, command string) (string, error) {
+	args := []string{"split-window", "-d", "-t", target, "-P", "-F", "#{pane_id}"}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	out, err := exec.Command("tmux", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux split-window: %w\n%s", err, out)
+	}
+	pane := strings.TrimSpace(string(out))
+	// Best-effort even tiling of the window the new pane lives in.
+	exec.Command("tmux", "select-layout", "-t", pane, "tiled").Run()
+	return pane, nil
+}
+
+// EnsureAgentPane returns a fresh pane (id %N) in the named window of a
+// session, creating that window on first use and tiling it thereafter. It
+// keeps orchestrator addressing untouched — worker panes live in their own
+// window, not the orc's — while still putting the whole worker fleet on one
+// screen.
+func EnsureAgentPane(session, window, dir string) (string, error) {
+	target := session + ":" + window
+	if HasWindow(session, window) {
+		return SplitPane(target, dir, "")
+	}
+	args := []string{"new-window", "-d", "-t", session, "-n", window, "-P", "-F", "#{pane_id}"}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	out, err := exec.Command("tmux", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux new-window: %w\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// PaneAlive reports whether a pane id (%N) still exists.
+func PaneAlive(pane string) bool {
+	if pane == "" {
+		return false
+	}
+	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id}").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.TrimSpace(line) == pane {
+			return true
+		}
+	}
+	return false
+}
+
+// KillPane closes a single pane by id; the window and its siblings survive.
+func KillPane(pane string) error {
+	if pane == "" {
+		return nil
+	}
+	output, err := exec.Command("tmux", "kill-pane", "-t", pane).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux kill-pane: %w\n%s", err, output)
+	}
+	return nil
+}
+
+// SetPaneTitle labels a pane (shown in the pane border) so agents are
+// identifiable in a tiled mission window.
+func SetPaneTitle(pane, title string) {
+	exec.Command("tmux", "select-pane", "-t", pane, "-T", title).Run()
+}
+
 // InsideTmux reports whether the current process runs inside a tmux client.
 func InsideTmux() bool {
 	return os.Getenv("TMUX") != ""

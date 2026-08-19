@@ -16,7 +16,6 @@ import (
 	"github.com/ashvinbhat/ox/internal/memory"
 	"github.com/ashvinbhat/ox/internal/memory/embed"
 	"github.com/ashvinbhat/ox/internal/mission"
-	"github.com/ashvinbhat/ox/internal/tmuxutil"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
@@ -27,9 +26,7 @@ func CloseMission(cfg *config.Config, m *mission.Mission) error {
 	reg, err := LoadRegistry(m)
 	if err == nil {
 		for _, w := range reg.Workers {
-			if tmuxutil.HasSession(w.TmuxSession) {
-				tmuxutil.KillSession(w.TmuxSession)
-			}
+			w.Teardown()
 			if !w.Finished() {
 				MarkWorkerFinished(cfg.Home, m, w.ID, WorkerKilled, "mission closed")
 			}
