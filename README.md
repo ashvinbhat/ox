@@ -253,27 +253,17 @@ defaults:
   persona: builder
 ```
 
-## Status
-
-**Implemented:**
-- Phase O0: Foundation (repos, pickup, done)
-- Phase O1: Git Integration (worktrees, ship)
-- Phase O2: Rich Context Generation (AGENTS.md)
-- Phase O3: Skills System (auto-injection)
-- Phase O4: Personas (auto-selection)
-- Phase O5: Hook System (Claude Code integration)
-- Phase O6: Checkpoints & Memory
-- Phase O7: Learning System
-- Phase O8: Web Dashboard (task views, tree, task creation)
-- Phase O9: Yoke Integration (all yoke commands via ox)
-
-**Coming:**
-- Pre-Ship Quality Gates
-
-See [ROADMAP.md](./ROADMAP.md) for full plan.
-
 ## Dependencies
 
-- [yoke](https://github.com/ashvinbhat/yoke) - Task management
+- [yoke](https://github.com/ashvinbhat/yoke) — task management
 - Git with worktree support
-- Claude Code (optional, for hooks)
+- [Claude Code](https://claude.com/claude-code) CLI and tmux (for the mission harness)
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). `main` is protected — changes land via
+pull requests, and CI (build + vet + test) must pass.
+
+## License
+
+[MIT](./LICENSE)
