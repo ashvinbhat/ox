@@ -131,7 +131,7 @@ func printMissionWorkers(cfg *config.Config, args []string) bool {
 		for _, id := range ids {
 			w := reg.Workers[id]
 			live := ""
-			if w.Status == harness.WorkerRunning && tmuxutil.HasSession(w.TmuxSession) {
+			if w.Status == harness.WorkerRunning && w.Alive() {
 				live = " (live)"
 			}
 			duration := time.Since(w.SpawnedAt).Truncate(time.Second)

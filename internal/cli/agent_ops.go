@@ -75,7 +75,7 @@ Examples:
 // mission workers first, then the legacy agent registry.
 func findAnyAgentSession(cfg *config.Config, id string) (session string, isWorker bool, err error) {
 	if _, w, werr := harness.FindWorker(cfg.Home, id); werr == nil {
-		return w.TmuxSession, true, nil
+		return w.Target(), true, nil
 	}
 	mgr := agent.NewManager(cfg.Home, cfg)
 	a, _, aerr := mgr.FindAgent(id)
