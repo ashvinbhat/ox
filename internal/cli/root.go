@@ -14,6 +14,13 @@ var (
 	verbose bool
 )
 
+// SetVersion wires the build-stamped version into the root command so
+// `ox --version` / `ox version` report it.
+func SetVersion(v string) {
+	rootCmd.Version = v
+	rootCmd.InitDefaultVersionFlag()
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "ox",
 	Short: "Agent workspace manager",

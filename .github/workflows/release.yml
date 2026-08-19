@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          out="ox_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}"
+          go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o "$out" ./cmd/ox
+          tar -czf "${out}.tar.gz" "$out"
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "ox_*.tar.gz"
+          generate_release_notes: true
