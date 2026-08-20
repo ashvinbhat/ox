@@ -266,6 +266,7 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 	}
 
 	watcher.EnsureRunning(requireConfig(), m)
+	ensureConductorBoard(m, orcTarget)
 
 	if !harness.EnsureClaudeReady(orcTarget, 45*time.Second) {
 		fmt.Println("Warning: orchestrator did not reach the input prompt in time — check the tmux window")
@@ -284,6 +285,26 @@ func launchMission(oxHome string, m *mission.Mission, resume bool) error {
 		return tmuxutil.SwitchClient(session)
 	}
 	return tmuxutil.Attach(session)
+}
+
+// ensureConductorBoard gives a conductor session a live track board pane
+// beside the chat: chat on the left, missions/pending on the right. Idempotent
+// — only splits when the conductor window is still a single pane, so resumes
+// don't stack panes.
+func ensureConductorBoard(m *mission.Mission, orcTarget string) {
+	if m.Type != "conductor" {
+		return
+	}
+	track := strings.TrimPrefix(m.Goal, trackGoalPrefix)
+	if track == m.Goal || tmuxutil.PaneCount(orcTarget) != 1 {
+		return
+	}
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "ox"
+	}
+	cmd := fmt.Sprintf("'%s' track %s --board", bin, track)
+	tmuxutil.SplitRight(orcTarget, m.Dir(), cmd, 40)
 }
 
 // orchestratorCmd builds the shell command for the orc window. Resume falls

@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ashvinbhat/ox/internal/harness"
 	"github.com/ashvinbhat/ox/internal/mission"
 )
 
@@ -43,6 +45,9 @@ full context like any mission. Its plan.md is the track document.`,
 		if trackListMissions {
 			return printTrackMissions(oxHome, name)
 		}
+		if trackBoard {
+			return runTrackBoard(oxHome, name)
+		}
 
 		if m := findConductor(oxHome, name); m != nil {
 			fmt.Printf("Resuming conductor %s for track %q\n", m.ID, name)
@@ -58,7 +63,47 @@ var (
 	trackAttach       []string
 	trackDetach       []string
 	trackListMissions bool
+	trackBoard        bool
 )
+
+// runTrackBoard renders a live, auto-refreshing board of the track's missions
+// and what needs the user — the conductor's status pane.
+func runTrackBoard(oxHome, name string) error {
+	for {
+		fmt.Print("\033[2J\033[H") // clear + home
+		fmt.Printf("  ╭─ TRACK: %s ─ %s\n\n", name, time.Now().Format("15:04:05"))
+		missions, err := mission.List(oxHome)
+		if err != nil {
+			fmt.Printf("  (error: %v)\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		var mine []*mission.Mission
+		for _, m := range missions {
+			if m.Track == name {
+				mine = append(mine, m)
+			}
+		}
+		if len(mine) == 0 {
+			fmt.Println("  no missions attached yet.")
+			fmt.Printf("\n  attach: ox track %s --attach <id>,<id>\n", name)
+		} else {
+			fmt.Println("  MISSIONS")
+			for _, m := range mine {
+				state := m.Phase
+				if !m.Open() {
+					state = "closed"
+				}
+				fmt.Printf("   %-5s %-10s %s\n", m.ID, state, firstN(m.Goal, 30))
+				if pend := harness.PendingOnUser(m); pend != "" {
+					fmt.Printf("         ⚠ %s\n", firstN(pend, 34))
+				}
+			}
+		}
+		fmt.Print("\n  ─────────────\n  refreshes 5s · Ctrl-a z zoom\n")
+		time.Sleep(5 * time.Second)
+	}
+}
 
 // setTrackMembership sets/clears the Track field on the given missions.
 func setTrackMembership(oxHome, name string, attach, detach []string) error {
@@ -153,5 +198,6 @@ func init() {
 	trackCmd.Flags().StringSliceVar(&trackAttach, "attach", nil, "Attach existing missions to the track (mission ids)")
 	trackCmd.Flags().StringSliceVar(&trackDetach, "detach", nil, "Detach missions from the track (mission ids)")
 	trackCmd.Flags().BoolVar(&trackListMissions, "missions", false, "List the track's attached missions and exit")
+	trackCmd.Flags().BoolVar(&trackBoard, "board", false, "Render a live board of the track's missions (used by the conductor pane)")
 	rootCmd.AddCommand(trackCmd)
 }
