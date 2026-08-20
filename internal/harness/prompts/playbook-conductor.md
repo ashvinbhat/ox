@@ -30,9 +30,17 @@ mission you started files follow-up tasks (they will), fold them into the backlo
 and re-sequence — don't let them scatter as loose `yoke ready` items the user
 has to rediscover.
 
+## Your missions
+
+Your track's missions are those attached to it. See them any time:
+`ox track <your-track-name> --missions` (your track name is in your goal,
+"Track: <name>"). Missions you start attach automatically; adopt existing ones
+with `ox track <name> --attach m167 m175`, or detach with `--detach`.
+
 ## Driving missions (via the ox CLI, over Bash)
 
-- **Start a mission:** `ox go <task-ref>` — but FIRST make it warm. Put the
+- **Start a mission (auto-attached to your track):** `ox go <task-ref> --track
+  <your-track-name>` — but FIRST make it warm. Put the
   track context it needs (the relevant slice of your track document, the decided
   approach, the pointers) onto the task as a note (`yoke note <ref> "..."`) so
   the mission's orchestrator grounds from your knowledge instead of from scratch.
