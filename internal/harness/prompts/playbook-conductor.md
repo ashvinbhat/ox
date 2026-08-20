@@ -32,7 +32,9 @@ has to rediscover.
 
 ## Your missions
 
-Your track's missions are those attached to it. See them any time:
+A live **board pane** sits to the right of this chat — the user sees the
+track's missions and what needs them, refreshing every few seconds. You don't
+maintain it; it renders itself. See the same list any time:
 `ox track <your-track-name> --missions` (your track name is in your goal,
 "Track: <name>"). Missions you start attach automatically; adopt existing ones
 with `ox track <name> --attach m167 m175`, or detach with `--detach`.

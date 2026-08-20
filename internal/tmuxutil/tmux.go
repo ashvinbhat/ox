@@ -254,6 +254,33 @@ func EnsureAgentPane(session, window, dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// SplitRight opens a fixed-width pane to the right of a target running a
+// command (a live status board beside a chat pane). Does not re-tile — the
+// left pane stays wide.
+func SplitRight(target, dir, command string, cols int) (string, error) {
+	args := []string{"split-window", "-h", "-d", "-t", target, "-l", fmt.Sprintf("%d", cols), "-P", "-F", "#{pane_id}"}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	out, err := exec.Command("tmux", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux split-window -h: %w\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// PaneCount returns the number of panes in a window target.
+func PaneCount(target string) int {
+	out, err := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_id}").Output()
+	if err != nil {
+		return 0
+	}
+	return len(strings.Fields(string(out)))
+}
+
 // PaneAlive reports whether a pane id (%N) still exists.
 func PaneAlive(pane string) bool {
 	if pane == "" {
