@@ -25,6 +25,7 @@ var (
 	goPlaybook string
 	goModel    string
 	goReopen   bool
+	goTrack    string
 	goNoAttach bool
 )
 
@@ -179,6 +180,13 @@ func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD 
 	m, err := mission.Create(oxHome, playbook, goal, yoke, model, uuid.NewString())
 	if err != nil {
 		return fmt.Errorf("create mission: %w", err)
+	}
+	if goTrack != "" {
+		mission.Update(oxHome, m.ID, func(mm *mission.Mission) error {
+			mm.Track = goTrack
+			return nil
+		})
+		m.Track = goTrack
 	}
 
 	if err := harness.WriteOrchestratorFiles(requireConfig(), m, taskMD); err != nil {
@@ -380,6 +388,7 @@ func init() {
 	goCmd.Flags().StringVar(&goPlaybook, "playbook", "task", "Mission type (task, debug, or a custom playbook)")
 	goCmd.Flags().StringVar(&goModel, "model", "", "Orchestrator model override")
 	goCmd.Flags().BoolVar(&goReopen, "reopen", false, "Start a fresh mission even if the task is done / already ran")
+	goCmd.Flags().StringVar(&goTrack, "track", "", "Attach the new mission to this conductor track")
 	goCmd.Flags().BoolVar(&goNoAttach, "no-attach", false, "Create/resume without attaching")
 	rootCmd.AddCommand(goCmd)
 }
