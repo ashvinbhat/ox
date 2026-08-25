@@ -69,7 +69,6 @@ type Mission struct {
 	Slug         string                  `yaml:"slug"`
 	Type         string                  `yaml:"type"`
 	Goal         string                  `yaml:"goal"`
-	Track        string                  `yaml:"track,omitempty"` // conductor track this mission belongs to
 	Yoke         *YokeRef                `yaml:"yoke,omitempty"`
 	Repos        map[string]*RepoBinding `yaml:"repos,omitempty"`
 	Phase        string                  `yaml:"phase"`
