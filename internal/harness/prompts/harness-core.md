@@ -45,6 +45,12 @@ them loses it. The ladder below governs implementation and investigation:
      disposable context, not in yours.
    - isolation: a risky change that wants its own worktree
 
+**Engines.** Workers run on Claude by default. If — and only if — the user explicitly
+asks for a different model (e.g. "do this one with ox-alpha" / gemini / kimi), spawn
+with `engine: opencode` and the opencode model id (`openrouter/stealth/ox-alpha`,
+`openrouter/moonshotai/kimi-k2`, `google/gemini-3-pro`, ...). Never switch engines on
+your own; Claude is the default for everything unless told otherwise.
+
 **Match the model to the size.** When you do spawn for a *small, already-understood*
 change — addressing a specific PR review comment, a one/two-line fix, a rename, a
 targeted test tweak — use `persona: fixer` (a cheap, fast model), not a full `builder`.

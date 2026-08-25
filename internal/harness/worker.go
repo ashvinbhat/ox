@@ -36,6 +36,7 @@ type Worker struct {
 	MissionID    string     `json:"mission_id"`
 	Persona      string     `json:"persona"`
 	Model        string     `json:"model"`
+	Engine       string     `json:"engine,omitempty"` // "" / "claude" (default) | "opencode"
 	Repo         string     `json:"repo"`
 	Status       string     `json:"status"`
 	TmuxSession  string     `json:"tmux_session"`
@@ -53,6 +54,10 @@ type Worker struct {
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`
 	Summary      string     `json:"summary,omitempty"`
 }
+
+// UsesOpencode reports whether this worker runs on opencode (any model)
+// rather than claude (the default).
+func (w *Worker) UsesOpencode() bool { return w.Engine == "opencode" }
 
 func (w *Worker) Finished() bool {
 	return w.Status == WorkerDone || w.Status == WorkerFailed || w.Status == WorkerKilled
@@ -154,6 +159,7 @@ type SpawnInput struct {
 	Brief        string
 	Persona      string
 	Model        string
+	Engine       string
 	Cwd          string // existing directory to run in (e.g. a review worktree); skips worktree/branch creation
 	Files        []string
 	DependsOn    []string
@@ -189,7 +195,7 @@ func SpawnWorker(cfg *config.Config, m *mission.Mission, in SpawnInput) (*Worker
 	}
 
 	w := &Worker{
-		ID: in.ID, MissionID: m.ID, Persona: in.Persona, Model: in.Model, Repo: in.Repo,
+		ID: in.ID, MissionID: m.ID, Persona: in.Persona, Model: in.Model, Engine: in.Engine, Repo: in.Repo,
 		Status: WorkerPending, Files: in.Files, DependsOn: in.DependsOn,
 		MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD,
 		TmuxSession:  fmt.Sprintf("ox-%s-%s", m.ID, in.ID),
@@ -312,7 +318,11 @@ func StartWorker(cfg *config.Config, m *mission.Mission, w *Worker) error {
 		briefRef = workerFile(m, w.ID, "AGENTS.md")
 		doneVerb = "call report_done"
 	}
-	go kickWorker(target,
+	kick := kickWorker
+	if w.UsesOpencode() {
+		kick = kickOpencode
+	}
+	go kick(target,
 		fmt.Sprintf("You are worker '%s'. Read %s for your brief, then BEGIN IMMEDIATELY. When completely done: %s, then /exit. Do not ask for confirmation.", w.ID, briefRef, doneVerb))
 
 	m.AppendEvent("agent_started", "system", map[string]any{"id": w.ID, "session": sessionID})
@@ -382,7 +392,11 @@ func RespawnWorker(cfg *config.Config, m *mission.Mission, w *Worker, extraConte
 	if extraContext != "" {
 		msg += " Additional context: " + extraContext
 	}
-	go kickWorker(target, msg)
+	kick := kickWorker
+	if w.UsesOpencode() {
+		kick = kickOpencode
+	}
+	go kick(target, msg)
 
 	m.AppendEvent("agent_started", "system", map[string]any{"id": w.ID, "resumed_from": prev})
 	return nil
@@ -565,12 +579,51 @@ func writeWorkerFiles(cfg *config.Config, m *mission.Mission, w *Worker) error {
 		os.Symlink("AGENTS.md", claudePath)
 	}
 
+	if w.UsesOpencode() {
+		if err := writeOpencodeWorkerConfig(cfg, m, w, agentsPath); err != nil {
+			return err
+		}
+	}
+
 	if _, err := WriteWorkerMCPConfig(m, w.ID); err != nil {
 		return err
 	}
 
 	prompt := workerPrompt(cfg.Home, w)
 	return os.WriteFile(workerFile(m, w.ID, "prompt.md"), []byte(prompt), 0o644)
+}
+
+// writeOpencodeWorkerConfig wires an opencode worker: an opencode.json in the
+// worktree carrying the model + the ox MCP server (so report_done etc. work),
+// and the worker doctrine folded into AGENTS.md — opencode reads AGENTS.md
+// natively and has no --append-system-prompt.
+func writeOpencodeWorkerConfig(cfg *config.Config, m *mission.Mission, w *Worker, agentsPath string) error {
+	oxBin, err := os.Executable()
+	if err != nil {
+		oxBin = "ox"
+	}
+	conf := map[string]any{
+		"$schema": "https://opencode.ai/config.json",
+		"model":   w.Model,
+		"mcp": map[string]any{
+			"ox": map[string]any{
+				"type":    "local",
+				"enabled": true,
+				"command": []string{oxBin, "mcp", "--mission", m.ID, "--role", "worker", "--agent", w.ID},
+			},
+		},
+	}
+	data, _ := json.MarshalIndent(conf, "", "  ")
+	if err := os.WriteFile(filepath.Join(w.WorktreePath, "opencode.json"), data, 0o644); err != nil {
+		return fmt.Errorf("write opencode.json: %w", err)
+	}
+	f, err := os.OpenFile(agentsPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString("\n\n---\n\n" + workerPrompt(cfg.Home, w))
+	return err
 }
 
 // workerPrompt = worker-core + hygiene + persona body. Stable per worker so
@@ -591,6 +644,12 @@ func workerPrompt(oxHome string, w *Worker) string {
 }
 
 func workerClaudeCmd(m *mission.Mission, w *Worker, sessionID, resumeID string) string {
+	if w.UsesOpencode() {
+		// Model + ox MCP + brief all come from opencode.json / AGENTS.md in
+		// the worktree (written by writeWorkerFiles); opencode reads them
+		// natively. No resume in v1.
+		return "opencode"
+	}
 	promptFile := workerFile(m, w.ID, "prompt.md")
 	mcpFile := filepath.Join(m.Dir(), "workers", w.ID, "mcp.json")
 
@@ -618,6 +677,16 @@ func kickWorker(session, msg string) {
 		return
 	}
 	SendMessageEnsured(session, msg)
+}
+
+// kickOpencode nudges an opencode worker. opencode's TUI has no claude-style
+// readiness marker, so this is delay-based best-effort: wait for the TUI to
+// paint, type the message, submit.
+func kickOpencode(target, msg string) {
+	time.Sleep(6 * time.Second)
+	tmuxutil.SendKeys(target, msg)
+	time.Sleep(500 * time.Millisecond)
+	tmuxutil.SendKeysRaw(target, "Enter")
 }
 
 func personaModel(cfg *config.Config, persona, fallback string) string {
