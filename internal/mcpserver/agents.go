@@ -123,7 +123,8 @@ type spawnAgentIn struct {
 	Repo         string   `json:"repo" jsonschema:"registered repo the worker codes in"`
 	Brief        string   `json:"brief" jsonschema:"full subtask brief: goal, owned files, integration contract, done criteria"`
 	Persona      string   `json:"persona,omitempty" jsonschema:"default builder"`
-	Model        string   `json:"model,omitempty" jsonschema:"haiku|sonnet|opus; default from config"`
+	Model        string   `json:"model,omitempty" jsonschema:"claude tier (haiku|sonnet|opus) or, with engine=opencode, an opencode model id like openrouter/stealth/ox-alpha"`
+	Engine       string   `json:"engine,omitempty" jsonschema:"agent engine: claude (default) or opencode. Use opencode ONLY when the user explicitly asks for a non-Claude model"`
 	Cwd          string   `json:"cwd,omitempty" jsonschema:"run in this EXISTING directory (e.g. the review worktree) instead of creating a worktree — no branch, dir never cleaned up; use for interactive reviewers or debugging in place"`
 	Files        []string `json:"files,omitempty" jsonschema:"file globs this worker owns exclusively"`
 	DependsOn    []string `json:"depends_on,omitempty" jsonschema:"worker ids that must finish first (auto-spawns when they do)"`
@@ -171,7 +172,7 @@ type respawnAgentIn struct {
 func (s *Server) registerAgentTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "spawn_agent",
-		Description: "Spawn a session worker in its own worktree + tmux session. Only when the delegation ladder justifies it: parallelism, isolation, or long-running implementation. State the reason in the brief.",
+		Description: "Spawn a session worker in its own worktree + tmux session. Only when the delegation ladder justifies it. Defaults to Claude; pass engine=opencode + an opencode model id (e.g. openrouter/stealth/ox-alpha) ONLY when the user asks for a non-Claude model.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in spawnAgentIn) (*mcp.CallToolResult, spawnAgentOut, error) {
 		m, err := s.openMission()
 		if err != nil {
