@@ -647,8 +647,10 @@ func workerClaudeCmd(m *mission.Mission, w *Worker, sessionID, resumeID string) 
 	if w.UsesOpencode() {
 		// Model + ox MCP + brief all come from opencode.json / AGENTS.md in
 		// the worktree (written by writeWorkerFiles); opencode reads them
-		// natively. No resume in v1.
-		return "opencode"
+		// natively. Source ox secrets so provider keys ({env:OPENROUTER_API_KEY}
+		// etc. referenced by opencode.json) are in the process env — the
+		// spawned tmux shell doesn't have them otherwise. No resume in v1.
+		return `. "$HOME/.ox/secrets.env" 2>/dev/null; exec opencode`
 	}
 	promptFile := workerFile(m, w.ID, "prompt.md")
 	mcpFile := filepath.Join(m.Dir(), "workers", w.ID, "mcp.json")
