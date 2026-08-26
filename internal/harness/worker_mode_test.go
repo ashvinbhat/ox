@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ashvinbhat/ox/internal/mission"
@@ -37,8 +38,8 @@ func TestWorkerEngine(t *testing.T) {
 		t.Error("engine=opencode must route to opencode")
 	}
 	m := &mission.Mission{}
-	if cmd := workerClaudeCmd(m, oc, "sid", ""); cmd != "opencode" {
-		t.Errorf("opencode worker launch cmd = %q, want \"opencode\"", cmd)
+	if cmd := workerClaudeCmd(m, oc, "sid", ""); !strings.Contains(cmd, "exec opencode") {
+		t.Errorf("opencode worker launch cmd = %q, want it to exec opencode", cmd)
 	}
 	if cmd := workerClaudeCmd(m, claude, "sid", ""); cmd == "opencode" {
 		t.Error("claude worker must not launch opencode")
