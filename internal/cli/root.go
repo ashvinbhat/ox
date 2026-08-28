@@ -42,6 +42,15 @@ Quick start:
 		}
 		cfg, cfgErr = config.Load()
 	},
+	// Bare `ox` is the fast path into work: resume (and attach to) the current
+	// mission's orchestrator — same as `ox go` with no args. A stray positional
+	// that matched no subcommand falls here too; show help rather than guess.
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return cmd.Help()
+		}
+		return runGo(cmd, nil)
+	},
 }
 
 // Execute runs the root command.

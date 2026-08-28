@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -330,10 +331,19 @@ func pickMission(oxHome string) error {
 			open = append(open, m)
 		}
 	}
+	// Most-recently-touched first, so the top choice (and the empty-Enter
+	// default below) is the mission you were last working in.
+	sort.Slice(open, func(i, j int) bool { return open[i].UpdatedAt.After(open[j].UpdatedAt) })
 	if len(open) == 0 {
 		fmt.Println("No open missions.")
 		fmt.Println("\nStart one:  ox go <task-ref>   ·   ox go \"a goal\" [--playbook debug]")
 		return nil
+	}
+	if len(open) == 1 {
+		// The common case: one mission in flight — drop straight into its
+		// orchestrator rather than prompting a single pointless choice.
+		fmt.Printf("Resuming %s — %s\n", open[0].ID, open[0].Goal)
+		return launchMission(oxHome, open[0], true)
 	}
 
 	fmt.Println("Open missions:")
@@ -344,12 +354,16 @@ func pickMission(oxHome string) error {
 		}
 		fmt.Printf("  %d. %s [%s/%s]%s — %s\n", i+1, m.ID, m.Type, m.Phase, task, m.Goal)
 	}
-	fmt.Print("\nResume which? ")
+	fmt.Print("\nResume which? [1] ")
 	sc := bufio.NewScanner(os.Stdin)
 	if !sc.Scan() {
 		return nil
 	}
-	choice, err := strconv.Atoi(strings.TrimSpace(sc.Text()))
+	text := strings.TrimSpace(sc.Text())
+	if text == "" {
+		text = "1" // bare Enter resumes the most recent
+	}
+	choice, err := strconv.Atoi(text)
 	if err != nil || choice < 1 || choice > len(open) {
 		return fmt.Errorf("invalid choice")
 	}
