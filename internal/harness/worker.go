@@ -649,7 +649,15 @@ func workerClaudeCmd(m *mission.Mission, w *Worker, sessionID, resumeID string) 
 		// the worktree (written by writeWorkerFiles); opencode reads them
 		// natively. Source ox secrets so provider keys ({env:OPENROUTER_API_KEY}
 		// etc. referenced by opencode.json) are in the process env — the
-		// spawned tmux shell doesn't have them otherwise. No resume in v1.
+		// spawned tmux shell doesn't have them otherwise.
+		//
+		// Resume: each worker owns its worktree and opencode scopes sessions by
+		// project dir, so --continue restores THIS worker's last conversation
+		// without needing the server-assigned id. A non-empty resumeID is the
+		// respawn signal (StartWorker passes ""; RespawnWorker passes prev).
+		if resumeID != "" {
+			return `. "$HOME/.ox/secrets.env" 2>/dev/null; exec opencode --continue`
+		}
 		return `. "$HOME/.ox/secrets.env" 2>/dev/null; exec opencode`
 	}
 	promptFile := workerFile(m, w.ID, "prompt.md")
