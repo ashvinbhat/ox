@@ -31,6 +31,7 @@ type Job struct {
 	PanelID      string     `json:"panel_id,omitempty"`
 	Prompt       string     `json:"-"`
 	Model        string     `json:"model"`
+	Engine       string     `json:"engine,omitempty"` // "" / "claude" (default) | "opencode"
 	CWD          string     `json:"cwd"`
 	AddDirs      []string   `json:"add_dirs,omitempty"`
 	MaxTurns     int        `json:"max_turns"`
@@ -97,6 +98,7 @@ type StartInput struct {
 	PanelID      string
 	Prompt       string
 	Model        string
+	Engine       string // "" / "claude" (default) | "opencode"
 	CWD          string // "" = mission dir | "repo:<name>" = base clone | absolute path
 	AddDirs      []string
 	MaxTurns     int
@@ -116,6 +118,11 @@ func Start(cfg *config.Config, m *mission.Mission, in StartInput) (*Job, error) 
 		in.ID = fmt.Sprintf("job-%s", time.Now().Format("150405")) + "-" + uuid.NewString()[:4]
 	}
 	if in.Model == "" {
+		// opencode addresses models as provider/model and has no claude-tier
+		// default to fall back on — the caller must name one.
+		if in.Engine == "opencode" {
+			return nil, fmt.Errorf("opencode job requires an explicit provider/model (e.g. openrouter/z-ai/glm-4.7-flash)")
+		}
 		in.Model = cfg.JobModel()
 	}
 	// Jobs that read real code die around 15 turns — the audit trail is a
@@ -131,7 +138,7 @@ func Start(cfg *config.Config, m *mission.Mission, in StartInput) (*Job, error) 
 	}
 
 	j := &Job{
-		ID: in.ID, PanelID: in.PanelID, Model: in.Model, CWD: in.CWD,
+		ID: in.ID, PanelID: in.PanelID, Model: in.Model, Engine: in.Engine, CWD: in.CWD,
 		AddDirs: in.AddDirs, MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD,
 		ExpectJSON: in.ExpectJSON, Status: StatusRunning, Attempts: 1, StartedAt: time.Now(),
 	}
@@ -159,6 +166,10 @@ func Start(cfg *config.Config, m *mission.Mission, in StartInput) (*Job, error) 
 }
 
 func launch(cfg *config.Config, m *mission.Mission, j *Job) error {
+	if j.Engine == "opencode" {
+		return launchOpencode(cfg, m, j)
+	}
+
 	j.SessionID = uuid.NewString()
 
 	args := []string{
@@ -178,15 +189,24 @@ func launch(cfg *config.Config, m *mission.Mission, j *Job) error {
 	for _, d := range j.AddDirs {
 		args = append(args, "--add-dir", d)
 	}
+	return spawnDetached(cfg, m, j, "claude", args, nil)
+}
 
-	cwd := m.Dir()
-	switch {
-	case strings.HasPrefix(j.CWD, "repo:"):
-		cwd = filepath.Join(cfg.Home, "repos", strings.TrimPrefix(j.CWD, "repo:"))
-	case j.CWD != "" && filepath.IsAbs(j.CWD):
-		cwd = j.CWD
-	}
+// launchOpencode runs a job on opencode instead of claude. opencode reads the
+// prompt from stdin and streams newline-delimited JSON events to stdout
+// (--format json); there are no native --max-turns/--max-budget flags, so
+// opencode governs its own loop. The session id is server-assigned and
+// discovered from the transcript at harvest, not pre-assigned here. Provider
+// keys come from ox secrets injected into the child's env.
+func launchOpencode(cfg *config.Config, m *mission.Mission, j *Job) error {
+	args := []string{"run", "--format", "json", "-m", j.Model}
+	return spawnDetached(cfg, m, j, "opencode", args, oxSecretsEnv())
+}
 
+// spawnDetached wires the shared job plumbing for either engine: prompt on
+// stdin, output.json on stdout, job.log on stderr, setsid so the child
+// outlives every ox process, and PID capture into the index.
+func spawnDetached(cfg *config.Config, m *mission.Mission, j *Job, name string, args, extraEnv []string) error {
 	promptF, err := os.Open(jobFile(m, j.ID, "prompt.md"))
 	if err != nil {
 		return err
@@ -203,14 +223,17 @@ func launch(cfg *config.Config, m *mission.Mission, j *Job) error {
 	}
 	defer logF.Close()
 
-	cmd := exec.Command("claude", args...)
-	cmd.Dir = cwd
+	cmd := exec.Command(name, args...)
+	cmd.Dir = jobCWD(cfg, m, j)
 	cmd.Stdin = promptF
 	cmd.Stdout = outF
 	cmd.Stderr = logF
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start claude: %w", err)
+		return fmt.Errorf("start %s: %w", name, err)
 	}
 	j.PID = cmd.Process.Pid
 	// Reap on exit — without Wait the child zombifies while this process
@@ -226,6 +249,46 @@ func launch(cfg *config.Config, m *mission.Mission, j *Job) error {
 		}
 		return nil
 	})
+}
+
+// jobCWD resolves where a job runs: mission dir by default, a base repo clone
+// for "repo:<name>", or an explicit absolute path.
+func jobCWD(cfg *config.Config, m *mission.Mission, j *Job) string {
+	switch {
+	case strings.HasPrefix(j.CWD, "repo:"):
+		return filepath.Join(cfg.Home, "repos", strings.TrimPrefix(j.CWD, "repo:"))
+	case j.CWD != "" && filepath.IsAbs(j.CWD):
+		return j.CWD
+	}
+	return m.Dir()
+}
+
+// oxSecretsEnv reads ~/.ox/secrets.env into KEY=VALUE entries for a child's
+// env. opencode resolves {env:OPENROUTER_API_KEY} etc. against its process
+// env, and a detached job doesn't inherit the interactive shell that sources
+// secrets, so we inject them here.
+func oxSecretsEnv() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".ox", "secrets.env"))
+	if err != nil {
+		return nil
+	}
+	var env []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimPrefix(strings.TrimSpace(line), "export ")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		env = append(env, key+"="+strings.Trim(val, `"'`))
+	}
+	return env
 }
 
 // headlessResult is the claude -p --output-format json envelope.
@@ -246,6 +309,9 @@ type headlessResult struct {
 func Harvest(cfg *config.Config, m *mission.Mission, j *Job) (bool, error) {
 	if j.Status != StatusRunning {
 		return false, nil
+	}
+	if j.Engine == "opencode" {
+		return harvestOpencode(cfg, m, j)
 	}
 
 	res, err := parseResult(jobFile(m, j.ID, "output.json"))
@@ -279,6 +345,56 @@ func Harvest(cfg *config.Config, m *mission.Mission, j *Job) (bool, error) {
 			cur.Status = StatusDone
 			cur.FinishedAt = &now
 			cur.CostUSD += res.TotalCostUSD
+			*j = *cur
+		}
+		return nil
+	})
+	recordLedger(m, j, res.TotalCostUSD)
+	m.AppendEvent("job_done", "system", map[string]any{"id": j.ID, "cost_usd": res.TotalCostUSD, "panel": j.PanelID})
+	return true, nil
+}
+
+// harvestOpencode reconciles an opencode job. opencode streams JSON events for
+// the whole run, so — unlike claude, where a complete result envelope is the
+// done signal — the transcript carries content long before the job finishes.
+// The process exiting is the only reliable done signal, so wait for the PID to
+// clear before treating the transcript as final.
+func harvestOpencode(cfg *config.Config, m *mission.Mission, j *Job) (bool, error) {
+	if j.PID == 0 || processAlive(j.PID) {
+		return false, nil
+	}
+
+	res, sess, err := parseOpencodeResult(jobFile(m, j.ID, "output.json"))
+	if err != nil {
+		logTail := readTail(jobFile(m, j.ID, "job.log"), 400)
+		markFailed(cfg.Home, m, j, fmt.Sprintf("no parseable result (%v) %s", err, logTail))
+		m.AppendEvent("job_failed", "system", map[string]any{"id": j.ID, "error": j.Error})
+		return true, nil
+	}
+
+	if res.IsError {
+		markFailed(cfg.Home, m, j, fmt.Sprintf("%.300s", res.Result))
+		recordCost(cfg.Home, m, j, res.TotalCostUSD)
+		m.AppendEvent("job_failed", "system", map[string]any{"id": j.ID, "error": "opencode"})
+		return true, nil
+	}
+
+	if j.ExpectJSON && !looksLikeJSON(res.Result) {
+		markFailed(cfg.Home, m, j, "output contract violated: expected JSON result")
+		recordCost(cfg.Home, m, j, res.TotalCostUSD)
+		m.AppendEvent("job_failed", "system", map[string]any{"id": j.ID, "error": "contract"})
+		return true, nil
+	}
+
+	now := time.Now()
+	UpdateIndex(cfg.Home, m, func(idx *Index) error {
+		if cur := idx.Jobs[j.ID]; cur != nil {
+			cur.Status = StatusDone
+			cur.FinishedAt = &now
+			cur.CostUSD += res.TotalCostUSD
+			if sess != "" {
+				cur.SessionID = sess
+			}
 			*j = *cur
 		}
 		return nil
@@ -343,11 +459,79 @@ func RetryOrEscalate(cfg *config.Config, m *mission.Mission, j *Job) (*Job, erro
 
 // Result returns the result text of a done job.
 func Result(m *mission.Mission, j *Job) (string, error) {
+	if j.Engine == "opencode" {
+		res, _, err := parseOpencodeResult(jobFile(m, j.ID, "output.json"))
+		if err != nil {
+			return "", err
+		}
+		return res.Result, nil
+	}
 	res, err := parseResult(jobFile(m, j.ID, "output.json"))
 	if err != nil {
 		return "", err
 	}
 	return res.Result, nil
+}
+
+// opencodeEvent is one line of `opencode run --format json` (JSONL). Only the
+// fields the harvester consumes are modeled.
+type opencodeEvent struct {
+	Type      string          `json:"type"`
+	SessionID string          `json:"sessionID"`
+	Error     json.RawMessage `json:"error,omitempty"`
+	Part      struct {
+		Type string  `json:"type"`
+		Text string  `json:"text"`
+		Cost float64 `json:"cost"`
+	} `json:"part"`
+}
+
+// parseOpencodeResult folds an opencode JSONL transcript into the same result
+// shape the rest of the harvester expects: assistant text concatenated, cost
+// summed across steps, plus the server-assigned session id (for resume).
+func parseOpencodeResult(path string) (*headlessResult, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	var text strings.Builder
+	var cost float64
+	var sessionID, errText string
+	var sawEvent, isErr bool
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var ev opencodeEvent
+		if json.Unmarshal([]byte(line), &ev) != nil {
+			continue
+		}
+		sawEvent = true
+		if ev.SessionID != "" {
+			sessionID = ev.SessionID
+		}
+		switch ev.Type {
+		case "text":
+			text.WriteString(ev.Part.Text)
+		case "step_finish":
+			cost += ev.Part.Cost
+		case "error":
+			isErr = true
+			errText = string(ev.Error)
+		}
+	}
+	if !sawEvent {
+		return nil, "", fmt.Errorf("empty output")
+	}
+	result := text.String()
+	if result == "" && !isErr {
+		isErr, errText = true, "opencode produced no result text"
+	}
+	if isErr && result == "" {
+		result = errText
+	}
+	return &headlessResult{Type: "result", Result: result, TotalCostUSD: cost, IsError: isErr}, sessionID, nil
 }
 
 func markFailed(oxHome string, m *mission.Mission, j *Job, msg string) {

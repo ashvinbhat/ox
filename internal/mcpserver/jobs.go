@@ -16,7 +16,8 @@ type runJobIn struct {
 	ID           string   `json:"id,omitempty" jsonschema:"optional job id; auto-generated when empty"`
 	Prompt       string   `json:"prompt" jsonschema:"the complete self-contained prompt; the job has no mission context beyond this"`
 	Persona      string   `json:"persona,omitempty" jsonschema:"prepend this persona's instructions and inherit its model/output contract (e.g. reviewer-security)"`
-	Model        string   `json:"model,omitempty" jsonschema:"haiku (default) | sonnet | opus"`
+	Model        string   `json:"model,omitempty" jsonschema:"claude engine: haiku (default) | sonnet | opus. opencode engine: a provider/model id (e.g. openrouter/z-ai/glm-4.7-flash) — required"`
+	Engine       string   `json:"engine,omitempty" jsonschema:"'claude' (default) | 'opencode' — only set opencode when the user asked to run this on another model"`
 	CWD          string   `json:"cwd,omitempty" jsonschema:"'repo:<name>' runs in the base clone; absolute path; default mission dir"`
 	AddDirs      []string `json:"add_dirs,omitempty" jsonschema:"extra directories the job may read"`
 	MaxTurns     int      `json:"max_turns,omitempty" jsonschema:"default 40, floor 20 — omit unless deliberately constraining; jobs that read code need 30+"`
@@ -62,7 +63,7 @@ type jobResultIn struct {
 func (s *Server) registerJobTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "run_job",
-		Description: "Run a headless one-shot claude job (analysis, verification, summarization). Cheap model by default, exact cost, survives restarts. Prefer this over spawning an agent for read-mostly questions.",
+		Description: "Run a headless one-shot job (analysis, verification, summarization). Cheap claude model by default, exact cost, survives restarts. Prefer this over spawning an agent for read-mostly questions. Set engine=opencode (with a provider/model) only when the user asked to run on another model.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in runJobIn) (*mcp.CallToolResult, jobState, error) {
 		m, err := s.openMission()
 		if err != nil {
@@ -224,7 +225,7 @@ func (s *Server) startInput(in runJobIn, panelID string) job.StartInput {
 		}
 	}
 	return job.StartInput{
-		ID: in.ID, PanelID: panelID, Prompt: prompt, Model: in.Model, CWD: in.CWD,
+		ID: in.ID, PanelID: panelID, Prompt: prompt, Model: in.Model, Engine: in.Engine, CWD: in.CWD,
 		AddDirs: in.AddDirs, MaxTurns: in.MaxTurns, MaxBudgetUSD: in.MaxBudgetUSD, ExpectJSON: in.ExpectJSON,
 	}
 }
