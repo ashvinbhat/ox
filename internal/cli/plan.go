@@ -26,7 +26,7 @@ var planCmd = &cobra.Command{
 	Use:   "plan <mission-id | task-ref>",
 	Short: "Review a mission's plan from the terminal",
 	Long: `Opens the plan in your editor, and delivers review verdicts to the
-mission's orchestrator — the terminal twin of the cockpit's review panel.
+mission's orchestrator — a terminal review flow for plan.md and friends.
 
 Review cycle:
   ox plan m13                        # open plan.md in your editor
