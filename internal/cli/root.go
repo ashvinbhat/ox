@@ -23,18 +23,17 @@ func SetVersion(v string) {
 
 var rootCmd = &cobra.Command{
 	Use:   "ox",
-	Short: "Agent workspace manager",
-	Long: `Ox is an agent workspace manager built on yoke.
+	Short: "A mission harness for AI-assisted development",
+	Long: `Ox is a mission harness built on yoke.
 
-It provides structured workspaces, personas, skills, and lifecycle
-management for AI-assisted development.
+A mission opens a persistent orchestrator that plans, delegates to workers and
+jobs, integrates, and ships — resumable at any time.
 
 Quick start:
-  ox init                           # Initialize ~/.ox
-  ox repo add <url>                 # Register a codebase
-  ox pickup <task-id> --repos <x>   # Create workspace for yoke task
-  ox status                         # Show current workspace
-  ox done                           # Complete and cleanup`,
+  ox init              # Initialize ~/.ox
+  ox repo add <url>    # Register a codebase
+  ox go <task-ref>     # Start or resume a mission
+  ox                   # Resume the current mission`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Skip config loading for root init command only
 		if cmd.Name() == "init" && cmd.Parent() != nil && cmd.Parent().Name() == "ox" {

@@ -16,11 +16,10 @@ var initCmd = &cobra.Command{
 	Long: `Initializes the ox home directory structure.
 
 Creates ~/.ox with:
-  - ox.yaml (configuration)
+  - ox.yaml    (configuration)
   - repos/     (registered codebases)
-  - tasks/     (active task workspaces)
   - worktrees/ (git worktrees)
-  - skills/    (skill definitions)
+  - missions/  (mission state)
   - personas/  (persona definitions)
   - hooks/     (Claude Code hooks)`,
 	RunE: runInit,
@@ -64,8 +63,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Initialized ox at %s\n", oxHome)
 	fmt.Println("\nNext steps:")
-	fmt.Println("  ox repo add <url>              # Register a codebase")
-	fmt.Println("  ox pickup <task-id> --repos x  # Create workspace for yoke task")
+	fmt.Println("  ox repo add <url>   # Register a codebase")
+	fmt.Println("  ox go <task-ref>    # Start or resume a mission")
 
 	return nil
 }

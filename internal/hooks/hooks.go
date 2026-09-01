@@ -75,12 +75,6 @@ func (m *Manager) BuiltInHooks() []*Hook {
 			Enabled:     true,
 			BuiltIn:     true,
 		},
-		{
-			Name:        "workspace-context",
-			Description: "Current workspace and task summary",
-			Enabled:     true,
-			BuiltIn:     true,
-		},
 	}
 }
 
@@ -102,7 +96,7 @@ jq -n --arg ctx "## Ready Tasks (from yoke)
 
 $READY_TASKS
 
-Use 'ox pickup <id> --repos <repo>' to start working on a task." '{
+Use 'ox go <id>' to start or resume a mission on a task." '{
   hookSpecificOutput: {
     hookEventName: "SessionStart",
     additionalContext: $ctx
@@ -118,15 +112,11 @@ INPUT=$(cat)
 
 INSTRUCTIONS="## ox CLI Reference
 
-**Task Management:**
-- ox pickup <id> --repos <repo>  # Create workspace for task
-- ox status                       # Show current task
-- ox done [id]                    # Complete task, cleanup
-
-**During Work:**
-- ox morph <persona>              # Switch persona (builder/explorer/reviewer/captain)
-- ox skill inject <name>          # Add skill to workspace
-- ox ship                         # Push and create PR
+**Missions:**
+- ox go <task-ref|mission-id|goal>  # Start or resume a mission
+- ox                                 # Resume the current mission
+- ox missions                        # List missions with phase + spend
+- ox where <id> / ox inbox / ox retro  # Locate work / what needs you / cost
 
 **Tasks (use yoke directly):**
 - yoke list / yoke ready          # List tasks / unblocked tasks
@@ -136,7 +126,7 @@ INSTRUCTIONS="## ox CLI Reference
 
 **Info:**
 - ox personas                     # List personas
-- ox skill list                   # List skills"
+- ox memory recall <query>        # Search long-term memory"
 
 jq -n --arg ctx "$INSTRUCTIONS" '{
   hookSpecificOutput: {
@@ -144,39 +134,6 @@ jq -n --arg ctx "$INSTRUCTIONS" '{
     additionalContext: $ctx
   }
 }'
-`
-	case "workspace-context":
-		return `#!/bin/bash
-# ox hook: workspace-context
-# Shows current workspace context if in a workspace
-
-INPUT=$(cat)
-
-# Check if we're in an ox workspace
-if [[ "$PWD" == *"/.ox/tasks/"* ]]; then
-  WORKSPACE_NAME=$(basename "$PWD")
-  TASK_ID=$(echo "$WORKSPACE_NAME" | cut -d'-' -f1)
-
-  # Get task info from yoke
-  TASK_INFO=$(yoke show "$TASK_ID" 2>/dev/null || echo "Task $TASK_ID")
-
-  CONTEXT="## Current Workspace
-
-Working on: $WORKSPACE_NAME
-$TASK_INFO
-
-Use 'ox morph <persona>' to change mindset, 'ox ship' when ready."
-
-  jq -n --arg ctx "$CONTEXT" '{
-    hookSpecificOutput: {
-      hookEventName: "SessionStart",
-      additionalContext: $ctx
-    }
-  }'
-else
-  # Not in workspace, output empty
-  echo '{}'
-fi
 `
 	default:
 		return `#!/bin/bash

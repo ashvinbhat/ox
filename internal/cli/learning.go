@@ -65,7 +65,7 @@ var legacyKind = map[string]string{
 }
 
 func runLearn(cmd *cobra.Command, args []string) error {
-	cfg := requireConfig()
+	requireConfig() // guard: exits if ox isn't initialized
 	content := args[0]
 
 	store, err := openMemoryStore()
@@ -81,14 +81,6 @@ func runLearn(cmd *cobra.Command, args []string) error {
 
 	tags := learnTags
 	scope := "global"
-	if ws, err := getCurrentWorkspace(cfg.Home); err == nil {
-		for _, repo := range ws.Repos {
-			tags = append(tags, repo)
-			if scope == "global" {
-				scope = "repo:" + repo
-			}
-		}
-	}
 
 	res, err := store.Remember(cmd.Context(), memory.RememberInput{
 		Content: content, Kind: kind, Scope: scope, Tags: tags, Source: "user",
