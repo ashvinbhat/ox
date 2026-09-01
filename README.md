@@ -1,45 +1,34 @@
 # ox
 
-> Agent workspace manager - Built on yoke
+> A mission harness for AI-assisted development — built on [yoke](https://github.com/ashvinbhat/yoke)
 
-Creates structured workspaces for AI-assisted development with context, personas, skills, and Claude Code hooks.
+`ox go <task>` opens a persistent orchestrator that plans with you, delegates to
+workers and jobs only when the work justifies it, integrates, and ships — all in
+one tmux session you can leave and resume at any time.
 
 ## Features
 
-- **Task-driven**: Every session tied to a [yoke](https://github.com/ashvinbhat/yoke) task
-- **Context-rich**: AGENTS.md with full task context, notes, dependencies
-- **Persona-based**: Right mindset for the job (builder, explorer, reviewer, captain)
-- **Skill-augmented**: Relevant expertise auto-injected based on tags
-- **Hook-enabled**: Context injected at Claude Code session start
+- **Mission-centric**: one resumable orchestrator per task; the task id is the resume handle
+- **Files are truth**: every mission's state lives on disk, so every process is stateless and restart-safe
+- **Delegation ladder**: spawns worker sessions and headless jobs (claude or opencode) only when needed
+- **Self-reconciling**: a watcher auto-starts dependency-gated workers, prices transcripts into a ledger, and enforces budgets
+- **Long-term memory**: hybrid FTS5 + embedding recall, distilled at mission close
+- **Playbooks**: mission types (task, debug, review, …) are plain markdown, no code
 
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Terminal 1: ox CLI                                             │
-│  $ ox pickup 9 --repos backend                                  │
-│    → Creates workspace at ~/.ox/tasks/9-feature/                │
-│    → Creates git worktree with branch ox/9-feature              │
-│    → Generates AGENTS.md with task context + persona + skills   │
-│    → Symlinks CLAUDE.md → AGENTS.md                             │
-│                                                                 │
-│  $ ox open                                                      │
-│    → Opens workspace in IDE                                     │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  Terminal 2: Claude Code (in workspace)                         │
-│  $ cd ~/.ox/tasks/9-feature/ && claude                          │
-│    → Claude Code reads CLAUDE.md automatically                  │
-│    → Has full task context, skills, related files               │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  Back to Terminal 1                                             │
-│  $ ox ship                    # Push branch, create PR          │
-│  $ ox done                    # Cleanup workspace, mark done    │
-└─────────────────────────────────────────────────────────────────┘
+tmux session  ox-<mission>
+├─ window "orc"    persistent claude orchestrator — plans, delegates, integrates, ships
+└─ window "watch"  reconciles state, starts gated workers, prices the ledger, injects digests
+
+~/.ox/missions/m<seq>-<slug>/     mission.yaml · plan.md · events.jsonl · ledger.jsonl
+                                  agents.json · jobs.json · workers/ · jobs/
 ```
+
+Workers are their own claude/opencode sessions in git worktrees; jobs are
+detached headless one-shots. Both are addressed by the files in the mission
+dir, so the orchestrator, watcher, and MCP server are all stateless over them.
 
 ## Installation
 
@@ -48,120 +37,61 @@ go install github.com/ashvinbhat/ox/cmd/ox@latest
 ox init
 ```
 
-Requires: [yoke](https://github.com/ashvinbhat/yoke) installed and initialized.
+Requires [yoke](https://github.com/ashvinbhat/yoke) installed and initialized,
+plus [Claude Code](https://claude.com/claude-code) and tmux.
 
 ## Quick Start
 
 ```bash
-# Initialize ox
-ox init
-
-# Register a codebase
+ox init                                           # Initialize ~/.ox
 ox repo add git@github.com:company/backend.git --name backend
-
-# Pick up a yoke task
-ox pickup 9 --repos backend
-
-# Open in IDE
-ox open
-
-# Work with Claude Code in the workspace...
-
-# Create PR when ready
-ox ship
-
-# Complete and cleanup
-ox done
+ox go 114                                         # Open/resume the mission for task #114
+ox                                                # Resume the current mission
 ```
 
 ## Commands
 
-### Missions (the harness — primary workflow)
+### Missions (the primary workflow)
 ```bash
+ox                               # Resume the current mission (bare ox = ox go, no args)
 ox go 114                        # Open/resume the mission for a task
 ox go m17                        # Resume a mission by id
 ox go "why is CI flaky" --playbook debug   # Freeform mission
-ox go                            # Pick from open missions
-
-# Inside: a persistent orchestrator plans with you, spawns workers/jobs only
-# when needed, merges, and ships — all in one resumable tmux session.
-# The watcher (window "watch") feeds it events and enforces budgets.
+ox go <pr-url>                   # Review a PR (review playbook)
 
 ox missions                      # List missions with phase + spend
 ox missions distill m17          # Re-run knowledge distillation
 ox missions prune                # GC zombie sessions + closed-mission worktrees
+ox where m17                     # Show where a mission's code and files live
+ox inbox                         # What needs you, across all missions
+ox retro                         # Mission scorecards — cost and outcome
+ox plan                          # Review a mission's plan from the terminal
+ox watch m17                     # Run the watcher loop (normally its own window)
+```
 
+### Models / opencode
+```bash
+ox opencode [dir]                # Open opencode with ox provider keys wired in
+```
+Workers and jobs default to claude; the orchestrator can put one on opencode
+(any OpenRouter/Google model) when you ask.
+
+### Memory
+```bash
 ox memory recall "query"         # Search long-term memory
 ox memory stats|migrate|backfill|gc
-
-ox claude 18                     # Start Claude in a legacy task workspace
+ox learn "insight" [-t tag]      # Capture a learning
+ox learnings [--tag x]           # List captured learnings
 ```
 
-### Workspace
-```bash
-ox pickup <id> --repos <repo>    # Create workspace for task
-ox status                        # Current task and workspace
-ox open                          # Open workspace in IDE
-ox go <pr-url>                   # Review a PR (review playbook: panel → discuss → post)
-ox ship                          # Push and create PR
-ox done [id]                     # Complete task, cleanup
-```
-
-### Repos
+### Repos, personas, hooks, budgets
 ```bash
 ox repo add <url> [--name x]     # Register a codebase
-ox repo list                     # Show registered repos
-ox repo remove <name>            # Unregister repo
+ox repo list | remove <name>
+ox personas                      # List personas (agent mindset + model preset)
+ox hooks | hooks init            # Manage Claude Code hooks
+ox budgets on|off                # Toggle spend enforcement (tracking always on)
 ```
-
-### Personas
-```bash
-ox personas                      # List available personas
-ox pickup --persona explorer     # Start with specific persona
-ox morph <persona>               # Switch persona mid-task
-```
-
-### Skills
-```bash
-ox skill list                    # List available skills
-ox skill inject <name>           # Add skill to workspace
-ox skill eject <name>            # Remove skill from workspace
-```
-
-### Hooks
-```bash
-ox hooks                         # List hooks
-ox hooks init                    # Initialize and install to Claude Code
-ox hooks run <name>              # Test a hook
-```
-
-### Checkpoints
-```bash
-ox checkpoint --done "..." --next "..."   # Save progress checkpoint
-ox checkpoints                            # List checkpoints for current task
-ox resume                                 # Show latest checkpoint context
-ox resume <checkpoint-id>                 # Show specific checkpoint
-```
-
-### Learnings
-```bash
-ox learn "insight" [-c category] [-t tag] # Capture a learning
-ox learnings                              # List all learnings
-ox learnings --tag backend                # Filter by tag
-ox learnings --category gotcha            # Filter by category
-ox done --learn "insight"                 # Capture learning on completion
-```
-
-### Cockpit
-```bash
-ox dashboard                   # Live mission cockpit on localhost:8080
-ox budgets on|off              # Toggle spend enforcement (tracking always on)
-```
-
-The cockpit shows every open mission (phase, spend, budget, PRs, recent
-events) with its orchestrator, watcher, workers, and jobs — click any session
-to stream its terminal live (tmux control mode, real-time push) and type to
-the agent from the input bar.
 
 ### Task Management (yoke)
 
@@ -178,7 +108,7 @@ yoke done <id>                 # Complete task
 ```
 
 `yoke docs` writes the full usage reference to `~/.yoke/AGENTS.md`; ox symlinks
-it into every workspace as `YOKE.md` so agents always know how to drive yoke.
+it into each mission dir as `YOKE.md` so agents always know how to drive yoke.
 
 ## Personas
 
@@ -189,48 +119,26 @@ it into every workspace as `YOKE.md` so agents always know how to drive yoke.
 | **explorer** | Researches, investigates | `research`, `spike`, `investigate` |
 | **reviewer** | Reviews, checks quality | `review`, `pr`, `audit`, `quality` |
 
-Personas are auto-selected based on task tags, or specified with `--persona`.
-
-## Skills
-
-Skills are expertise modules auto-injected based on task tags, persona, or task type:
-
-```yaml
-# ~/.ox/skills/skills.yaml
-skills:
-  backend-engineer:
-    file: backend-engineer.md
-    tags: [backend, java, python]
-    personas: [builder]
-  debugging:
-    file: debugging.md
-    tags: [bug, incident]
-    personas: [builder, explorer]
-```
+A persona is a system-prompt + model preset applied to a worker or job.
 
 ## Hooks
 
-Hooks inject context into Claude Code sessions:
-
-- **yoke-ready-tasks**: Show ready tasks at session start
-- **ox-instructions**: ox CLI quick reference
-- **workspace-context**: Current task summary
-
-Run `ox hooks init` to install hooks to Claude Code.
+ox installs SessionStart hooks into Claude Code's native hook system
+(`~/.claude/settings.json`) to surface ready yoke tasks and an ox quick
+reference. Run `ox hooks init` to install them.
 
 ## Directory Structure
 
 ```
 ~/.ox/
-├── ox.yaml              # Configuration
-├── repos/               # Registered codebases (cloned)
-├── tasks/               # Active task workspaces
-│   └── 9-feature/       # Workspace directory
-│       ├── AGENTS.md    # Generated context
-│       ├── CLAUDE.md    # Symlink → AGENTS.md
-│       └── backend/     # Symlink → worktree
-├── worktrees/           # Git worktrees
-├── skills/              # Skill definitions
+├── ox.yaml              # Config (repos, model tiers, memory.embeddings, budgets)
+├── repos/               # Registered codebases (base clones)
+├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
+├── missions/            # Missions — the primary work unit
+│   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/…
+├── memory.db            # Long-term memory (FTS5 + embedding BLOBs)
+├── memory/repos/        # Living per-repo knowledge docs (distiller-maintained)
+├── playbooks/           # Mission-type overrides (task.md, debug.md, …)
 ├── personas/            # Persona definitions
 └── hooks/               # Claude Code hooks
 ```
@@ -239,9 +147,6 @@ Run `ox hooks init` to install hooks to Claude Code.
 
 ```yaml
 # ~/.ox/ox.yaml
-agent: claude
-ide: windsurf
-
 repos:
   backend:
     url: git@github.com:company/backend.git
@@ -249,8 +154,8 @@ repos:
     copy_files: [.env, .vscode]
     post_setup: npm install
 
-defaults:
-  persona: builder
+models:
+  orchestrator: claude-opus-4-6
 ```
 
 ## Dependencies
@@ -258,6 +163,7 @@ defaults:
 - [yoke](https://github.com/ashvinbhat/yoke) — task management
 - Git with worktree support
 - [Claude Code](https://claude.com/claude-code) CLI and tmux (for the mission harness)
+- [opencode](https://opencode.ai) — optional, for running workers/jobs on other models
 
 ## Contributing
 

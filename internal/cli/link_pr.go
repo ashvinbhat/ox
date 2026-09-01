@@ -21,7 +21,7 @@ Tasks can carry multiple PRs (one per repo, or revisions). Each invocation
 adds a separate "PR (<repo>): <url>" note on the task. Duplicate URLs are
 skipped silently.
 
-ox ship calls this automatically after creating a PR. Use this command
+The harness records PRs automatically when it ships. Use this command
 when:
 - A PR was created outside ox (gh pr create, web UI, etc.)
 - A follow-up PR was raised on top of the original

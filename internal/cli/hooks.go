@@ -15,7 +15,6 @@ var hooksCmd = &cobra.Command{
 Built-in hooks:
   yoke-ready-tasks   Show ready tasks from yoke at session start
   ox-instructions    ox CLI quick reference
-  workspace-context  Current workspace and task summary
 
 Hooks are shell scripts in ~/.ox/hooks/ that output JSON for Claude Code.`,
 	RunE: runHooksList,
