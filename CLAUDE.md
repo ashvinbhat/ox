@@ -30,28 +30,27 @@ go build -o ox ./cmd/ox
 
 Or use `go run ./cmd/ox <command>` during development.
 
-## Testing Commands
+## Commands
 
-**Workspace-dependent commands must be run FROM the workspace directory:**
-- `ox checkpoint` - requires being in workspace
-- `ox checkpoints` - requires being in workspace
-- `ox resume` - requires being in workspace
-- `ox refresh` - requires being in workspace
-- `ox morph` - requires being in workspace
-- `ox skill inject/eject` - requires being in workspace
+The mission harness is the primary surface:
+- `ox` — resume the current mission (bare `ox` = `ox go` with no args)
+- `ox go <task-ref | mission-id | "goal">` — start or resume a mission
+- `ox watch <id>` — reconcile + budget + digest loop for a mission
+- `ox missions` / `ox where <id>` — list missions / locate its worktrees & agents
+- `ox inbox` — what needs the human · `ox retro` — cost/health · `ox plan` — review plan.md
+- `ox mcp --mission <id> --role orchestrator|worker` — typed tool server per session
+- `ox opencode [dir]` — open opencode with ox provider keys wired in
 
-These commands use `getCurrentWorkspace()` which detects if the current working directory is inside a workspace path.
+Work-anywhere helpers:
+- `ox repo add/list` — manage registered codebases
+- `ox personas` — list personas (agent mindset + model preset)
+- `ox hooks` — list Claude Code hooks
+- `ox learn` / `ox learnings` — write / search long-term memory
+- `ox memory …` — inspect the memory store
 
-**Commands that work from anywhere:**
-- `ox pickup` - creates workspace
-- `ox status` - lists all workspaces
-- `ox done <task-id>` - can specify task ID
-- `ox repo list` - lists registered repos
-- `ox skill list` - lists available skills
-- `ox personas` - lists personas
-- `ox hooks` - lists hooks
-- `ox learn` - works anywhere (but adds workspace context if in one)
-- `ox learnings` - lists all learnings
+The pre-mission "solo workspace" commands (pickup/checkpoint/morph/skill/…) and
+their `internal/{agent,tui,workspace,skills}` packages were removed — missions
+replaced them, and skills/hooks now use Claude Code's native mechanisms.
 
 ## Yoke Integration
 
@@ -62,7 +61,7 @@ through the yoke CLI:
   decodes `--json` output (show/list/notes + start/done/note/context/docs)
 - Task management is done with yoke directly (`yoke add/list/show/...`), not
   through ox wrappers — those were removed
-- Every workspace gets a `YOKE.md` symlink → `~/.yoke/AGENTS.md` (regenerated
+- Every mission dir gets a `YOKE.md` symlink → `~/.yoke/AGENTS.md` (regenerated
   by `yoke docs`) so agents know how to drive yoke
 - yoke binary location: `~/go/bin/yoke` (yokecli.BinaryPath falls back there
   when PATH lacks it)
@@ -73,15 +72,9 @@ through the yoke CLI:
 
 1. **"unknown command" errors** - Binary is stale, rebuild with `go build -o ox ./cmd/ox`
 
-2. **"not in a workspace" errors** - Run command from workspace directory:
-   ```bash
-   cd ~/.ox/tasks/<task-dir>
-   ox checkpoint --done "..."
-   ```
+2. **Config not found** - Run `ox init` first
 
-3. **Config not found** - Run `ox init` first
-
-4. **Repo not registered** - Run `ox repo add <url> --name <name>`
+3. **Repo not registered** - Run `ox repo add <url> --name <name>`
 
 ## Architecture
 
@@ -95,11 +88,8 @@ through the yoke CLI:
 ├── memory.db            # Long-term memory (FTS5 + embedding BLOBs)
 ├── memory/repos/        # Living per-repo knowledge docs (distiller-maintained)
 ├── playbooks/           # Mission-type overrides (task.md, debug.md, ...)
-├── tasks/               # Legacy solo workspaces (ox pickup)
-├── skills/              # Skill markdown files
 ├── personas/            # Persona definitions
-├── hooks/               # Claude Code hooks
-└── learnings.db         # Legacy learnings (migrated into memory.db)
+└── hooks/               # Claude Code hooks
 ```
 
 ## Full Workflow Test
@@ -108,14 +98,9 @@ through the yoke CLI:
 # 1. Create task in yoke
 yoke add "Test task" -t backend -p 2
 
-# 2. Pickup task
-ox pickup <task-id> --repos backend
+# 2. Open a mission on it (orchestrator plans, delegates, integrates, ships)
+ox go <task-id>
 
-# 3. Work in workspace
-cd ~/.ox/tasks/<task-dir>
-ox checkpoint --done "Did X" --next "Do Y"
-ox learn "Learned Z" -c gotcha
-
-# 4. Complete
-ox done <task-id> --reason "Shipped"
+# 3. Leave and resume any time — the task/mission id is the resume handle
+ox go <task-id>     # or just: ox
 ```

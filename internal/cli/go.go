@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -165,6 +166,21 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// linkYokeDocs symlinks the generated yoke agent docs into a mission dir as
+// YOKE.md, so agents in that dir know how to drive yoke.
+func linkYokeDocs(dir string) {
+	docsPath, err := yokecli.DocsPath()
+	if err != nil {
+		fmt.Printf("Warning: could not resolve yoke docs: %v\n", err)
+		return
+	}
+	linkPath := filepath.Join(dir, "YOKE.md")
+	os.Remove(linkPath)
+	if err := os.Symlink(docsPath, linkPath); err != nil {
+		fmt.Printf("Warning: could not link YOKE.md: %v\n", err)
+	}
 }
 
 func createMission(oxHome, playbook, goal string, yoke *mission.YokeRef, taskMD string) error {

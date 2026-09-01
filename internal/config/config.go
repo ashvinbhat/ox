@@ -213,12 +213,10 @@ func EnsureDirs(oxHome string) error {
 	dirs := []string{
 		oxHome,
 		filepath.Join(oxHome, "repos"),
-		filepath.Join(oxHome, "tasks"),
 		filepath.Join(oxHome, "worktrees"),
-		filepath.Join(oxHome, "skills"),
+		filepath.Join(oxHome, "missions"),
 		filepath.Join(oxHome, "personas"),
 		filepath.Join(oxHome, "hooks"),
-		filepath.Join(oxHome, "agents"),
 	}
 
 	for _, dir := range dirs {
