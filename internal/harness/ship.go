@@ -78,6 +78,53 @@ func Ship(cfg *config.Config, m *mission.Mission, repos []string, draft bool, ti
 	return results, nil
 }
 
+// MarkReady flips the mission's draft PRs to ready-for-review: it takes each
+// bound repo's PR out of draft and adds the ready-for-review label. Called once
+// the wider test suite is green, after ship(draft:true) opened the PR early so
+// the user could test in parallel.
+func MarkReady(m *mission.Mission, repos []string) []ShipResult {
+	targets := repos
+	if len(targets) == 0 {
+		for name := range m.Repos {
+			targets = append(targets, name)
+		}
+	}
+	var results []ShipResult
+	for _, name := range targets {
+		binding, ok := m.Repos[name]
+		if !ok {
+			results = append(results, ShipResult{Repo: name, Error: "repo not bound to mission"})
+			continue
+		}
+		r := ShipResult{Repo: name}
+		if msg, err := ghReady(binding.IntegrationWorktree); err != nil {
+			r.Error = "ready: " + msg
+		}
+		results = append(results, r)
+	}
+	m.AppendEvent("pr_ready", "orchestrator", map[string]any{"repos": targets})
+	return results
+}
+
+// ghReady takes the worktree branch's PR out of draft and labels it
+// ready-for-review. Idempotent: a PR that is already non-draft is fine.
+func ghReady(worktree string) (string, error) {
+	ready := exec.Command("gh", "pr", "ready")
+	ready.Dir = worktree
+	if out, err := ready.CombinedOutput(); err != nil {
+		s := strings.TrimSpace(string(out))
+		if !strings.Contains(s, "not a draft") && !strings.Contains(s, "already") {
+			return s, err
+		}
+	}
+	label := exec.Command("gh", "pr", "edit", "--add-label", "ready-for-review")
+	label.Dir = worktree
+	if out, err := label.CombinedOutput(); err != nil {
+		return strings.TrimSpace(string(out)), err
+	}
+	return "", nil
+}
+
 // taskIsNotionLinked reports whether the mission's task tracks a Notion page.
 func taskIsNotionLinked(m *mission.Mission) bool {
 	t, err := yokecli.Get(fmt.Sprintf("%d", m.Yoke.Seq))
@@ -115,11 +162,15 @@ func LinkPR(m *mission.Mission, repo, prURL string) {
 }
 
 // CreatePR opens a PR via gh from the given worktree, or returns the existing
-// one for the branch.
+// one for the branch. A draft opens without the ready-for-review label — it is
+// not ready by definition; mark_ready adds the label once the wider suite is
+// green.
 func CreatePR(worktree, title, body string, draft bool) (string, error) {
-	args := []string{"pr", "create", "--title", title, "--body", body, "--label", "ready-for-review"}
+	args := []string{"pr", "create", "--title", title, "--body", body}
 	if draft {
 		args = append(args, "--draft")
+	} else {
+		args = append(args, "--label", "ready-for-review")
 	}
 	cmd := exec.Command("gh", args...)
 	cmd.Dir = worktree
