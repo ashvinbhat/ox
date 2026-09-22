@@ -31,6 +31,10 @@ type shipOut struct {
 	Results []harness.ShipResult `json:"results"`
 }
 
+type markReadyIn struct {
+	Repos []string `json:"repos,omitempty" jsonschema:"default: all bound repos"`
+}
+
 type linkPRIn struct {
 	Repo string `json:"repo"`
 	URL  string `json:"url"`
@@ -57,7 +61,7 @@ func (s *Server) registerIntegrateTools(srv *mcp.Server) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "ship",
-		Description: "Push integration branches and open PRs. HARD GATE: only after the user explicitly approved shipping, and only in a late phase. Runs a blocking comment-polish gate per repo first (removes WHAT-comments and redundant javadocs the branch added; may add a chore commit and take a few minutes).",
+		Description: "Push integration branches and open PRs. Open a DRAFT (draft=true) the moment the task's targeted tests pass — that is standing-authorized so the user can test in parallel; opening a NON-draft (ready) PR still needs the user's explicit approval. Phase-gated to reviewing/shipping. Runs a blocking comment-polish gate per repo first (removes WHAT-comments and redundant javadocs the branch added; may add a chore commit and take a few minutes).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in shipIn) (*mcp.CallToolResult, shipOut, error) {
 		if !in.Confirm {
 			return nil, shipOut{}, fmt.Errorf("set confirm=true after the user approves shipping")
@@ -74,6 +78,17 @@ func (s *Server) registerIntegrateTools(srv *mcp.Server) {
 			return nil, shipOut{}, err
 		}
 		return nil, shipOut{Results: results}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "mark_ready",
+		Description: "Take the mission's draft PRs out of draft and label them ready-for-review. Call this once the WIDER/full test suite and the review gates pass, after ship(draft:true) opened the PR early for parallel manual testing.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in markReadyIn) (*mcp.CallToolResult, shipOut, error) {
+		m, err := s.openMission()
+		if err != nil {
+			return nil, shipOut{}, err
+		}
+		return nil, shipOut{Results: harness.MarkReady(m, in.Repos)}, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{

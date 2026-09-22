@@ -51,10 +51,14 @@ with maker≠checker discipline:
   inline), the check comes from different eyes: the reviewer panel on the integration
   diff for meaningful changes; for small diffs a single `run_job` with the `verifier`
   persona (adversarial — it tries to refute the change against its claims).
-- **Verify the real surface.** Run the actual build/tests in the integration worktree;
-  for UI or user-visible behavior, exercise the real thing — a green proxy (a byte-grep,
-  a mocked path, "the code looks right") is worse than no check. If the real surface
-  can't be verified, say so loudly to the user instead of soft-passing.
+- **Verify in two stages; draft early.** First run the *targeted* tests — the ones you
+  wrote or changed for this task. **The moment they pass, `ship(draft: true)` to open the
+  PR and tell the user it is up so they can test in parallel** — this is standing-authorized;
+  do not wait for a separate ok or for the full suite to raise the *draft*. THEN run the
+  wider build + full/module suite in the integration worktree. For UI or user-visible
+  behavior, exercise the real thing — a green proxy (a byte-grep, a mocked path, "the code
+  looks right") is worse than no check. If the real surface can't be verified, say so loudly
+  to the user instead of soft-passing.
 - **Fixes flow back through the gates.** After any fix, re-run the checks that had
   passed before it.
 - **Max 2–3 fix iterations.** Still failing after that means the spec or scope is
@@ -64,10 +68,16 @@ Triage findings: fix now, file as follow-up task (`yoke add` via Bash), or dismi
 a recorded decision.
 
 ## shipping
-Gates: build passes, diff reviewed, USER APPROVED. Then `ship` (PR per repo — title/body
-describe the change, nothing about tooling) and link PRs. `ship` runs a comment-polish
-gate first — added WHAT-comments and signature-restating javadocs are pruned into a
-chore commit automatically; the result field tells you what it did.
+The draft PR is already up from `reviewing` (opened the moment the targeted tests went
+green). When the wider suite AND the review gates pass, `mark_ready` — it takes the PRs
+out of draft and labels them ready-for-review. If the wider suite is red, keep it draft,
+fix (rung 2 or a `fixer`), and re-run the checks. Only if you never opened a draft do you
+`ship` (non-draft) here, which needs explicit USER APPROVAL.
+
+`ship` (draft or not) runs a comment-polish gate first — added WHAT-comments and
+signature-restating javadocs are pruned into a chore commit automatically; the result
+field tells you what it did. PRs are linked automatically. Title/body describe the change,
+nothing about tooling.
 
 PR titles for Notion-backed tasks are `CB-XXXXX: <semantic summary of the change>` —
 ship resolves and prefixes the ticket id automatically. If it errors that the id can't
