@@ -36,3 +36,6 @@ config.local.yaml
 # Local working notes (not part of ox)
 DM2.0/
 linkedin-video-ad-template.html
+
+# opencode goals plugin session state
+.opencode/goals/
