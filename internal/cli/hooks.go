@@ -13,8 +13,7 @@ var hooksCmd = &cobra.Command{
 	Long: `Manages hooks that inject context into Claude Code sessions.
 
 Built-in hooks:
-  yoke-ready-tasks   Show ready tasks from yoke at session start
-  ox-instructions    ox CLI quick reference
+  ox-brief   Start every thread with ` + "`ox now --brief`" + `
 
 Hooks are shell scripts in ~/.ox/hooks/ that output JSON for Claude Code.`,
 	RunE: runHooksList,

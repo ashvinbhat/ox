@@ -41,6 +41,14 @@ func (m *Manager) Init() error {
 		return fmt.Errorf("create hooks dir: %w", err)
 	}
 
+	// Every .sh in the hooks dir gets registered, so a retired built-in left on
+	// disk would keep running at every session start.
+	for _, name := range retiredBuiltIns {
+		if err := os.Remove(filepath.Join(m.hooksDir, name+".sh")); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove retired hook %s: %w", name, err)
+		}
+	}
+
 	// Built-in scripts are owned by ox: rewrite them whenever the embedded
 	// content changes, otherwise stale copies advertise removed commands.
 	builtins := m.BuiltInHooks()
@@ -60,18 +68,16 @@ func (m *Manager) Init() error {
 	return nil
 }
 
+// retiredBuiltIns are hooks earlier ox versions installed. They pointed
+// threads at missions, which are frozen in 1.0.
+var retiredBuiltIns = []string{"ox-instructions", "yoke-ready-tasks", "workspace-context"}
+
 // BuiltInHooks returns the default built-in hooks.
 func (m *Manager) BuiltInHooks() []*Hook {
 	return []*Hook{
 		{
-			Name:        "yoke-ready-tasks",
-			Description: "Show ready tasks from yoke at session start",
-			Enabled:     true,
-			BuiltIn:     true,
-		},
-		{
-			Name:        "ox-instructions",
-			Description: "ox CLI quick reference",
+			Name:        "ox-brief",
+			Description: "Start every thread with `ox now --brief`",
 			Enabled:     true,
 			BuiltIn:     true,
 		},
@@ -81,54 +87,20 @@ func (m *Manager) BuiltInHooks() []*Hook {
 // generateBuiltInScript creates the script content for a built-in hook.
 func (m *Manager) generateBuiltInScript(name string) string {
 	switch name {
-	case "yoke-ready-tasks":
+	case "ox-brief":
+		// Hooks run without the user's shell PATH, hence the go/bin fallback.
+		// Any failure prints nothing, so a broken ox never blocks a session.
 		return `#!/bin/bash
-# ox hook: yoke-ready-tasks
-# Shows ready tasks from yoke at Claude Code session start
+# ox hook: ox-brief
+# Starts every Claude Code thread with where things stand (ox now --brief).
 
-INPUT=$(cat)
+cat > /dev/null
 
-# Get ready tasks from yoke
-READY_TASKS=$(yoke ready 2>/dev/null || echo "No ready tasks")
+OX=$(command -v ox || echo "$HOME/go/bin/ox")
+BRIEF=$("$OX" now --brief 2>/dev/null) || exit 0
+[ -z "$BRIEF" ] && exit 0
 
-# Output JSON for Claude Code
-jq -n --arg ctx "## Ready Tasks (from yoke)
-
-$READY_TASKS
-
-Use 'ox go <id>' to start or resume a mission on a task." '{
-  hookSpecificOutput: {
-    hookEventName: "SessionStart",
-    additionalContext: $ctx
-  }
-}'
-`
-	case "ox-instructions":
-		return `#!/bin/bash
-# ox hook: ox-instructions
-# Provides ox CLI quick reference
-
-INPUT=$(cat)
-
-INSTRUCTIONS="## ox CLI Reference
-
-**Missions:**
-- ox go <task-ref|mission-id|goal>  # Start or resume a mission
-- ox                                 # Resume the current mission
-- ox missions                        # List missions with phase + spend
-- ox where <id> / ox inbox / ox retro  # Locate work / what needs you / cost
-
-**Tasks (use yoke directly):**
-- yoke list / yoke ready          # List tasks / unblocked tasks
-- yoke show <id>                  # Task details
-- yoke context <id>               # Full task context
-- yoke note <id> <text>           # Add note
-
-**Info:**
-- ox personas                     # List personas
-- ox memory recall <query>        # Search long-term memory"
-
-jq -n --arg ctx "$INSTRUCTIONS" '{
+jq -n --arg ctx "$BRIEF" '{
   hookSpecificOutput: {
     hookEventName: "SessionStart",
     additionalContext: $ctx

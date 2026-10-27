@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Toward 1.0.0. ox becomes what Claude Code desktop threads draw on; the tmux
+mission harness is frozen.
+
+### Added
+- `ox now`: every desktop thread by state (needs you, in review, working,
+  stuck, done) and track, plus yoke tasks and open PRs that no thread owns.
+  `--brief` for thread start, `--json` for agents, `--track` to filter,
+  `--all` to include archived threads.
+- Tracks: `~/.ox/tracks.yaml` names your workstreams; terms match at a word start.
+- `ox-brief` SessionStart hook: every new thread starts with `ox now --brief`.
+
+### Changed
+- **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
+  `ox go` to resume one.
+- CLAUDE.md and README lead with working in desktop threads; missions are
+  documented as frozen.
+
+### Removed
+- The `ox-instructions` and `yoke-ready-tasks` hooks, which pointed threads at
+  missions. `ox hooks init` deletes their scripts.
+
 ## [0.1.0] - 2026-08-19
 
 Initial public release.

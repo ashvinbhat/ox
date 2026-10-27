@@ -1,34 +1,32 @@
 # ox
 
-> A mission harness for AI-assisted development — built on [yoke](https://github.com/ashvinbhat/yoke)
+> What your Claude Code threads draw on — built on [yoke](https://github.com/ashvinbhat/yoke)
 
-`ox go <task>` opens a persistent orchestrator that plans with you, delegates to
-workers and jobs only when the work justifies it, integrates, and ships — all in
-one tmux session you can leave and resume at any time.
+You work in Claude Code desktop threads. ox keeps them pointed the same way:
+every thread starts knowing what needs you, what's in review and what's
+running, grouped by your tracks.
 
 ## Features
 
-- **Mission-centric**: one resumable orchestrator per task; the task id is the resume handle
-- **Files are truth**: every mission's state lives on disk, so every process is stateless and restart-safe
-- **Delegation ladder**: spawns worker sessions and headless jobs (claude or opencode) only when needed
-- **Self-reconciling**: a watcher auto-starts dependency-gated workers, prices transcripts into a ledger, and enforces budgets
-- **Long-term memory**: hybrid FTS5 + embedding recall, distilled at mission close
-- **Playbooks**: mission types (task, debug, review, …) are plain markdown, no code
+- **`ox now`**: every desktop thread by state — needs you, in review, working,
+  stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
+- **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
+- **Tracks**: your workstreams in `~/.ox/tracks.yaml`
+- **Long-term memory**: hybrid FTS5 + embedding recall in `~/.ox/memory.db`
+- **Mission harness (frozen)**: the tmux orchestrator from 0.x still runs via `ox go`
 
 ## How It Works
 
 ```
-tmux session  ox-<mission>
-├─ window "orc"    persistent claude orchestrator — plans, delegates, integrates, ships
-└─ window "watch"  reconciles state, starts gated workers, prices the ledger, injects digests
-
-~/.ox/missions/m<seq>-<slug>/     mission.yaml · plan.md · events.jsonl · ledger.jsonl
-                                  agents.json · jobs.json · workers/ · jobs/
+Claude Code desktop ── per-thread state files ──┐
+GitHub (gh) ── your open PRs ───────────────────┼──▶ ox now ──▶ you, and every new thread (--brief)
+yoke ── tasks ──────────────────────────────────┤
+~/.ox/tracks.yaml ── workstreams ───────────────┘
 ```
 
-Workers are their own claude/opencode sessions in git worktrees; jobs are
-detached headless one-shots. Both are addressed by the files in the mission
-dir, so the orchestrator, watcher, and MCP server are all stateless over them.
+ox reads the desktop app's thread state read-only. That format is internal to
+the app, so ox treats every field as optional: if it changes, threads drop out
+of `ox now` and nothing else breaks.
 
 ## Installation
 
@@ -38,22 +36,39 @@ ox init
 ```
 
 Requires [yoke](https://github.com/ashvinbhat/yoke) installed and initialized,
-plus [Claude Code](https://claude.com/claude-code) and tmux.
+the [Claude Code](https://claude.com/claude-code) desktop app (macOS) for
+`ox now`, and `gh` for PRs. tmux only for the frozen mission harness.
 
 ## Quick Start
 
 ```bash
-ox init                                           # Initialize ~/.ox
-ox repo add git@github.com:company/backend.git --name backend
-ox go 114                                         # Open/resume the mission for task #114
-ox                                                # Resume the current mission
+ox init                          # Initialize ~/.ox
+ox hooks init                    # Start every thread with ox now --brief
+$EDITOR ~/.ox/tracks.yaml        # Name your workstreams
+ox                               # Same as ox now
 ```
 
 ## Commands
 
-### Missions (the primary workflow)
+### Where things stand
 ```bash
-ox                               # Resume the current mission (bare ox = ox go, no args)
+ox now                           # Threads by state and track, tasks, PRs without a thread
+ox now --brief                   # The short version new threads get
+ox now --track durable           # One track
+ox now --json                    # For agents and scripts
+```
+
+`~/.ox/tracks.yaml`:
+```yaml
+tracks:
+  - name: Durable agents
+    short: durable               # column label; defaults to the first word
+    goal: Agent turns survive restarts.
+    match: [durable, redis, valkey]   # matched at a word start in titles, branches, repos
+```
+
+### Missions (frozen)
+```bash
 ox go 114                        # Open/resume the mission for a task
 ox go m17                        # Resume a mission by id
 ox go "why is CI flaky" --playbook debug   # Freeform mission
@@ -123,18 +138,21 @@ A persona is a system-prompt + model preset applied to a worker or job.
 
 ## Hooks
 
-ox installs SessionStart hooks into Claude Code's native hook system
-(`~/.claude/settings.json`) to surface ready yoke tasks and an ox quick
-reference. Run `ox hooks init` to install them.
+`ox hooks init` installs the `ox-brief` SessionStart hook into Claude Code's
+native hook system (`~/.claude/settings.json`), so every new thread starts with
+`ox now --brief`. It also deletes the pre-1.0 `ox-instructions` and
+`yoke-ready-tasks` scripts.
 
 ## Directory Structure
 
 ```
 ~/.ox/
 ├── ox.yaml              # Config (repos, model tiers, memory.embeddings, budgets)
+├── tracks.yaml          # Workstreams for ox now
 ├── repos/               # Registered codebases (base clones)
+├── reviews/             # Review rounds per PR
 ├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
-├── missions/            # Missions — the primary work unit
+├── missions/            # Missions (frozen harness)
 │   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/…
 ├── memory.db            # Long-term memory (FTS5 + embedding BLOBs)
 ├── memory/repos/        # Living per-repo knowledge docs (distiller-maintained)
