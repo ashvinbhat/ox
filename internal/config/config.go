@@ -45,6 +45,10 @@ type EmbeddingsConfig struct {
 // MemoryConfig configures the long-term memory store.
 type MemoryConfig struct {
 	Embeddings EmbeddingsConfig `yaml:"embeddings,omitempty"`
+	// ClaudeDir is the Claude Code auto-memory dir `ox memory audit` checks.
+	// Empty means the project store under ~/.claude/projects with the most
+	// memories.
+	ClaudeDir string `yaml:"claude_dir,omitempty"`
 }
 
 // BudgetsConfig controls whether the harness enforces spend limits (warnings,

@@ -21,7 +21,7 @@ func TestInstallWritesOxSkillsAndLeavesUserSkillsAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(installed, ",") != "review-pr" || strings.Join(skipped, ",") != "review-asks" {
+	if strings.Join(installed, ",") != "memory-check,review-pr" || strings.Join(skipped, ",") != "review-asks" {
 		t.Fatalf("installed %v, skipped %v", installed, skipped)
 	}
 	if b, _ := os.ReadFile(user); string(b) != "---\nname: review-asks\n---\nmine" {
@@ -29,7 +29,7 @@ func TestInstallWritesOxSkillsAndLeavesUserSkillsAlone(t *testing.T) {
 	}
 
 	installed, _, err = Install(dir)
-	if err != nil || strings.Join(installed, ",") != "review-pr" {
+	if err != nil || strings.Join(installed, ",") != "memory-check,review-pr" {
 		t.Fatalf("re-install of an ox skill: %v, %v", installed, err)
 	}
 }

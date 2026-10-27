@@ -20,8 +20,13 @@ also read "Building ox".
 - Tasks: drive yoke directly — `yoke ready`, `yoke show <id>`,
   `yoke add "title" -t tag1 -t tag2 -p 2` (not `--tags`). Take the task number
   from `yoke add` output.
-- Memory: Claude auto-memory for this folder is the source of truth.
-  `ox memory recall <query>` searches the older `~/.ox/memory.db`.
+- Memory: Claude auto-memory for this folder is the one store. When a memory
+  rests on specific code or files, add `metadata.cites`
+  (`["backend:SegmentService", "ox:internal/cli/now.go", "~/.ox/tracks.yaml"]`)
+  so the weekly audit checks exactly those. When Ashvin confirms a memory
+  still holds, set `metadata.verified: YYYY-MM-DD`. `/memory-check` works
+  through what the audit found. `~/.ox/memory.db` is an archive
+  (`ox memory recall <query>`).
 - PR reviews happen only when Ashvin asks, against the whole codebase at the
   PR head, not just the diff: `/review-pr <url>`. `/review-asks` picks up asks
   from Slack; `ox reviews` is the queue. Rounds and asks per PR are in
@@ -53,7 +58,12 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   `/review-pr` and `/review-asks` skills drive
 - `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
   hook runs it hourly in the background; log in `~/.ox/logs/worktrees.log`)
-- `ox repo add/list`, `ox personas`, `ox learn` / `ox learnings`, `ox memory …`
+- `ox memory audit [--json] [--keep <id>]` — gone paths, code and ox commands,
+  MEMORY.md drift, stale project memories, memories stranded in other
+  projects' stores (the hook runs it weekly; the result is in
+  `~/.ox/memory-check/last.json`)
+- `ox repo add/list`, `ox personas`, `ox learnings` / `ox memory recall` (the
+  memory.db archive)
 - `ox opencode [dir]` — opencode with ox provider keys wired in
 - Frozen mission harness: `ox go`, `ox watch`, `ox missions`, `ox where`,
   `ox inbox`, `ox retro`, `ox plan`, `ox mcp`
@@ -71,7 +81,11 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   in `desk.go`, diff files in `~/.ox/reviews/work/` (outside the checkout).
 - `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded), installed by
   `ox setup` into `~/.claude/skills`; `owner: ox` marks them as ox's.
-- `internal/memory` — `~/.ox/memory.db` (FTS5 + embeddings, hybrid RRF recall).
+- `internal/memcheck` — the memory audit: frontmatter parsing, the checks,
+  and the code search (ripgrep over checkouts, then `git grep` at the default
+  branch for what's still missing). Keeps and the last report are in
+  `~/.ox/memory-check/`.
+- `internal/memory` — `~/.ox/memory.db`, the archive (FTS5 + embeddings).
 - `internal/hooks` — SessionStart hook scripts in `~/.ox/hooks/`, registered
   in `~/.claude/settings.json`.
 - Frozen harness: `internal/{harness,mission,watcher,job,mcpserver}`. A mission
@@ -85,7 +99,8 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ├── tracks.yaml      # Workstreams for ox now
 ├── repos/           # Cloned repos
 ├── reviews/         # Review rounds per PR
-├── memory.db        # Older long-term memory store
+├── memory-check/    # Last memory audit and kept suggestions
+├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs
 ├── hooks/           # Claude Code hook scripts
 ├── missions/        # Frozen mission harness state

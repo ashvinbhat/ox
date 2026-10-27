@@ -61,30 +61,16 @@ func runWorktreesPrune(cmd *cobra.Command, args []string) error {
 
 	sessions, _ := desktop.List(desktop.DefaultDir(), false)
 	inUse := map[string]bool{}
-	repoSet := map[string]bool{}
 	for _, s := range sessions {
-		if s.Cwd == "" {
-			continue
-		}
-		inUse[filepath.Clean(s.Cwd)] = true
-		if main, err := worktrees.MainCheckout(s.Cwd); err == nil {
-			repoSet[main] = true
+		if s.Cwd != "" {
+			inUse[filepath.Clean(s.Cwd)] = true
 		}
 	}
 	if wd, err := os.Getwd(); err == nil {
 		inUse[filepath.Clean(wd)] = true
 	}
-	clones, _ := filepath.Glob(filepath.Join(cfg.Home, "repos", "*", ".git"))
-	for _, g := range clones {
-		repoSet[filepath.Dir(g)] = true
-	}
-	repos := make([]string, 0, len(repoSet))
-	for r := range repoSet {
-		repos = append(repos, r)
-	}
-	sort.Strings(repos)
 
-	outcomes, err := worktrees.Prune(repos, inUse, pruneDryRun)
+	outcomes, err := worktrees.Prune(knownRepos(cfg.Home, sessions), inUse, pruneDryRun)
 	if err != nil {
 		return err
 	}
@@ -99,6 +85,30 @@ func runWorktreesPrune(cmd *cobra.Command, args []string) error {
 	}
 	printPrune(outcomes, pruneDryRun)
 	return nil
+}
+
+// knownRepos is every clone in ~/.ox/repos plus the main checkout of every
+// open thread's repo.
+func knownRepos(oxHome string, sessions []desktop.Session) []string {
+	set := map[string]bool{}
+	for _, s := range sessions {
+		if s.Cwd == "" {
+			continue
+		}
+		if main, err := worktrees.MainCheckout(s.Cwd); err == nil {
+			set[main] = true
+		}
+	}
+	clones, _ := filepath.Glob(filepath.Join(oxHome, "repos", "*", ".git"))
+	for _, g := range clones {
+		set[filepath.Dir(g)] = true
+	}
+	repos := make([]string, 0, len(set))
+	for r := range set {
+		repos = append(repos, r)
+	}
+	sort.Strings(repos)
+	return repos
 }
 
 func printPrune(outcomes []worktrees.Outcome, dryRun bool) {
