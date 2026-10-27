@@ -147,7 +147,7 @@ func printAudit(r memcheck.Report) {
 		fmt.Printf("Nothing to fix%s.\n", kept)
 		return
 	}
-	fmt.Printf("%d suggestions%s:\n", len(r.Suggestions), kept)
+	fmt.Printf("%s%s:\n", countSuggestions(len(r.Suggestions)), kept)
 
 	var strandedOnes []memcheck.Suggestion
 	file := ""
@@ -173,6 +173,13 @@ func printAudit(r memcheck.Report) {
 		}
 	}
 	fmt.Println("\nNext: /memory-check in any thread walks you through them, five at a time.")
+}
+
+func countSuggestions(n int) string {
+	if n == 1 {
+		return "1 suggestion"
+	}
+	return fmt.Sprintf("%d suggestions", n)
 }
 
 // knownOxCommand reports whether `ox <words...>` resolves to a command.

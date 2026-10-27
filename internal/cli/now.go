@@ -297,7 +297,7 @@ func renderBrief(v nowView) string {
 	}
 
 	if v.Memory != nil {
-		fmt.Fprintf(&b, "Memory: %d suggestions from the weekly check (/memory-check)\n", v.Memory.Suggestions)
+		fmt.Fprintf(&b, "Memory: %s from the weekly check (/memory-check)\n", countSuggestions(v.Memory.Suggestions))
 	}
 
 	done := groups[desktop.StateDone]
@@ -344,7 +344,7 @@ func renderFull(w io.Writer, v nowView) {
 	}
 
 	if v.Memory != nil {
-		fmt.Fprintf(w, "\nMEMORY · %d suggestions from the check on %s\n", v.Memory.Suggestions, v.Memory.AuditedAt.Format("Mon 2 Jan"))
+		fmt.Fprintf(w, "\nMEMORY · %s from the check on %s\n", countSuggestions(v.Memory.Suggestions), v.Memory.AuditedAt.Format("Mon 2 Jan"))
 		fmt.Fprintf(w, "  /memory-check in a thread walks through them; `ox memory audit` lists them\n")
 	}
 
