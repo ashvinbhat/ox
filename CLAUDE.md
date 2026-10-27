@@ -23,7 +23,9 @@ also read "Building ox".
 - Memory: Claude auto-memory for this folder is the source of truth.
   `ox memory recall <query>` searches the older `~/.ox/memory.db`.
 - PR reviews happen only when Ashvin asks, against the whole codebase at the
-  PR head, not just the diff. Past review rounds per PR are in `~/.ox/reviews/`.
+  PR head, not just the diff: `/review-pr <url>`. `/review-asks` picks up asks
+  from Slack; `ox reviews` is the queue. Rounds and asks per PR are in
+  `~/.ox/reviews/`.
 - Missions (`ox go`, the tmux orchestrator, `~/.ox/missions/`) are frozen:
   they still run, but don't start new work in them.
 
@@ -45,7 +47,10 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ### Commands
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
-- `ox hooks init` — install the `ox-brief` hook (retires pre-1.0 hooks)
+- `ox setup` — install the `ox-brief` hook (retiring pre-1.0 hooks) and ox's
+  skills; re-run after `make install`
+- `ox reviews`, `ox review ask|start|post|record` — the review desk the
+  `/review-pr` and `/review-asks` skills drive
 - `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
   hook runs it hourly in the background; log in `~/.ox/logs/worktrees.log`)
 - `ox repo add/list`, `ox personas`, `ox learn` / `ox learnings`, `ox memory …`
@@ -61,8 +66,11 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 - `internal/tracks` — `tracks.yaml` loading; a term matches at a word start.
 - `internal/yokecli` — the ONLY bridge to yoke: shells out to the yoke binary
   (`~/go/bin/yoke` fallback) and decodes `--json`. No yoke library import.
-- `internal/ghreview` — per-PR review rounds (head SHA, findings) in
-  `~/.ox/reviews/<owner>-<repo>-<pr>.json`.
+- `internal/ghreview` — the review ledger `~/.ox/reviews/<owner>-<repo>-<pr>.json`
+  (asks, rounds with head/base SHA, findings, verdicts), prepare/submit/queue
+  in `desk.go`, diff files in `~/.ox/reviews/work/` (outside the checkout).
+- `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded), installed by
+  `ox setup` into `~/.claude/skills`; `owner: ox` marks them as ox's.
 - `internal/memory` — `~/.ox/memory.db` (FTS5 + embeddings, hybrid RRF recall).
 - `internal/hooks` — SessionStart hook scripts in `~/.ox/hooks/`, registered
   in `~/.claude/settings.json`.

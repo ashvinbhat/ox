@@ -43,7 +43,7 @@ the [Claude Code](https://claude.com/claude-code) desktop app (macOS) for
 
 ```bash
 ox init                          # Initialize ~/.ox
-ox hooks init                    # Start every thread with ox now --brief
+ox setup                         # Start hook + skills for every thread
 $EDITOR ~/.ox/tracks.yaml        # Name your workstreams
 ox                               # Same as ox now
 ```
@@ -57,6 +57,21 @@ ox now --brief                   # The short version new threads get
 ox now --track durable           # One track
 ox now --json                    # For agents and scripts
 ox worktrees prune --dry-run     # Worktrees whose PR merged (the hook prunes hourly)
+```
+
+### Reviews
+Reviews start only when someone asks. In a thread:
+```
+/review-asks                     # Pick up review asks from Slack DMs and mentions
+/review-pr <pr-url>              # Review against the whole codebase; re-review grades open findings
+```
+The commands those skills drive:
+```bash
+ox reviews                       # Queue: to review, re-review, waiting on author
+ox review ask <pr-url> --from X  # Record an ask
+ox review start <pr-url>         # Checkout at PR head, diff, interdiff, open findings
+ox review post <pr-url> --file round.json --confirm   # Post an approved round
+ox review record <pr-url> --file round.json           # Save a round without posting
 ```
 
 `~/.ox/tracks.yaml`:

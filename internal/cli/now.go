@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ashvinbhat/ox/internal/desktop"
+	"github.com/ashvinbhat/ox/internal/ghreview"
 	"github.com/ashvinbhat/ox/internal/tracks"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
@@ -58,10 +59,11 @@ type nowPR struct {
 }
 
 type nowView struct {
-	At      time.Time      `json:"at"`
-	Threads []nowThread    `json:"threads"`
-	Tasks   []yokecli.Task `json:"tasks,omitempty"`
-	PRs     []nowPR        `json:"prsWithoutThread,omitempty"`
+	At      time.Time            `json:"at"`
+	Threads []nowThread          `json:"threads"`
+	Reviews []ghreview.QueueItem `json:"reviews,omitempty"`
+	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
+	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 }
 
 func runNow(cmd *cobra.Command, args []string) error {
@@ -77,7 +79,7 @@ func runNow(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
 
-	view := nowView{At: now, Threads: threadsFrom(sessions, ts, now)}
+	view := nowView{At: now, Threads: threadsFrom(sessions, ts, now), Reviews: reviewsToDo(cfg.Home)}
 	// yoke missing or failing only costs the tasks section.
 	if tasks, err := yokecli.List(false, ""); err == nil {
 		view.Tasks = tasks
@@ -131,6 +133,22 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) [
 	return out
 }
 
+// reviewsToDo reads the review ledger without calling GitHub, so the brief
+// stays instant; `ox reviews` refreshes PR state.
+func reviewsToDo(oxHome string) []ghreview.QueueItem {
+	items, err := ghreview.Queue(oxHome, false)
+	if err != nil {
+		return nil
+	}
+	var todo []ghreview.QueueItem
+	for _, it := range items {
+		if it.Status == ghreview.QueueToReview || it.Status == ghreview.QueueReReview {
+			todo = append(todo, it)
+		}
+	}
+	return todo
+}
+
 func filterTrack(v nowView, ts []tracks.Track, label string) nowView {
 	var threads []nowThread
 	for _, t := range v.Threads {
@@ -150,7 +168,13 @@ func filterTrack(v nowView, ts []tracks.Track, label string) nowView {
 			prs = append(prs, p)
 		}
 	}
-	v.Threads, v.Tasks, v.PRs = threads, tasks, prs
+	var reviews []ghreview.QueueItem
+	for _, r := range v.Reviews {
+		if tr := tracks.Of(ts, r.Ref, r.Title); tr != nil && tr.Label() == label {
+			reviews = append(reviews, r)
+		}
+	}
+	v.Threads, v.Tasks, v.PRs, v.Reviews = threads, tasks, prs, reviews
 	return v
 }
 
@@ -249,6 +273,18 @@ func renderBrief(v nowView) string {
 		fmt.Fprintf(&b, "In review (%d): %s\n", len(review), strings.Join(refs, ", "))
 	}
 
+	if len(v.Reviews) > 0 {
+		var refs []string
+		for i, r := range v.Reviews {
+			if i == 3 {
+				refs = append(refs, fmt.Sprintf("+%d", len(v.Reviews)-3))
+				break
+			}
+			refs = append(refs, fmt.Sprintf("%s (%s)", r.Ref, reviewReason(r, v.At)))
+		}
+		fmt.Fprintf(&b, "Reviews to do (%d): %s\n", len(v.Reviews), strings.Join(refs, ", "))
+	}
+
 	done := groups[desktop.StateDone]
 	line := fmt.Sprintf("Working %d · stuck %d · done %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]), len(done))
 	if n := countArchivable(done); n > 0 {
@@ -282,6 +318,13 @@ func renderFull(w io.Writer, v nowView) {
 		}
 		if hidden := len(threads) - len(shown); hidden > 0 {
 			fmt.Fprintf(w, "  +%d older\n", hidden)
+		}
+	}
+
+	if len(v.Reviews) > 0 {
+		fmt.Fprintf(w, "\nREVIEWS TO DO · %d\n", len(v.Reviews))
+		for _, r := range v.Reviews {
+			fmt.Fprintf(w, "  %-24s %4s  %-44s %s\n", clip(r.Ref, 24), sinceAge(r.Since, v.At), clip(r.Title, 44), r.Why)
 		}
 	}
 
@@ -332,6 +375,26 @@ func detail(t nowThread, now time.Time) string {
 		}
 	}
 	return clip(t.Recap, 70)
+}
+
+// reviewReason is the short form for the brief: "Neeraj, 3h" or "new commits".
+func reviewReason(r ghreview.QueueItem, now time.Time) string {
+	who, ok := strings.CutPrefix(r.Why, "asked again by ")
+	if !ok {
+		who, ok = strings.CutPrefix(r.Why, "asked by ")
+	}
+	if !ok {
+		return r.Why
+	}
+	who, _, _ = strings.Cut(who, " (")
+	return who + ", " + sinceAge(r.Since, now)
+}
+
+func sinceAge(t, now time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return shortAge(now.Sub(t))
 }
 
 func askOrRecap(t nowThread) string {
