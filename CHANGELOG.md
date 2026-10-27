@@ -42,6 +42,22 @@ mission harness is frozen.
 - `ox worktrees prune` also removes `review/pr-<n>` checkouts once that PR
   merges or closes.
 
+- Memory check. Claude Code's auto-memory is the one store.
+  - `ox memory audit`: flags `~/` paths, code names, source files and
+    `ox` commands a memory mentions that no longer exist; MEMORY.md links
+    to missing files, files it misses, and length past 200 lines; project
+    memories untouched for 30 days; memories stranded in other projects'
+    stores. Code is searched in every checkout, then at the default branch
+    tip, so a stale checkout doesn't make live code look gone.
+  - Citations: `metadata.cites` (`repo:path`, `repo:Symbol`, `~/path`) are
+    checked exactly; `metadata.verified` resets the stale clock.
+  - `--keep <id>` marks a suggestion fine as is, for good.
+  - The `ox-brief` hook runs the audit weekly in the background; the brief
+    shows "Memory: N suggestions" and `ox now` a MEMORY section.
+  - `/memory-check` skill: checks each suggestion, proposes edit, delete,
+    merge, move, verify or keep in batches of five, and applies only what
+    you approve.
+
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp
@@ -56,6 +72,8 @@ mission harness is frozen.
 ### Removed
 - The `ox-instructions` and `yoke-ready-tasks` hooks, which pointed threads at
   missions. `ox hooks init` deletes their scripts.
+- **Breaking:** `ox learn`. `~/.ox/memory.db` is an archive;
+  `ox learnings` and `ox memory recall` still search it.
 
 ## [0.1.0] - 2026-08-19
 

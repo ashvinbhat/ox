@@ -15,6 +15,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/ghreview"
+	"github.com/ashvinbhat/ox/internal/memcheck"
 	"github.com/ashvinbhat/ox/internal/tracks"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
@@ -58,10 +59,17 @@ type nowPR struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// nowMemory is what the weekly memory audit left for Ashvin to look at.
+type nowMemory struct {
+	Suggestions int       `json:"suggestions"`
+	AuditedAt   time.Time `json:"auditedAt"`
+}
+
 type nowView struct {
 	At      time.Time            `json:"at"`
 	Threads []nowThread          `json:"threads"`
 	Reviews []ghreview.QueueItem `json:"reviews,omitempty"`
+	Memory  *nowMemory           `json:"memory,omitempty"`
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 }
@@ -80,6 +88,9 @@ func runNow(cmd *cobra.Command, args []string) error {
 	}
 
 	view := nowView{At: now, Threads: threadsFrom(sessions, ts, now), Reviews: reviewsToDo(cfg.Home)}
+	if r, err := memcheck.Pending(cfg.Home); err == nil && len(r.Suggestions) > 0 {
+		view.Memory = &nowMemory{Suggestions: len(r.Suggestions), AuditedAt: r.At}
+	}
 	// yoke missing or failing only costs the tasks section.
 	if tasks, err := yokecli.List(false, ""); err == nil {
 		view.Tasks = tasks
@@ -285,6 +296,10 @@ func renderBrief(v nowView) string {
 		fmt.Fprintf(&b, "Reviews to do (%d): %s\n", len(v.Reviews), strings.Join(refs, ", "))
 	}
 
+	if v.Memory != nil {
+		fmt.Fprintf(&b, "Memory: %d suggestions from the weekly check (/memory-check)\n", v.Memory.Suggestions)
+	}
+
 	done := groups[desktop.StateDone]
 	line := fmt.Sprintf("Working %d · stuck %d · done %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]), len(done))
 	if n := countArchivable(done); n > 0 {
@@ -326,6 +341,11 @@ func renderFull(w io.Writer, v nowView) {
 		for _, r := range v.Reviews {
 			fmt.Fprintf(w, "  %-24s %4s  %-44s %s\n", clip(r.Ref, 24), sinceAge(r.Since, v.At), clip(r.Title, 44), r.Why)
 		}
+	}
+
+	if v.Memory != nil {
+		fmt.Fprintf(w, "\nMEMORY · %d suggestions from the check on %s\n", v.Memory.Suggestions, v.Memory.AuditedAt.Format("Mon 2 Jan"))
+		fmt.Fprintf(w, "  /memory-check in a thread walks through them; `ox memory audit` lists them\n")
 	}
 
 	if len(v.Tasks) > 0 {

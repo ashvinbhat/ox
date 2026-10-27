@@ -18,7 +18,7 @@ import (
 
 var memoryCmd = &cobra.Command{
 	Use:   "memory",
-	Short: "Manage the long-term memory store",
+	Short: "Check the Claude memory store; read the memory.db archive",
 }
 
 var memoryMigrateCmd = &cobra.Command{

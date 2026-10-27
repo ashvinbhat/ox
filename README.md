@@ -12,7 +12,9 @@ running, grouped by your tracks.
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
-- **Long-term memory**: hybrid FTS5 + embedding recall in `~/.ox/memory.db`
+- **Memory check**: a weekly audit of Claude's memory store (gone paths, code
+  and commands, index drift, stale and stranded memories); `/memory-check`
+  walks you through fixes and applies only what you approve
 - **Mission harness (frozen)**: the tmux orchestrator from 0.x still runs via `ox go`
 
 ## How It Works
@@ -108,12 +110,18 @@ Workers and jobs default to claude; the orchestrator can put one on opencode
 (any OpenRouter/Google model) when you ask.
 
 ### Memory
+Claude Code's auto-memory is the one store. `ox memory audit` checks it; the
+`ox-brief` hook runs the audit weekly and the brief shows the count.
 ```bash
-ox memory recall "query"         # Search long-term memory
-ox memory stats|migrate|backfill|gc
-ox learn "insight" [-t tag]      # Capture a learning
-ox learnings [--tag x]           # List captured learnings
+ox memory audit [--json]         # What may be stale or broken
+ox memory audit --keep <id>      # Fine as is; never flag it again
+ox memory recall "query"         # Search the memory.db archive
+ox learnings [--tag x]           # Same archive, by tag
 ```
+In a thread, `/memory-check` goes through the suggestions five at a time and
+applies only the fixes you approve. A memory can cite what it depends on
+(`metadata.cites: ["backend:SegmentService", "~/.ox/tracks.yaml"]`) so the
+audit checks exactly that.
 
 ### Repos, personas, hooks, budgets
 ```bash
@@ -170,7 +178,8 @@ native hook system (`~/.claude/settings.json`), so every new thread starts with
 ├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
 ├── missions/            # Missions (frozen harness)
 │   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/…
-├── memory.db            # Long-term memory (FTS5 + embedding BLOBs)
+├── memory-check/        # Last memory audit and kept suggestions
+├── memory.db            # Memory archive from before 1.0
 ├── memory/repos/        # Living per-repo knowledge docs (distiller-maintained)
 ├── playbooks/           # Mission-type overrides (task.md, debug.md, …)
 ├── personas/            # Persona definitions
