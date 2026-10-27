@@ -21,7 +21,29 @@ mission harness is frozen.
   them. The `ox-brief` hook runs it in the background at most hourly; removals
   go to `~/.ox/logs/worktrees.log`.
 
+- Review desk. Reviews start only from an explicit ask; team review requests
+  are never pulled in.
+  - `/review-asks` skill: finds review asks in Slack DMs, group DMs and
+    @-mentions (Slack connector) and records them with `ox review ask`.
+  - `/review-pr` skill: reviews against the whole codebase at the PR head
+    (callers, siblings, consumers, duplication, tests, conventions), grades
+    open findings on a re-review, and posts only the text the user approved.
+  - `ox reviews`: the queue (to review, re-review, waiting on author),
+    refreshed from GitHub; merged and closed PRs are never re-checked.
+  - `ox review start`: full checkout at the PR head, the diff, and on a
+    re-review the interdiff since the last reviewed head plus open findings.
+  - `ox review post --confirm` / `ox review record`: save a round, posted or not.
+  - Ledger (`~/.ox/reviews/`): asks per PR, base SHA per round, verdicts per
+    round; finding refs continue across rounds (F4 after F1–F3), and "open"
+    means every finding not yet marked addressed.
+  - `ox now` shows reviews to do; the brief reads the ledger without network.
+- `ox setup`: installs the `ox-brief` hook and ox's skills in one step;
+  re-run after every upgrade. A skill folder you wrote yourself is left alone.
+- `ox worktrees prune` also removes `review/pr-<n>` checkouts once that PR
+  merges or closes.
+
 ### Fixed
+- Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp
   (`internal/version.Version`); the release workflow and Makefile both set it.
 

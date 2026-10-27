@@ -44,6 +44,13 @@ func TestDecide(t *testing.T) {
 		{"local commits after merge", nil, false, "def", false},
 		{"head unknown", nil, false, "", false},
 	}
+	review := PR{Number: 6786, Review: true}
+	if remove, _ := Decide(wt, review, nil, false, "stale-head"); !remove {
+		t.Error("clean review checkout of a closed PR should go regardless of HEAD")
+	}
+	if remove, _ := Decide(wt, review, nil, true, "x"); remove {
+		t.Error("review checkout with uncommitted changes should stay")
+	}
 	for _, c := range cases {
 		remove, reason := Decide(wt, pr, c.inUse, c.dirty, c.head)
 		if remove != c.remove {

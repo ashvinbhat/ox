@@ -33,10 +33,13 @@ type Outcome struct {
 	Reason  string `json:"reason,omitempty"` // why it was kept
 }
 
-// PR is the merged pull request for a branch.
+// PR is the merged pull request for a branch. Review is set for the
+// review/pr-<n> checkouts `ox review start` makes: they hold no work of the
+// user's, so they go once the PR merges or closes, whatever their HEAD.
 type PR struct {
 	Number  int
 	HeadSHA string
+	Review  bool
 }
 
 // List returns the linked worktrees of the repo at repoDir, skipping the main
@@ -82,6 +85,8 @@ func Decide(wt Worktree, pr PR, inUse map[string]bool, dirty bool, head string) 
 		return false, "an open thread works in it"
 	case dirty:
 		return false, "uncommitted changes"
+	case pr.Review:
+		return true, ""
 	case head == "" || head != pr.HeadSHA:
 		return false, "local commits not in the merged PR"
 	}
@@ -133,10 +138,27 @@ func Prune(repos []string, inUse map[string]bool, dryRun bool) ([]Outcome, error
 }
 
 // mergedPR asks GitHub for the merged PR whose head is branch, in the repo
-// behind dir's origin remote.
+// behind dir's origin remote. A review/pr-<n> branch is looked up by number
+// and counts once that PR merged or closed.
 func mergedPR(dir, branch string) (PR, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if n, ok := strings.CutPrefix(branch, "review/pr-"); ok {
+		cmd := exec.CommandContext(ctx, "gh", "pr", "view", n, "--json", "number,state")
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		if err != nil {
+			return PR{}, false
+		}
+		var found struct {
+			Number int    `json:"number"`
+			State  string `json:"state"`
+		}
+		if json.Unmarshal(out, &found) != nil || (found.State != "MERGED" && found.State != "CLOSED") {
+			return PR{}, false
+		}
+		return PR{Number: found.Number, Review: true}, true
+	}
 	cmd := exec.CommandContext(ctx, "gh", "pr", "list", "--head", branch, "--state", "merged",
 		"--limit", "1", "--json", "number,headRefOid")
 	cmd.Dir = dir

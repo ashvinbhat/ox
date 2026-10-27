@@ -13,19 +13,110 @@ import (
 // across worktree rebuilds and feed the follow-up review's addressing
 // analysis on subsequent runs.
 type ReviewRecord struct {
-	ReviewedAt time.Time `json:"reviewedAt"`
-	HeadSHA    string    `json:"headSHA"`
-	ReviewID   int64     `json:"reviewID,omitempty"`  // 0 = not posted (self-PR, --no-interactive, user declined)
-	ReviewURL  string    `json:"reviewURL,omitempty"` // GitHub html_url; empty for unposted reviews
-	Posted     bool      `json:"posted"`              // true iff the review hit GitHub
-	Findings   []Finding `json:"findings"`            // all findings the agents produced (with Ref + CommentID stamped if posted)
+	ReviewedAt time.Time    `json:"reviewedAt"`
+	HeadSHA    string       `json:"headSHA"`
+	BaseSHA    string       `json:"baseSHA,omitempty"`   // merge-base with the target branch; lets a later round range-diff after a rebase
+	ReviewID   int64        `json:"reviewID,omitempty"`  // 0 = not posted (self-PR, --no-interactive, user declined)
+	ReviewURL  string       `json:"reviewURL,omitempty"` // GitHub html_url; empty for unposted reviews
+	Posted     bool         `json:"posted"`              // true iff the review hit GitHub
+	Findings   []Finding    `json:"findings"`            // all findings the agents produced (with Ref + CommentID stamped if posted)
+	Addressing []Addressing `json:"addressing,omitempty"`
+}
+
+// Ask is one request for a review: who asked, where, and when.
+type Ask struct {
+	From  string    `json:"from"`
+	Where string    `json:"where"` // slack-dm | slack-thread | github
+	Link  string    `json:"link,omitempty"`
+	Note  string    `json:"note,omitempty"`
+	At    time.Time `json:"at"`
 }
 
 // State is the persisted history of reviews for a single PR.
 type State struct {
 	PR        int            `json:"pr"`
 	OwnerRepo string         `json:"ownerRepo"`
+	URL       string         `json:"url,omitempty"`
+	Title     string         `json:"title,omitempty"`
+	Author    string         `json:"author,omitempty"`
+	PRState   string         `json:"prState,omitempty"` // OPEN | MERGED | CLOSED as last seen on GitHub
+	Head      string         `json:"head,omitempty"`    // PR head as last seen on GitHub
+	Asks      []Ask          `json:"asks,omitempty"`
 	History   []ReviewRecord `json:"history"`
+}
+
+// AddAsk records a request, ignoring one already recorded from the same
+// link (or, without a link, from the same person at the same time).
+func (s *State) AddAsk(a Ask) bool {
+	for _, have := range s.Asks {
+		if (a.Link != "" && have.Link == a.Link) || (a.Link == "" && have.From == a.From && have.At.Equal(a.At)) {
+			return false
+		}
+	}
+	s.Asks = append(s.Asks, a)
+	return true
+}
+
+// LatestAsk returns the most recent ask, or nil.
+func (s *State) LatestAsk() *Ask {
+	var latest *Ask
+	for i := range s.Asks {
+		if latest == nil || s.Asks[i].At.After(latest.At) {
+			latest = &s.Asks[i]
+		}
+	}
+	return latest
+}
+
+// OpenFindings are the findings from every round whose latest verdict is not
+// "addressed". A re-review grades all of them, not only the last round's.
+func (s *State) OpenFindings() []Finding {
+	verdict := map[string]AddressingStatus{}
+	for _, rec := range s.History {
+		for _, a := range rec.Addressing {
+			verdict[a.Ref] = a.Status
+		}
+	}
+	var open []Finding
+	for _, rec := range s.History {
+		for _, f := range rec.Findings {
+			if verdict[f.Ref] != AddressingAddressed {
+				open = append(open, f)
+			}
+		}
+	}
+	return open
+}
+
+// findingCount is how many findings all rounds hold, so new refs continue
+// the sequence (F4 after F1–F3) instead of colliding with earlier rounds.
+func (s *State) findingCount() int {
+	n := 0
+	for _, rec := range s.History {
+		n += len(rec.Findings)
+	}
+	return n
+}
+
+// ListStates loads every PR's review state under oxHome.
+func ListStates(oxHome string) ([]*State, error) {
+	paths, err := filepath.Glob(filepath.Join(oxHome, "reviews", "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	var states []*State
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var s State
+		if json.Unmarshal(b, &s) != nil || s.PR == 0 {
+			continue
+		}
+		states = append(states, &s)
+	}
+	return states, nil
 }
 
 // LastReview returns the most recent record, or nil if none exists yet.

@@ -13,6 +13,7 @@ type PRInfo struct {
 	Title     string   `json:"title"`
 	Body      string   `json:"body"`
 	URL       string   `json:"url"`
+	State     string   `json:"state"` // OPEN | MERGED | CLOSED
 	BaseRef   string   `json:"baseRefName"`
 	HeadRef   string   `json:"headRefName"`
 	HeadSHA   string   `json:"headRefOid"`
@@ -43,7 +44,7 @@ type ghFile struct {
 func ResolvePR(ref string, repoOverride string) (*PRInfo, error) {
 	args := []string{
 		"pr", "view", ref,
-		"--json", "number,title,body,url,baseRefName,headRefName,headRefOid,author,headRepository,headRepositoryOwner,files",
+		"--json", "number,title,body,url,state,baseRefName,headRefName,headRefOid,author,headRepository,headRepositoryOwner,files",
 	}
 	if repoOverride != "" {
 		args = append(args, "--repo", repoOverride)
