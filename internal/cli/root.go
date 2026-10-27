@@ -23,17 +23,16 @@ func SetVersion(v string) {
 
 var rootCmd = &cobra.Command{
 	Use:   "ox",
-	Short: "A mission harness for AI-assisted development",
-	Long: `Ox is a mission harness built on yoke.
-
-A mission opens a persistent orchestrator that plans, delegates to workers and
-jobs, integrates, and ships — resumable at any time.
+	Short: "What your Claude Code threads draw on",
+	Long: `ox is what Claude Code desktop threads draw on: where every thread stands,
+your tracks, yoke tasks, review history and long-term memory.
 
 Quick start:
   ox init              # Initialize ~/.ox
-  ox repo add <url>    # Register a codebase
-  ox go <task-ref>     # Start or resume a mission
-  ox                   # Resume the current mission`,
+  ox hooks init        # Start every thread with ox now --brief
+  ox                   # Same as ox now: threads by state and track
+
+Missions (ox go) are frozen: they still run, but get no new work.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Skip config loading for root init command only
 		if cmd.Name() == "init" && cmd.Parent() != nil && cmd.Parent().Name() == "ox" {
@@ -41,14 +40,14 @@ Quick start:
 		}
 		cfg, cfgErr = config.Load()
 	},
-	// Bare `ox` is the fast path into work: resume (and attach to) the current
-	// mission's orchestrator — same as `ox go` with no args. A stray positional
-	// that matched no subcommand falls here too; show help rather than guess.
+	// Bare `ox` answers "where do things stand?" — same as `ox now`. A stray
+	// positional that matched no subcommand falls here too; show help rather
+	// than guess.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			return cmd.Help()
 		}
-		return runGo(cmd, nil)
+		return runNow(cmd, nil)
 	},
 }
 

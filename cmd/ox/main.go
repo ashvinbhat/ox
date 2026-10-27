@@ -4,14 +4,11 @@ import (
 	"os"
 
 	"github.com/ashvinbhat/ox/internal/cli"
+	"github.com/ashvinbhat/ox/internal/version"
 )
 
-// version is stamped at build time via -ldflags "-X main.version=vX.Y.Z";
-// defaults to "dev" for local builds.
-var version = "dev"
-
 func main() {
-	cli.SetVersion(version)
+	cli.SetVersion(version.Version)
 	if err := cli.Execute(); err != nil {
 		os.Exit(1)
 	}
