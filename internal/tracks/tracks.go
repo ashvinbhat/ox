@@ -18,6 +18,9 @@ type Track struct {
 	Short string   `yaml:"short,omitempty"`
 	Goal  string   `yaml:"goal,omitempty"`
 	Match []string `yaml:"match"`
+	// Own marks a workstream Ashvin wants to understand deeply: threads on it
+	// offer own-it rounds.
+	Own bool `yaml:"own,omitempty"`
 }
 
 type file struct {

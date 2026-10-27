@@ -58,12 +58,30 @@ mission harness is frozen.
     merge, move, verify or keep in batches of five, and applies only what
     you approve.
 
+- Learning loop.
+  - Decision journal: `ox journal add --decided … --over … --why …` appends
+    to `~/.ox/journal/YYYY-MM-DD.md`, with the time, thread title and track
+    taken from the desktop thread it runs in. `ox journal [--days N]
+    [--track x]` reads it; CLAUDE.md asks every thread to log real choices.
+  - `/own-it` skill: Ashvin predicts the approach (where, shape, risk), Claude
+    builds, then compares and explains each gap; graded match, partial or
+    miss and logged with `ox journal own-it`. Tracks with `own: true` in
+    `tracks.yaml` get offered a round, at most 2 a day.
+  - `/recap` skill: three concepts from the week, one explain-it-back prompt
+    each, gaps filled, logged with `ox journal recap`. The brief shows
+    "Recap due" Friday through Monday until it's done; `ox now` has a JOURNAL
+    section.
+  - `ox journal status`: today's decisions and own-it rounds, the week's
+    own-it score, whether a recap is due, and this thread's track.
+
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp
   (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
+- A thread's track comes from its title first, then its PRs' repos and
+  branches, so an ox thread that opened a review-desk PR stays on ox.
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
   `ox go` to resume one.
 - CLAUDE.md and README lead with working in desktop threads; missions are

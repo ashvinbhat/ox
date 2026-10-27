@@ -27,6 +27,19 @@ also read "Building ox".
   still holds, set `metadata.verified: YYYY-MM-DD`. `/memory-check` works
   through what the audit found. `~/.ox/memory.db` is an archive
   (`ox memory recall <query>`).
+- Decisions: when you make a real choice (an approach, a design, a trade-off,
+  the root cause you act on), log it right then:
+  `ox journal add --decided "…" --over "…" --why "…"`, a line each in his
+  style. ox adds the time, the thread and its track. Name those decisions in
+  your closing message too. Skip routine choices (names, commands). The
+  journal is `~/.ox/journal/YYYY-MM-DD.md`; `ox journal` reads today.
+- Own-it: tracks with `own: true` in `tracks.yaml` (durable, ox) are the ones
+  he wants to understand deeply. On those, before writing code, offer one
+  own-it round if `ox journal status` shows rounds left today (2 a day):
+  he predicts the approach, you build, then compare (`/own-it`). Run it
+  anywhere when he asks.
+- Recap: `/recap` takes three concepts from the week's journal and asks him
+  to explain each back. The brief shows "Recap due" Friday through Monday.
 - PR reviews happen only when Ashvin asks, against the whole codebase at the
   PR head, not just the diff: `/review-pr <url>`. `/review-asks` picks up asks
   from Slack; `ox reviews` is the queue. Rounds and asks per PR are in
@@ -62,6 +75,8 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   MEMORY.md drift, stale project memories, memories stranded in other
   projects' stores (the hook runs it weekly; the result is in
   `~/.ox/memory-check/last.json`)
+- `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
+  the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox repo add/list`, `ox personas`, `ox learnings` / `ox memory recall` (the
   memory.db archive)
 - `ox opencode [dir]` — opencode with ox provider keys wired in
@@ -85,6 +100,10 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   and the code search (ripgrep over checkouts, then `git grep` at the default
   branch for what's still missing). Keeps and the last report are in
   `~/.ox/memory-check/`.
+- `internal/journal` — the decision journal: day files in `~/.ox/journal/`
+  (`### HH:MM · track · thread` then `- Key: value` lines; the first key
+  names the kind), parsing, and the status the brief shows (recap due,
+  own-it rounds today).
 - `internal/memory` — `~/.ox/memory.db`, the archive (FTS5 + embeddings).
 - `internal/hooks` — SessionStart hook scripts in `~/.ox/hooks/`, registered
   in `~/.claude/settings.json`.
@@ -99,6 +118,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ├── tracks.yaml      # Workstreams for ox now
 ├── repos/           # Cloned repos
 ├── reviews/         # Review rounds per PR
+├── journal/         # Decision journal, one file a day
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

@@ -6,9 +6,11 @@ package desktop
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -97,6 +99,29 @@ func List(dir string, includeArchived bool) ([]Session, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LastActiveMs > out[j].LastActiveMs })
 	return out, nil
+}
+
+// Get reads one thread by its id (local_…), archived or not.
+func Get(dir, id string) (Session, error) {
+	if !strings.HasPrefix(id, "local_") || filepath.Base(id) != id {
+		return Session{}, fmt.Errorf("not a thread id: %q", id)
+	}
+	paths, err := filepath.Glob(filepath.Join(dir, "*", "*", id+".json"))
+	if err != nil {
+		return Session{}, err
+	}
+	if len(paths) == 0 {
+		return Session{}, fmt.Errorf("no thread %s", id)
+	}
+	b, err := os.ReadFile(paths[0])
+	if err != nil {
+		return Session{}, err
+	}
+	var s Session
+	if err := json.Unmarshal(b, &s); err != nil {
+		return Session{}, fmt.Errorf("read thread %s: %w", id, err)
+	}
+	return s, nil
 }
 
 // LastActive is when the thread last did anything.

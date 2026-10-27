@@ -15,6 +15,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/ghreview"
+	"github.com/ashvinbhat/ox/internal/journal"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 	"github.com/ashvinbhat/ox/internal/tracks"
 	"github.com/ashvinbhat/ox/internal/yokecli"
@@ -70,6 +71,7 @@ type nowView struct {
 	Threads []nowThread          `json:"threads"`
 	Reviews []ghreview.QueueItem `json:"reviews,omitempty"`
 	Memory  *nowMemory           `json:"memory,omitempty"`
+	Journal *journal.Status      `json:"journal,omitempty"`
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 }
@@ -90,6 +92,9 @@ func runNow(cmd *cobra.Command, args []string) error {
 	view := nowView{At: now, Threads: threadsFrom(sessions, ts, now), Reviews: reviewsToDo(cfg.Home)}
 	if r, err := memcheck.Pending(cfg.Home); err == nil && len(r.Suggestions) > 0 {
 		view.Memory = &nowMemory{Suggestions: len(r.Suggestions), AuditedAt: r.At}
+	}
+	if st, err := journalStatus(cfg.Home, now); err == nil {
+		view.Journal = &st
 	}
 	// yoke missing or failing only costs the tasks section.
 	if tasks, err := yokecli.List(false, ""); err == nil {
@@ -118,10 +123,6 @@ func runNow(cmd *cobra.Command, args []string) error {
 func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) []nowThread {
 	out := make([]nowThread, 0, len(sessions))
 	for _, s := range sessions {
-		texts := []string{s.Title}
-		for _, p := range s.PRs {
-			texts = append(texts, p.Repo, p.Branch)
-		}
 		var prs []string
 		for _, p := range s.OpenPRs() {
 			prs = append(prs, prRef(p.Repo, p.Number))
@@ -136,12 +137,26 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) [
 			LastActive: s.LastActive(),
 			Archivable: s.Archivable(now),
 		}
-		if tr := tracks.Of(ts, texts...); tr != nil {
+		if tr := sessionTrack(s, ts); tr != nil {
 			t.Track = tr.Label()
 		}
 		out = append(out, t)
 	}
 	return out
+}
+
+// sessionTrack matches a thread to a track by its title, falling back to its
+// PRs' repos and branches. The title goes first: a thread that once opened a
+// review-desk PR is still about ox, not about reviews.
+func sessionTrack(s desktop.Session, ts []tracks.Track) *tracks.Track {
+	if t := tracks.Of(ts, s.Title); t != nil {
+		return t
+	}
+	var texts []string
+	for _, p := range s.PRs {
+		texts = append(texts, p.Repo, p.Branch)
+	}
+	return tracks.Of(ts, texts...)
 }
 
 // reviewsToDo reads the review ledger without calling GitHub, so the brief
@@ -300,6 +315,10 @@ func renderBrief(v nowView) string {
 		fmt.Fprintf(&b, "Memory: %s from the weekly check (/memory-check)\n", countSuggestions(v.Memory.Suggestions))
 	}
 
+	if v.Journal != nil && v.Journal.RecapDue {
+		fmt.Fprintf(&b, "Recap due: %s in the last 7 days (/recap)\n", countOf(v.Journal.DecisionsWeek, "decision"))
+	}
+
 	done := groups[desktop.StateDone]
 	line := fmt.Sprintf("Working %d · stuck %d · done %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]), len(done))
 	if n := countArchivable(done); n > 0 {
@@ -346,6 +365,16 @@ func renderFull(w io.Writer, v nowView) {
 	if v.Memory != nil {
 		fmt.Fprintf(w, "\nMEMORY · %s from the check on %s\n", countSuggestions(v.Memory.Suggestions), v.Memory.AuditedAt.Format("Mon 2 Jan"))
 		fmt.Fprintf(w, "  /memory-check in a thread walks through them; `ox memory audit` lists them\n")
+	}
+
+	if j := v.Journal; j != nil && (j.DecisionsWeek > 0 || j.OwnItToday > 0) {
+		fmt.Fprintf(w, "\nJOURNAL · today %s, own-it %d of %d · last 7 days %s\n",
+			countOf(j.DecisionsToday, "decision"), j.OwnItToday, journal.OwnItPerDay, countOf(j.DecisionsWeek, "decision"))
+		next := "  `ox journal` reads today, `--days 7` the week"
+		if j.RecapDue {
+			next += "; recap due (/recap)"
+		}
+		fmt.Fprintln(w, next)
 	}
 
 	if len(v.Tasks) > 0 {
