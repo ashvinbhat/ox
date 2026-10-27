@@ -12,6 +12,9 @@ running, grouped by your tracks.
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
+- **Learning loop**: threads log each decision (chosen, over what, why) to a
+  daily journal; own-it rounds have you predict the approach before the build;
+  a Friday recap asks you to explain three of the week's concepts back
 - **Memory check**: a weekly audit of Claude's memory store (gone paths, code
   and commands, index drift, stale and stranded memories); `/memory-check`
   walks you through fixes and applies only what you approve
@@ -109,6 +112,17 @@ ox opencode [dir]                # Open opencode with ox provider keys wired in
 Workers and jobs default to claude; the orchestrator can put one on opencode
 (any OpenRouter/Google model) when you ask.
 
+### Journal
+Threads log decisions as they make them; ox adds the time, thread and track.
+```bash
+ox journal [--days 7] [--track ox]   # Read: today, or the last N days
+ox journal status                    # Counts, own-it rounds left, recap due
+ox journal add --decided … --over … --why …
+```
+`/own-it` in a thread: you predict the approach, Claude builds, then compares
+and explains each gap. Tracks with `own: true` in `tracks.yaml` get offered a
+round (2 a day). `/recap`: three concepts from the week, explained back.
+
 ### Memory
 Claude Code's auto-memory is the one store. `ox memory audit` checks it; the
 `ox-brief` hook runs the audit weekly and the brief shows the count.
@@ -175,6 +189,7 @@ native hook system (`~/.claude/settings.json`), so every new thread starts with
 ├── tracks.yaml          # Workstreams for ox now
 ├── repos/               # Registered codebases (base clones)
 ├── reviews/             # Review rounds per PR
+├── journal/             # Decision journal, one file a day
 ├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
 ├── missions/            # Missions (frozen harness)
 │   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/…
