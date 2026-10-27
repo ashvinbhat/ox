@@ -56,6 +56,7 @@ ox now                           # Threads by state and track, tasks, PRs withou
 ox now --brief                   # The short version new threads get
 ox now --track durable           # One track
 ox now --json                    # For agents and scripts
+ox worktrees prune --dry-run     # Worktrees whose PR merged (the hook prunes hourly)
 ```
 
 `~/.ox/tracks.yaml`:

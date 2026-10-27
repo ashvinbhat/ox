@@ -16,6 +16,14 @@ mission harness is frozen.
   `--all` to include archived threads.
 - Tracks: `~/.ox/tracks.yaml` names your workstreams; terms match at a word start.
 - `ox-brief` SessionStart hook: every new thread starts with `ox now --brief`.
+- `ox worktrees prune`: removes worktrees (and local branches) whose PR merged,
+  keeping any with uncommitted files, local-only commits, or an open thread in
+  them. The `ox-brief` hook runs it in the background at most hourly; removals
+  go to `~/.ox/logs/worktrees.log`.
+
+### Fixed
+- `ox --version` and `ox version` read one build stamp
+  (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use

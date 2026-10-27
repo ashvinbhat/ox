@@ -28,7 +28,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           out="ox_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}"
-          go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o "$out" ./cmd/ox
+          go build -ldflags "-s -w -X github.com/ashvinbhat/ox/internal/version.Version=${GITHUB_REF_NAME}" -o "$out" ./cmd/ox
           tar -czf "${out}.tar.gz" "$out"
       - name: Release
         uses: softprops/action-gh-release@v2

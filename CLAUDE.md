@@ -7,9 +7,12 @@ also read "Building ox".
 
 ## Working from this folder
 
+- Starting work is just opening a thread and saying what to do. No `ox go`,
+  no task to create first.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
-  what needs Ashvin, what's in review, what's running. `ox now` is the full
-  view, `--json` for parsing, `--track <short>` to filter.
+  what needs Ashvin, what's in review, what's running. It is background: don't
+  bring it up unless he asks what needs him or the thread's work touches it.
+  `ox now` is the full view, `--json` for parsing, `--track <short>` to filter.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
@@ -43,6 +46,8 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
 - `ox hooks init` — install the `ox-brief` hook (retires pre-1.0 hooks)
+- `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
+  hook runs it hourly in the background; log in `~/.ox/logs/worktrees.log`)
 - `ox repo add/list`, `ox personas`, `ox learn` / `ox learnings`, `ox memory …`
 - `ox opencode [dir]` — opencode with ox provider keys wired in
 - Frozen mission harness: `ox go`, `ox watch`, `ox missions`, `ox where`,
