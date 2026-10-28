@@ -26,6 +26,9 @@ also read "Building ox".
   one-sentence offer at the end of your first reply ("Also: the weekly recap
   is due. Want to do it now?"). `ox now` is the full view, `--json` for
   parsing, `--track <short>` to filter.
+- The ox board is a side panel in every desktop thread (the `ox-board` plugin
+  `ox setup` installs): the same queue as the brief, refreshed every minute.
+  It's how Ashvin sees what's waiting without asking.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
@@ -85,8 +88,8 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ### Commands
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
-- `ox setup` — install the `ox-brief` hook (retiring pre-1.0 hooks) and ox's
-  skills; re-run after `make install`
+- `ox setup` — install the `ox-brief` hook (retiring pre-1.0 hooks), ox's
+  skills and the board panel; re-run after `make install`
 - `ox reviews`, `ox review ask|start|post|record` — the review desk the
   `/review-pr` and `/review-asks` skills drive
 - `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
@@ -117,8 +120,10 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 - `internal/ghreview` — the review ledger `~/.ox/reviews/<owner>-<repo>-<pr>.json`
   (asks, rounds with head/base SHA, findings, verdicts), prepare/submit/queue
   in `desk.go`, diff files in `~/.ox/reviews/work/` (outside the checkout).
-- `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded), installed by
-  `ox setup` into `~/.claude/skills`; `owner: ox` marks them as ox's.
+- `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded) and the
+  `ox-board` panel plugin (`hooks/register.tsx`; `claude plugin test` runs its
+  tests), installed by `ox setup` into `~/.claude/skills`. `owner: ox` in a
+  SKILL.md and `"author": { "name": "ox" }` in a plugin.json mark them as ox's.
 - `internal/memcheck` — the memory audit: frontmatter parsing, the checks,
   and the code search (ripgrep over checkouts, then `git grep` at the default
   branch for what's still missing). Keeps and the last report are in

@@ -1,0 +1,7 @@
+{
+  "name": "ox-board",
+  "version": "0.1.0",
+  "description": "A side panel with what's waiting on Ashvin, what threads can fix, and where threads stand, from ox now",
+  "author": { "name": "ox" },
+  "types": "./types/index.d.ts"
+}

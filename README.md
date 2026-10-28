@@ -27,6 +27,8 @@ weekly recap or memory suggestions. The commands below are what threads use.
 - **`ox now`**: every desktop thread by state — needs you, in review, working,
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
+- **Board**: a side panel in every desktop thread with what's waiting on you,
+  what threads can fix, and threads by state, refreshed every minute
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
 - **Asks**: one ranked queue of what only you can do (thread questions, review
   asks, PRs ready to merge, memory, recap); PR fixes go to threads. `/tidy`
@@ -67,7 +69,7 @@ the [Claude Code](https://claude.com/claude-code) desktop app (macOS) for
 
 ```bash
 ox init                          # Initialize ~/.ox
-ox setup                         # Start hook + skills for every thread
+ox setup                         # Start hook, skills and board panel for every thread
 $EDITOR ~/.ox/tracks.yaml        # Name your workstreams
 ox                               # Same as ox now
 ```

@@ -97,6 +97,11 @@ mission harness is frozen.
     share a title, a sidebar group per track, and what to do with stale
     questions; applies what you approve with the app's session tools.
 
+- Board panel. `ox setup` installs `ox-board`, a Claude Code plugin, into
+  `~/.claude/skills/ox-board`. In every desktop thread it opens a side panel
+  with what's waiting on you, what threads can fix, and threads by state,
+  from `ox now --brief --json` every minute. GitHub links open the PR.
+
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp
