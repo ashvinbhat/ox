@@ -97,6 +97,21 @@ mission harness is frozen.
     share a title, a sidebar group per track, and what to do with stale
     questions; applies what you approve with the app's session tools.
 
+- Parking. `/park` skill: when you leave a thread on purpose, it writes a
+  resumption note as the thread's last message (goal, done, next, open,
+  state) and runs `ox park --next "…"`, which records the next step in
+  `~/.ox/parked/`. `ox now` shows the thread as "parked" with that step until
+  it is active again; a parked thread is never an ask, never archivable, and
+  `/tidy` leaves it alone. The brief counts parked threads.
+- Memory check, three more checks.
+  - `changed`: a cited file (or, for a cited symbol, the file named after it)
+    has commits on the default branch since the memory was last confirmed or
+    edited; a cited `~/` file was edited since.
+  - `duplicate`: two memories whose words overlap enough (TF-IDF cosine
+    0.4+) that one may restate the other.
+  - `frontmatter`: YAML that doesn't parse, which made the audit read the
+    memory as having no type, verified date or cites.
+
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp

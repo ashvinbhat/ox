@@ -1,11 +1,13 @@
 // Package memcheck audits the Claude Code auto-memory store, the one place
 // memories live: paths, code and ox commands a memory names that no longer
 // exist, MEMORY.md drift, project memories nobody has confirmed lately, and
-// memories stranded in other projects' stores.
+// memories stranded in other projects' stores, cited files that changed
+// since a memory was confirmed, and memories that cover the same ground.
 package memcheck
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,6 +27,9 @@ const (
 	KindIndex    = "index"
 	KindStale    = "stale"
 	KindStranded = "stranded"
+	KindChanged  = "changed"
+	KindDup      = "duplicate"
+	KindFront    = "frontmatter"
 )
 
 // StaleAfter is how long a project memory goes unconfirmed before the audit
@@ -48,6 +53,7 @@ type Memory struct {
 	Touched     time.Time // latest of verified, metadata.modified and the file's mtime
 	Cites       []string  // metadata.cites: "repo:path", "repo:Symbol" or "~/path"
 	Body        string
+	BadFront    bool // frontmatter present but not valid YAML, so its fields are lost
 }
 
 // Suggestion is one thing in the store that may need an edit.
@@ -91,9 +97,14 @@ func Audit(o Options) (Report, error) {
 	r := Report{At: o.Now, Dir: o.Dir, Memories: len(mems)}
 
 	all := indexDrift(o.Dir, mems)
+	all = append(all, duplicates(mems)...)
 	refs := map[string][]string{}  // identifier → memory files naming it
 	files := map[string][]string{} // repo-relative path → memory files naming it
 	for _, m := range mems {
+		if m.BadFront {
+			all = append(all, suggest(KindFront, m.File, "",
+				"frontmatter isn't valid YAML (quote a description that has a colon), so its type, verified date and cites are ignored"))
+		}
 		text := m.Description + "\n" + m.Body
 		all = append(all, gonePaths(m.File, text)...)
 		if o.Known != nil {
@@ -131,6 +142,7 @@ func Audit(o Options) (Report, error) {
 		}
 		for _, m := range mems {
 			all = append(all, search.goneCites(m.File, m.Cites)...)
+			all = append(all, search.changedCites(m)...)
 		}
 	} else {
 		r.Notes = append(r.Notes, search.why)
@@ -216,6 +228,7 @@ func parse(path string) (Memory, error) {
 		}
 	}
 	if yaml.Unmarshal([]byte(front), &fm) != nil {
+		m.BadFront = true
 		return m, nil
 	}
 	m.Name, m.Description, m.Type, m.Cites, m.Body = fm.Name, fm.Description, fm.Metadata.Type, fm.Metadata.Cites, body
@@ -287,6 +300,59 @@ func stranded(dir string) []Suggestion {
 	for _, m := range mems {
 		out = append(out, suggest(KindStranded, filepath.Join(dir, m.File), "",
 			"in another project's store, which ox threads never load"))
+	}
+	return out
+}
+
+// DupAt is how alike two memories must be (TF-IDF cosine over their words)
+// to be flagged as covering the same ground. Distinct memories in a cleaned
+// store stay under 0.25.
+const DupAt = 0.4
+
+var wordRe = regexp.MustCompile(`[a-z0-9][a-z0-9_.#/-]*[a-z0-9]`)
+
+// duplicates flags each pair of memories whose words overlap enough that one
+// may restate the other. Words common to the whole store weigh nothing.
+func duplicates(mems []Memory) []Suggestion {
+	counts := make([]map[string]int, len(mems))
+	docs := map[string]int{}
+	for i, m := range mems {
+		counts[i] = map[string]int{}
+		for _, w := range wordRe.FindAllString(strings.ToLower(m.Description+"\n"+m.Body), -1) {
+			if len(w) >= 3 {
+				counts[i][w]++
+			}
+		}
+		for w := range counts[i] {
+			docs[w]++
+		}
+	}
+	vecs := make([]map[string]float64, len(mems))
+	for i, c := range counts {
+		v, norm := map[string]float64{}, 0.0
+		for w, n := range c {
+			x := (1 + math.Log(float64(n))) * math.Log(float64(len(mems))/float64(docs[w]))
+			v[w], norm = x, norm+x*x
+		}
+		if norm > 0 {
+			for w := range v {
+				v[w] /= math.Sqrt(norm)
+			}
+		}
+		vecs[i] = v
+	}
+	var out []Suggestion
+	for i := range mems {
+		for j := i + 1; j < len(mems); j++ {
+			sim := 0.0
+			for w, x := range vecs[i] {
+				sim += x * vecs[j][w]
+			}
+			if sim >= DupAt {
+				out = append(out, suggest(KindDup, mems[i].File, mems[j].File,
+					fmt.Sprintf("%.0f%% alike: may say the same thing; merge them?", sim*100)))
+			}
+		}
 	}
 	return out
 }
