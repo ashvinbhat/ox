@@ -1,6 +1,6 @@
 export type Ask = { id: string; what: string; where?: string; link?: string; age: string }
 
-export type Thread = { id: string; title: string; track?: string; state: string; ask?: string }
+export type Thread = { id: string; title: string; track?: string; state: string; next?: string }
 
 export type Board = {
   at: number

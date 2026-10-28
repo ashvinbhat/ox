@@ -99,8 +99,10 @@ mission harness is frozen.
 
 - Board panel. `ox setup` installs `ox-board`, a Claude Code plugin, into
   `~/.claude/skills/ox-board`. In every desktop thread it opens a side panel
-  with what's waiting on you, what threads can fix, and threads by state,
-  from `ox now --brief --json` every minute. GitHub links open the PR.
+  with what's waiting on you, what threads can fix, threads by state, and
+  parked threads with their next step, from `ox now --brief --json` every
+  minute once the panel opens; terminal and headless sessions never poll.
+  GitHub links open the PR.
 
 - Parking. `/park` skill: when you leave a thread on purpose, it writes a
   resumption note as the thread's last message (goal, done, next, open,

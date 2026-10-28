@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const PANE = {
   plugin: 'ox-board',
@@ -22,6 +22,7 @@ const VIEW = {
     { sessionId: 'local_a', title: 'Durable chat turns', track: 'durable', state: 'needs you', ask: 'Is a move to GCP planned?' },
     { sessionId: 'local_b', title: 'Board panel', track: 'ox', state: 'working' },
     { sessionId: 'local_c', title: 'Old work', state: 'done', archivable: true },
+    { sessionId: 'local_d', title: 'Left for later', state: 'parked', next: 'Rebase on main' },
   ],
   asks: {
     waiting: [
@@ -36,8 +37,7 @@ test('the board draws ox now on every surface', async ($, on) => {
   on('command.register', () => ({ value: { command: 'ox-board' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.surfaces', () => ({ value: ['desktop'] }))
-  on('clock.every', () => ({ value: undefined }))
-  on('clock.now', () => ({ value: NOW }))
+  const clock = mock.clock(on, { now: NOW })
   on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
 
@@ -51,6 +51,8 @@ test('the board draws ox now on every surface', async ($, on) => {
     expect((await ui.find({ type: 'Text', text: /^Threads can fix/ }))?.text).toBe('Threads can fix (1)')
     expect((await ui.find({ type: 'Text', text: /^working/ }))?.text).toBe('working 1 · stuck 0 · in review 0 · done 1')
     expect((await ui.find({ type: 'Text', text: /archived/ }))?.text).toBe('1 done thread can be archived')
+    expect((await ui.find({ type: 'Text', text: /^Parked/ }))?.text).toBe('Parked (1)')
+    expect((await ui.find({ type: 'Text', text: /^next:/ }))?.text).toBe('next: Rebase on main')
     await ui.unmount()
   }
 })
@@ -59,8 +61,7 @@ test('the board says when ox fails', async ($, on) => {
   on('command.register', () => ({ value: { command: 'ox-board' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.surfaces', () => ({ value: ['desktop'] }))
-  on('clock.every', () => ({ value: undefined }))
-  on('clock.now', () => ({ value: NOW }))
+  const clock = mock.clock(on, { now: NOW })
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'Error: config not found\nusage' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
 
@@ -69,5 +70,41 @@ test('the board says when ox fails', async ($, on) => {
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /^ox:/ }))?.text).toBe('ox: Error: config not found')
+  await ui.unmount()
+})
+
+test('a session with no pane never runs ox until the board is asked for', async ($, on) => {
+  let runs = 0
+  on('command.register', () => ({ value: { command: 'ox-board' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.surfaces', () => ({ value: [] }))
+  const clock = mock.clock(on, { now: NOW })
+  on('process.run', () => {
+    runs++
+    return { value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(runs).toBe(0)
+  await $.command.run({ command: 'ox-board' })
+  expect(runs).toBe(1)
+  await clock.advance(60_000)
+  expect(runs).toBe(2)
+})
+
+test('the board says when ox prints something that is not JSON', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'ox-board' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.surfaces', () => ({ value: [] }))
+  const clock = mock.clock(on, { now: NOW })
+  on('process.run', () => ({ value: { exitCode: 0, stdout: 'Update available\n{', stderr: '' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'ox-board' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /^ox:/ }))?.text).toBe("ox: ox printed something that isn't JSON")
   await ui.unmount()
 })

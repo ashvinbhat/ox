@@ -14,7 +14,7 @@ const OX_NOW = ['/bin/sh', '-c', 'exec "$(command -v ox || echo "$HOME/go/bin/ox
 type ViewAsk = { id: string; what: string; where?: string; link?: string; since: string }
 type View = {
   at: string
-  threads?: { sessionId: string; title: string; track?: string; state: string; ask?: string; archivable?: boolean }[]
+  threads?: { sessionId: string; title: string; track?: string; state: string; next?: string; archivable?: boolean }[]
   asks?: { waiting?: ViewAsk[]; fixes?: ViewAsk[] }
 }
 
@@ -30,47 +30,58 @@ async function refresh($: EngineInterface): Promise<void> {
     .run(OX_NOW, { timeoutMs: 20_000 })
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
   const now = await $.clock.now()
+  const fail = (error: string) =>
+    update($, board, b => (b ? { ...b, error } : { at: now, waiting: [], fixes: [], threads: [], archivable: 0, error }))
   if (ran.exitCode !== 0) {
-    const error = ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`
-    await update($, board, b => (b ? { ...b, error } : { at: now, waiting: [], fixes: [], threads: [], archivable: 0, error }))
+    await fail(ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`)
     return
   }
-  const view = JSON.parse(ran.stdout) as View
+  let view: View
+  try {
+    view = JSON.parse(ran.stdout) as View
+  } catch {
+    await fail("ox printed something that isn't JSON")
+    return
+  }
   const ask = (a: ViewAsk): Ask => ({ id: a.id, what: a.what, where: a.where, link: a.link, age: age(a.since, now) })
   const threads = view.threads ?? []
   const next: Board = {
     at: now,
     waiting: (view.asks?.waiting ?? []).map(ask),
     fixes: (view.asks?.fixes ?? []).map(ask),
-    threads: threads.map((t): Thread => ({ id: t.sessionId, title: t.title, track: t.track, state: t.state, ask: t.ask })),
+    threads: threads.map((t): Thread => ({ id: t.sessionId, title: t.title, track: t.track, state: t.state, next: t.next })),
     archivable: threads.filter(t => t.archivable).length,
   }
   await update($, board, () => next)
 }
 
-async function openOnDesktop($: EngineInterface): Promise<void> {
-  if ((await $.session.surfaces()).includes('desktop')) {
-    await $.ui.open({ id: PANE, title: TITLE })
+// Polling starts with the first pane, so a terminal or headless session that
+// never shows one never runs ox.
+let polling = false
+
+async function show($: EngineInterface): Promise<void> {
+  if (!polling) {
+    polling = true
+    $.clock.every(EVERY_MS, () => void refresh($))
   }
+  await $.ui.open({ id: PANE, title: TITLE })
+  await refresh($)
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'ox-board', description: 'Show the ox board: what waits on you and where threads stand' })
-    $.clock.every(EVERY_MS, () => void refresh($))
-    void refresh($)
-    void openOnDesktop($)
+    if ((await $.session.surfaces()).includes('desktop')) void show($)
     return next(e)
   })
 
   on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
-    void $.ui.open({ id: PANE, title: TITLE })
+    void show($)
     return next(e)
   })
 
   on('command.run', { command: 'ox-board' }, async $ => {
-    await $.ui.open({ id: PANE, title: TITLE })
-    void refresh($)
+    await show($)
     return { text: 'ox board opened.' }
   })
 
@@ -106,6 +117,7 @@ export const register: Register = on => {
       .map(s => `${s} ${inState(s).length}`)
       .join(' · ')
     const active = [...inState('stuck'), ...inState('working')]
+    const parked = inState('parked')
 
     return (
       <Box flexDirection="column" width={e.props.bodyColumns}>
@@ -120,6 +132,15 @@ export const register: Register = on => {
               {t.title}
               <Text dimColor>{t.track ? ` · ${t.track}` : ''}</Text>
             </Text>
+          ))}
+          {parked.length > 0 && <Text bold>Parked ({parked.length})</Text>}
+          {parked.map(t => (
+            <Box key={t.id} flexDirection="column">
+              <Text wrap="truncate-end">{t.title}</Text>
+              <Text dimColor wrap="truncate-end">
+                next: {t.next}
+              </Text>
+            </Box>
           ))}
           {b.archivable > 0 && (
             <Text dimColor>
