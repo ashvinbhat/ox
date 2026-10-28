@@ -19,6 +19,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/ghreview"
 	"github.com/ashvinbhat/ox/internal/journal"
 	"github.com/ashvinbhat/ox/internal/memcheck"
+	"github.com/ashvinbhat/ox/internal/park"
 	"github.com/ashvinbhat/ox/internal/tracks"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
@@ -56,6 +57,7 @@ type nowThread struct {
 	PRs        []string      `json:"prs,omitempty"`
 	LastActive time.Time     `json:"lastActive"`
 	Archivable bool          `json:"archivable,omitempty"`
+	Next       string        `json:"next,omitempty"` // a parked thread's first step back
 }
 
 type nowPR struct {
@@ -96,7 +98,8 @@ func runNow(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
 
-	view := nowView{At: now, Threads: threadsFrom(sessions, ts, now), Reviews: reviewsToDo(cfg.Home)}
+	parked, _ := park.Load(cfg.Home)
+	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(cfg.Home)}
 	if r, err := memcheck.Pending(cfg.Home); err == nil && len(r.Suggestions) > 0 {
 		view.Memory = &nowMemory{Suggestions: len(r.Suggestions), AuditedAt: r.At}
 	}
@@ -136,7 +139,7 @@ func runNow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) []nowThread {
+func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, now time.Time) []nowThread {
 	out := make([]nowThread, 0, len(sessions))
 	for _, s := range sessions {
 		var prs []string
@@ -152,6 +155,9 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) [
 			PRs:        prs,
 			LastActive: s.LastActive(),
 			Archivable: s.Archivable(now),
+		}
+		if r, ok := parked[s.ID]; ok && t.State != desktop.StateWorking && r.Holds(t.LastActive) {
+			t.State, t.Next, t.Archivable = desktop.StateParked, r.Next, false
 		}
 		if tr := sessionTrack(s, ts); tr != nil {
 			t.Track = tr.Label()
@@ -355,7 +361,11 @@ func renderBrief(v nowView) string {
 	}
 
 	done := groups[desktop.StateDone]
-	line := fmt.Sprintf("Working %d · stuck %d · done %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]), len(done))
+	line := fmt.Sprintf("Working %d · stuck %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]))
+	if n := len(groups[desktop.StateParked]); n > 0 {
+		line += fmt.Sprintf(" · parked %d", n)
+	}
+	line += fmt.Sprintf(" · done %d", len(done))
 	if n := countArchivable(done); n > 0 {
 		line += fmt.Sprintf(" (%d can be archived: /tidy)", n)
 	}
@@ -445,6 +455,8 @@ func detail(t nowThread, now time.Time) string {
 		return clip(t.Recap, 70)
 	case desktop.StateStuck:
 		return "no activity for " + shortAge(now.Sub(t.LastActive))
+	case desktop.StateParked:
+		return "next: " + clip(t.Next, 70)
 	case desktop.StateDone:
 		if t.Archivable {
 			return "archive?  " + clip(t.Recap, 60)

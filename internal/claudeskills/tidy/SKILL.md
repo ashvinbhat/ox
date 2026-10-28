@@ -30,6 +30,7 @@ archive:
 
 - this thread,
 - a running thread,
+- a parked thread (`parked` in `ox now`): he left it on purpose,
 - a thread with an open PR,
 - a thread whose question is in the asks queue.
 

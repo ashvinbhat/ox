@@ -15,7 +15,7 @@ also read "Building ox".
   - "what did we decide today / this week?" → `ox journal [--days 7]`
   - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
   - "check my memory" → memory-check; "any review asks?" → review-asks;
-    "review <PR>" → review-pr
+    "review <PR>" → review-pr; "park this" / "I'll come back to this" → park
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
@@ -95,14 +95,18 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 - `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
   hook runs it hourly in the background; log in `~/.ox/logs/worktrees.log`)
 - `ox memory audit [--json] [--keep <id>]` — gone paths, code and ox commands,
-  MEMORY.md drift, stale project memories, memories stranded in other
-  projects' stores (the hook runs it weekly; the result is in
-  `~/.ox/memory-check/last.json`)
+  cited files changed since the memory was confirmed, near-duplicate
+  memories, broken frontmatter, MEMORY.md drift, stale project memories,
+  memories stranded in other projects' stores (the hook runs it weekly; the
+  result is in `~/.ox/memory-check/last.json`)
 - `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
   the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
   refreshed hourly by the hook
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
+- `ox park --next "…"` — mark this thread parked; `/park` runs it after the
+  resumption note. `ox now` shows it as parked with that step until the thread
+  is active again; it's never an ask or archivable
 - `ox repo add/list`, `ox personas`, `ox learnings` / `ox memory recall` (the
   memory.db archive)
 - `ox opencode [dir]` — opencode with ox provider keys wired in
@@ -128,6 +132,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   and the code search (ripgrep over checkouts, then `git grep` at the default
   branch for what's still missing). Keeps and the last report are in
   `~/.ox/memory-check/`.
+- `internal/park` — parked threads, one record each in `~/.ox/parked/`.
 - `internal/asks` — the asks queue: sources in, ranked asks and thread fixes
   out (`Build`), PR state from gh (`FetchPRs`, cached), drops that lapse when
   the ask changes.
@@ -151,6 +156,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ├── reviews/         # Review rounds per PR
 ├── journal/         # Decision journal, one file a day
 ├── asks/            # PR state cache and dropped asks
+├── parked/          # Threads left on purpose, with the next step
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

@@ -23,10 +23,13 @@ const (
 	StateWorking  State = "working"
 	StateStuck    State = "stuck"
 	StateDone     State = "done"
+	// StateParked is ox's, not the app's: a thread left on purpose with a
+	// next step (internal/park).
+	StateParked State = "parked"
 )
 
 // States lists every state in the order ox shows them.
-var States = []State{StateNeedsYou, StateInReview, StateWorking, StateStuck, StateDone}
+var States = []State{StateNeedsYou, StateInReview, StateWorking, StateStuck, StateParked, StateDone}
 
 // A turn in flight has no post-turn summary yet; this much silence means the
 // turn died rather than that it is still running.

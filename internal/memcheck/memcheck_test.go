@@ -150,6 +150,65 @@ func TestCodeSearchChecksDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestAuditDuplicatesAndBadFrontmatter(t *testing.T) {
+	store := t.TempDir()
+	write(t, store, IndexFile, "- [a](a.md)\n- [b](b.md)\n- [c](c.md)\n- [d](d.md)\n")
+	write(t, store, "a.md", "---\nname: a\ndescription: LinkedIn format quirk\n---\nSet Campaign.format to SINGLE_VIDEO for VIDEO_VIEW and video lead-gen campaigns; otherwise LinkedIn infers it.\n")
+	write(t, store, "b.md", "---\nname: b\ndescription: LinkedIn video format\n---\nFor VIDEO_VIEW and video lead-gen, Campaign.format must be SINGLE_VIDEO; LinkedIn infers the rest.\n")
+	write(t, store, "c.md", "---\nname: c\ndescription: Temporal test env\n---\nFailure-path workflow tests need temporal.test.env=true or activities retry five times.\n")
+	write(t, store, "d.md", "---\nname: d\ndescription: ops: gotchas\n---\nForce-push with a lease and never fetch before the retry.\n")
+
+	r, err := Audit(Options{Dir: store, Now: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, s := range r.Suggestions {
+		ids = append(ids, s.ID)
+	}
+	if want := []string{"duplicate:a.md:b.md", "frontmatter:d.md"}; !reflect.DeepEqual(sorted(ids), want) {
+		t.Errorf("ids = %v, want %v", ids, want)
+	}
+}
+
+// A cite whose file changed on the default branch after the memory was last
+// confirmed is flagged; one untouched since is not.
+func TestChangedCites(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep not installed")
+	}
+	upstream := t.TempDir()
+	run(t, upstream, "git", "init", "-q", "-b", "main")
+	commit := func(date, file, content string) {
+		write(t, upstream, file, content)
+		run(t, upstream, "git", "add", ".")
+		cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", file)
+		cmd.Dir = upstream
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("commit: %v\n%s", err, out)
+		}
+	}
+	commit("2026-10-01T10:00:00Z", "src/FooService.go", "type FooService struct{}\n")
+	commit("2026-10-01T11:00:00Z", "docs/notes.md", "notes\n")
+	commit("2026-10-20T10:00:00Z", "src/FooService.go", "type FooService struct{ n int }\n")
+	clone := filepath.Join(t.TempDir(), "repo")
+	run(t, "", "git", "clone", "-q", upstream, clone)
+
+	verified := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	local := filepath.Join(t.TempDir(), "tracks.yaml")
+	write(t, filepath.Dir(local), "tracks.yaml", "x")
+	m := Memory{File: "a.md", Touched: verified, Cites: []string{"repo:FooService", "repo:docs/notes.md", local}}
+
+	var subjects []string
+	for _, c := range newCodeSearch([]string{clone}).changedCites(m) {
+		subjects = append(subjects, c.Subject)
+	}
+	if want := []string{"repo:FooService", local}; !reflect.DeepEqual(subjects, want) {
+		t.Errorf("changed cites = %v, want %v", subjects, want)
+	}
+}
+
 func write(t *testing.T, dir, name, content string) {
 	t.Helper()
 	p := filepath.Join(dir, name)

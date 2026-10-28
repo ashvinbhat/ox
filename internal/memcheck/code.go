@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // codeSearch answers whether names and files exist in the repos. It looks in
@@ -190,6 +192,77 @@ func (s *codeSearch) goneCites(file string, cites []string) []Suggestion {
 		}
 	}
 	return out
+}
+
+// changedCites reports cited files with commits on the default branch since
+// the memory was last confirmed or edited: the file is still there, but what
+// the memory says about it may no longer hold. A symbol cite stands for the
+// files named after it (SegmentService.java).
+func (s *codeSearch) changedCites(m Memory) []Suggestion {
+	if m.Touched.IsZero() {
+		return nil
+	}
+	since := m.Touched.Format("2006-01-02")
+	var out []Suggestion
+	for _, c := range m.Cites {
+		if strings.HasPrefix(c, "~") || strings.HasPrefix(c, "/") {
+			if info, err := os.Stat(expandHome(c)); err == nil && info.ModTime().After(m.Touched) {
+				out = append(out, suggest(KindChanged, m.File, c,
+					fmt.Sprintf("edited %s, after the memory was last confirmed or edited (%s)", info.ModTime().Format("2006-01-02"), since)))
+			}
+			continue
+		}
+		name, spec, ok := strings.Cut(c, ":")
+		if !ok || spec == "" {
+			continue
+		}
+		for _, r := range s.repos {
+			if filepath.Base(r.dir) != name {
+				continue
+			}
+			ref := r.ref
+			if ref == "" {
+				ref = "HEAD"
+			}
+			listing, err := git(r.dir, "ls-tree", "-r", "--name-only", ref)
+			if err != nil {
+				continue
+			}
+			files := citedFiles(listing, spec)
+			if len(files) == 0 {
+				break
+			}
+			n, err := git(r.dir, append([]string{"rev-list", "--count", "--since=" + m.Touched.Format(time.RFC3339), ref, "--"}, files...)...)
+			if err == nil && n != "0" {
+				out = append(out, suggest(KindChanged, m.File, c,
+					fmt.Sprintf("%s %s on %s since the memory was last confirmed or edited (%s)", n, plural(n, "commit"), ref, since)))
+			}
+			break
+		}
+	}
+	return out
+}
+
+// citedFiles lists the files in a tree listing that a cite names: the path
+// itself, or for a symbol every file whose name without extension is it.
+func citedFiles(listing, spec string) []string {
+	isFile := strings.Contains(spec, "/") || fileExtRe.MatchString(spec)
+	var out []string
+	for _, f := range strings.Split(listing, "\n") {
+		base := path.Base(f)
+		if isFile && (f == spec || strings.HasSuffix(f, "/"+spec)) ||
+			!isFile && strings.TrimSuffix(base, path.Ext(base)) == spec {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func plural(n, word string) string {
+	if n == "1" {
+		return word
+	}
+	return word + "s"
 }
 
 func patternFile(ids []string) (string, error) {

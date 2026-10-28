@@ -1,6 +1,6 @@
 ---
 name: memory-check
-description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, drift from MEMORY.md, or sit stranded in other projects' stores — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
+description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, cite files that changed since they were confirmed, duplicate each other, have broken frontmatter, drift from MEMORY.md, or sit stranded in other projects' stores — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
 metadata:
   owner: ox
 ---
@@ -37,6 +37,15 @@ Read each flagged memory file. Then, by kind:
   purpose (a pruned worktree, a retired hook).
 - **gone-command**: `ox --help` for what replaced it, if anything.
 - **gone-cite**: same as gone-code or gone-path, for the cited entry.
+- **changed**: a cited file has commits since the memory was last confirmed
+  or edited. Read them (`git -C <repo> log -p --since=<date> origin/HEAD --
+  <file>`) and check the memory's claims against the file today. Propose
+  verify if it still holds, else edit.
+- **duplicate**: two memories share most of their words. Read both: merge
+  (which file keeps it, what moves) or keep if they say different things.
+- **frontmatter**: the YAML doesn't parse, so the audit can't see the
+  memory's type, verified date or cites. Fix mechanically: quote the
+  description (`description: "…"`).
 - **stale**: read the memory's claims and check them against today: PR states
   (`gh pr view`), yoke tasks, files, dates. Say what still holds and what moved.
 - **stranded**: compare with the store. It's a duplicate, still worth having
