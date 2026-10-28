@@ -105,7 +105,7 @@ OX=$(command -v ox || echo "$HOME/go/bin/ox")
 ("$OX" worktrees prune --if-due >/dev/null 2>&1 &)
 ("$OX" memory audit --if-due >/dev/null 2>&1 &)
 ("$OX" asks refresh --if-due >/dev/null 2>&1 &)
-BRIEF=$("$OX" now --brief 2>/dev/null) || exit 0
+BRIEF=$("$OX" now --brief --mention 2>/dev/null) || exit 0
 [ -z "$BRIEF" ] && exit 0
 
 jq -n --arg ctx "$BRIEF" '{

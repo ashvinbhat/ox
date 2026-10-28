@@ -88,6 +88,11 @@ mission harness is frozen.
   - The brief's "Needs you", reviews, memory and recap lines become one
     "Waiting on you" list (top three) plus a "Threads can fix" line; `ox now`
     opens with the full queue.
+  - Plain chat: CLAUDE.md maps what Ashvin says ("what's waiting on me?",
+    "recap", "clean up my threads") to the command or skill a thread runs;
+    threads never tell him to run commands. `ox now --brief --mention` (the
+    hook) adds a "Mention once" line to the first brief of the day for a due
+    recap or memory suggestions, which the thread offers in words.
   - `/tidy` skill: proposes archiving finished threads, renaming threads that
     share a title, a sidebar group per track, and what to do with stale
     questions; applies what you approve with the app's session tools.

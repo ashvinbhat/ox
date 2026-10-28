@@ -6,6 +6,22 @@ You work in Claude Code desktop threads. ox keeps them pointed the same way:
 every thread starts knowing what needs you, what's in review and what's
 running, grouped by your tracks.
 
+You never need to type an `ox` command. Ask a thread in your own words:
+
+| You say | The thread runs |
+|---|---|
+| "what's waiting on me?" | `ox asks` |
+| "where are things?" | `ox now` |
+| "what did we decide this week?" | `ox journal --days 7` |
+| "let me own this one" | the own-it round |
+| "recap" | the weekly recap |
+| "check my memory" | the memory check |
+| "clean up my threads" | tidy |
+| "any review asks?" / "review <PR>" | the review desk |
+
+The first thread each day also mentions, in one line, anything due: the
+weekly recap or memory suggestions. The commands below are what threads use.
+
 ## Features
 
 - **`ox now`**: every desktop thread by state — needs you, in review, working,

@@ -7,13 +7,25 @@ also read "Building ox".
 
 ## Working from this folder
 
+- Ashvin chats in plain words. He doesn't run `ox` or slash commands and
+  won't remember them: they're yours. Map what he says to the command or
+  skill, run it, and answer in prose. Never end with "run `ox …`" or "type
+  /…"; offer in words and do it on a yes.
+  - "what's waiting on me?" → `ox asks`; "where are things?" → `ox now`
+  - "what did we decide today / this week?" → `ox journal [--days 7]`
+  - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
+  - "check my memory" → memory-check; "any review asks?" → review-asks;
+    "review <PR>" → review-pr
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
   the top of what's waiting on Ashvin, PR fixes threads can make, what's in
-  review, what's running. It is background: don't
-  bring it up unless he asks what needs him or the thread's work touches it.
-  `ox now` is the full view, `--json` for parsing, `--track <short>` to filter.
+  review, what's running. It is background: don't bring it up unless he asks
+  what needs him or the thread's work touches it. One exception: a "Mention
+  once" line (only the first thread of the day gets it). Say it as a
+  one-sentence offer at the end of your first reply ("Also: the weekly recap
+  is due. Want to do it now?"). `ox now` is the full view, `--json` for
+  parsing, `--track <short>` to filter.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at

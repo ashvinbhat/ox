@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,9 @@ var (
 	nowJSON  bool
 	nowTrack string
 	nowAll   bool
+	// nowMention adds the once-a-day reminders to the brief; only the
+	// ox-brief hook passes it, so a manual run doesn't use up the day's.
+	nowMention bool
 )
 
 var nowCmd = &cobra.Command{
@@ -74,6 +78,7 @@ type nowView struct {
 	Memory  *nowMemory           `json:"memory,omitempty"`
 	Journal *journal.Status      `json:"journal,omitempty"`
 	Asks    *asks.Queue          `json:"asks,omitempty"`
+	Mention []string             `json:"mention,omitempty"`
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 }
@@ -114,6 +119,9 @@ func runNow(cmd *cobra.Command, args []string) error {
 		q = trackAsks(q, view.Threads)
 	}
 	view.Asks = &q
+	if nowBrief && nowMention {
+		view.Mention = mentionOnce(cfg.Home, view, now)
+	}
 
 	switch {
 	case nowJSON:
@@ -151,6 +159,32 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) [
 		out = append(out, t)
 	}
 	return out
+}
+
+// mentionOnce returns the reminders Ashvin should hear today: a due recap and
+// memory suggestions. He never sees the brief and doesn't run commands, so
+// the first thread of the day says them in words. Later threads that day get
+// nothing.
+func mentionOnce(oxHome string, v nowView, now time.Time) []string {
+	var items []string
+	if j := v.Journal; j != nil && j.RecapDue {
+		items = append(items, fmt.Sprintf("the weekly recap is due (%s this week)", countOf(j.DecisionsWeek, "decision")))
+	}
+	if v.Memory != nil {
+		items = append(items, fmt.Sprintf("the weekly memory check left %s", countSuggestions(v.Memory.Suggestions)))
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	stamp := filepath.Join(asks.Dir(oxHome), "mentioned")
+	today := now.Format("2006-01-02")
+	if b, err := os.ReadFile(stamp); err == nil && strings.TrimSpace(string(b)) == today {
+		return nil
+	}
+	if os.MkdirAll(filepath.Dir(stamp), 0o755) != nil || os.WriteFile(stamp, []byte(today+"\n"), 0o644) != nil {
+		return nil
+	}
+	return items
 }
 
 // trackAsks keeps the asks that belong to the filtered threads: their
@@ -300,6 +334,9 @@ func renderBrief(v nowView) string {
 
 	if v.Asks != nil {
 		b.WriteString(briefAsks(*v.Asks, v.At))
+	}
+	if len(v.Mention) > 0 {
+		fmt.Fprintf(&b, "Mention once, as a plain offer at the end of your first reply: %s.\n", strings.Join(v.Mention, "; "))
 	}
 
 	if review := groups[desktop.StateInReview]; len(review) > 0 {
@@ -481,6 +518,7 @@ func clip(s string, n int) string {
 
 func init() {
 	nowCmd.Flags().BoolVar(&nowBrief, "brief", false, "Short version for the start of a thread")
+	nowCmd.Flags().BoolVar(&nowMention, "mention", false, "With --brief: add the day's reminders, once a day (the ox-brief hook)")
 	nowCmd.Flags().BoolVar(&nowJSON, "json", false, "Machine-readable output")
 	nowCmd.Flags().StringVar(&nowTrack, "track", "", "Only this track (its short label)")
 	nowCmd.Flags().BoolVar(&nowAll, "all", false, "Include archived threads")
