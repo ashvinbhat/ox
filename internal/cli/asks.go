@@ -25,9 +25,10 @@ var (
 	asksIfDue   bool
 )
 
-// PR state costs a gh call per PR. The ox-brief hook refreshes it hourly in
-// the background, so the brief reads a cache and never waits on GitHub.
-const prsEvery = time.Hour
+// PR state costs a gh call per PR. The ox-brief hook and the board refresh it
+// in the background, so the brief reads a cache and never waits on GitHub.
+// Ten minutes keeps a merged PR from lingering as an ask.
+const prsEvery = 10 * time.Minute
 
 var asksCmd = &cobra.Command{
 	Use:   "asks",
@@ -82,6 +83,12 @@ var asksRefreshCmd = &cobra.Command{
 			if _, at, err := asks.LoadPRs(cfg.Home); err == nil && time.Since(at) < prsEvery {
 				return nil
 			}
+			// Every open board asks at once; one fetch is enough.
+			release, ok := asks.Claim(cfg.Home, time.Now())
+			if !ok {
+				return nil
+			}
+			defer release()
 		}
 		_, _, err := refreshPRs(cfg.Home)
 		return err

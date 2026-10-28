@@ -177,6 +177,29 @@ func SavePRs(oxHome string, prs []PR, at time.Time) error {
 	return writeJSON(filepath.Join(Dir(oxHome), "prs.json"), prCache{At: at, PRs: prs})
 }
 
+// claimFor is how long a refresh may hold the claim; one that died longer ago
+// than this no longer blocks the next.
+const claimFor = 2 * time.Minute
+
+// Claim takes the right to refresh PR state, so refreshes started together
+// make one fetch. It reports false while another holds it; release frees it.
+func Claim(oxHome string, now time.Time) (release func(), ok bool) {
+	path := filepath.Join(Dir(oxHome), "refresh.claim")
+	if info, err := os.Stat(path); err == nil && now.Sub(info.ModTime()) < claimFor {
+		return nil, false
+	}
+	_ = os.Remove(path)
+	if err := os.MkdirAll(Dir(oxHome), 0o755); err != nil {
+		return nil, false
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, false
+	}
+	f.Close()
+	return func() { os.Remove(path) }, true
+}
+
 // LoadDropped reads the asks Ashvin dropped, by id, with when.
 func LoadDropped(oxHome string) (map[string]time.Time, error) {
 	dropped := map[string]time.Time{}

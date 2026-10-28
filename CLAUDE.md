@@ -102,7 +102,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   result is in `~/.ox/memory-check/last.json`)
 - `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
   the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
-  refreshed hourly by the hook
+  refreshed by the hook and the board once it's 10 minutes old
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox park --next "…"` — mark this thread parked; `/park` runs it after the
