@@ -99,18 +99,12 @@ mission harness is frozen.
     questions; applies what you approve with the app's session tools.
 
 - Board panel. `ox setup` installs `ox-board`, a Claude Code plugin, into
-  `~/.claude/skills/ox-board`. In every desktop thread it opens a side panel:
-  - one line per track: how many things are for you, then what threads are
-    handling (working, stuck, in review, parked, done);
-  - "For you" and "PRs to fix": each item with at most one button. Reply
-    sends your answer to the thread that asked; Fix sends the fix request to
-    the PR's thread (or runs it here when no thread owns it); Review and
-    Start begin a review, the memory check or the recap in this thread. A
-    PR's name opens it on GitHub;
-  - parked threads with their next step.
-  Every open panel reads `ox now --brief --json` every 15 seconds, so an
-  answer or a dropped ask in one thread shows in the others; terminal and
-  headless sessions never poll.
+  `~/.claude/skills/ox-board`. Beside every desktop thread it lists only the
+  threads that need you, each with one line on what it's waiting on: a
+  question you haven't dropped, a PR ready to merge, or a turn that went
+  quiet. No buttons; it reads like a chat reply (Markdown). Every open panel
+  rereads `ox now --brief --json` every 15 seconds, so a change in one
+  thread shows in the others; terminal and headless sessions never poll.
 - `ox now --json` lists the tracks by name, and each ask carries its track
   and the id of the thread it belongs to.
 

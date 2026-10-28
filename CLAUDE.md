@@ -27,9 +27,8 @@ also read "Building ox".
   is due. Want to do it now?"). `ox now` is the full view, `--json` for
   parsing, `--track <short>` to filter.
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
-  `ox setup` installs): a row per track, then his asks and PRs to fix, with
-  buttons that start work in this thread or message the thread an ask
-  belongs to. It's how he sees what's waiting without asking.
+  `ox setup` installs): the threads that need him, each with one line on
+  what it's waiting on. It's how he sees what's waiting without asking.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
