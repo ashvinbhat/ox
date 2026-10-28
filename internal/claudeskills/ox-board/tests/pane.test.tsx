@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 const PANE = {
   plugin: 'ox-board',
@@ -7,9 +8,9 @@ const PANE = {
   props: {
     title: 'ox',
     isFocused: false,
-    bodyColumns: 40,
+    bodyColumns: 60,
     placement: 'dock',
-    scroll: { offset: 0, bodyRows: 30 },
+    scroll: { offset: 0, bodyRows: 40 },
     view: {},
   },
 } as const
@@ -18,93 +19,121 @@ const NOW = Date.parse('2026-10-28T12:00:00+05:30')
 
 const VIEW = {
   at: '2026-10-28T12:00:00+05:30',
+  tracks: [
+    { short: 'durable', name: 'Durable agents' },
+    { short: 'build', name: 'Server build split' },
+    { short: 'review', name: 'Reviews' },
+    { short: 'ox', name: 'ox' },
+  ],
   threads: [
-    { sessionId: 'local_a', title: 'Durable chat turns', track: 'durable', state: 'needs you', ask: 'Is a move to GCP planned?' },
-    { sessionId: 'local_b', title: 'Board panel', track: 'ox', state: 'working' },
+    { sessionId: 'local_a', title: 'Durable chat turns', track: 'durable', state: 'needs you' },
+    { sessionId: 'local_e', title: 'Valkey clusters', track: 'durable', state: 'in review' },
+    { sessionId: 'local_d', title: 'Left for later', track: 'durable', state: 'parked', next: 'Rebase on main' },
+    { sessionId: 'local_b', title: 'Board panel', track: 'ox', state: 'needs you' },
+    { sessionId: 'local_f', title: 'Server build', track: 'build', state: 'in review' },
     { sessionId: 'local_c', title: 'Old work', state: 'done', archivable: true },
-    { sessionId: 'local_d', title: 'Left for later', state: 'parked', next: 'Rebase on main' },
   ],
   asks: {
     waiting: [
-      { id: 'question:local_a', what: 'Is a move to GCP planned?', where: 'Durable chat turns', link: 'local_a', since: '2026-10-26T16:00:00+05:30' },
-      { id: 'review:backend#6786', what: 'Review backend#6786 for Neeraj', link: 'https://github.com/CBX1/backend/pull/6786', since: '2026-10-28T11:30:00+05:30' },
+      { id: 'question:local_a', kind: 'question', what: 'Is a move to GCP planned?', where: 'Durable chat turns', thread: 'local_a', track: 'durable', since: '2026-10-26T15:00:00+05:30' },
+      { id: 'question:local_b', kind: 'question', what: 'Want me to merge it?', where: 'Board panel', thread: 'local_b', track: 'ox', since: '2026-10-28T11:50:00+05:30' },
+      { id: 'review:backend#6786', kind: 'review', what: 'Review backend#6786 for Neeraj', link: 'https://github.com/CBX1/backend/pull/6786', track: 'review', since: '2026-10-27T13:00:00+05:30' },
+      { id: 'memory', kind: 'memory', what: 'Memory: 2 suggestions (/memory-check)', since: '2026-10-28T11:00:00+05:30' },
     ],
-    fixes: [{ id: 'fix:frontend#9680', what: 'frontend#9680: CI failing (draft)', where: 'Server build', since: '2026-10-28T09:00:00+05:30' }],
+    fixes: [
+      { id: 'fix:frontend#9680', kind: 'fix', what: 'frontend#9680: CI failing (draft)', where: 'Server build', thread: 'local_f', track: 'build', link: 'https://github.com/CBX1/frontend/pull/9680', since: '2026-10-27T13:00:00+05:30' },
+    ],
   },
 }
 
-test('the board draws ox now on every surface', async ($, on) => {
+// The world beneath the board: ox answers with VIEW, sends and prompts are kept.
+function world(on: On, surfaces: string[], stdout = JSON.stringify(VIEW)) {
+  const seen = { runs: [] as string[][], sent: [] as { to: unknown; text: string }[], prompts: [] as string[] }
   on('command.register', () => ({ value: { command: 'ox-board' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('session.surfaces', () => ({ value: ['desktop'] }))
-  const clock = mock.clock(on, { now: NOW })
-  on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.surfaces', () => ({ value: surfaces }))
+  on('process.run', (_, e) => {
+    seen.runs.push([...e.argv])
+    return { value: { exitCode: 0, stdout, stderr: '' } }
+  })
+  on('session.send', (_, e) => {
+    seen.sent.push({ to: e.to, text: e.text })
+    return { isDelivered: true }
+  })
+  on('prompt.submit', (_, e) => {
+    seen.prompts.push(e.text)
+    return { text: e.text, context: [] }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  return { seen, clock: mock.clock(on, { now: NOW }) }
+}
 
+const text = async (ui: { find: (q: { type: 'Text'; text: RegExp }) => Promise<{ text: string } | undefined> }, re: RegExp) =>
+  (await ui.find({ type: 'Text', text: re }))?.text
+
+test('the board draws the track table and the lists on every surface', async ($, on) => {
+  world(on, ['desktop'])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.command.run({ command: 'ox-board' })
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /^Waiting on you/ }))?.text).toBe('Waiting on you (2)')
-    expect((await ui.find({ type: 'Text', text: /Durable chat turns ·/ }))?.text).toBe('Durable chat turns · 44h')
-    expect((await ui.find({ type: 'Text', text: /^Threads can fix/ }))?.text).toBe('Threads can fix (1)')
-    expect((await ui.find({ type: 'Text', text: /^working/ }))?.text).toBe('working 1 · stuck 0 · in review 0 · done 1')
-    expect((await ui.find({ type: 'Text', text: /archived/ }))?.text).toBe('1 done thread can be archived')
-    expect((await ui.find({ type: 'Text', text: /^Parked/ }))?.text).toBe('Parked (1)')
-    expect((await ui.find({ type: 'Text', text: /^next:/ }))?.text).toBe('next: Rebase on main')
+    expect(await text(ui, /^Durable agents$/)).toBe('Durable agents')
+    expect(await text(ui, /question$/)).toBe('● 1 question')
+    expect(await text(ui, /parked$/)).toBe('● 1 parked')
+    expect(await text(ui, /^● \d+ reviews?$/)).toBe('● 1 review')
+    expect(await text(ui, /to fix$/)).toBe('● 1 PR to fix')
+    expect(await text(ui, /^Your turn/)).toBe('Your turn · 4')
+    expect(await text(ui, /^Memory/)).toBe('Memory: 2 suggestions')
+    expect(await text(ui, /^Durable agents · /)).toBe('Durable agents · 45h')
+    expect(await text(ui, /^PRs to fix/)).toBe('PRs to fix · 1')
+    expect(await text(ui, /^Next:/)).toBe('Next: Rebase on main')
+    expect(await text(ui, /to archive$/)).toBe('1 finished thread to archive')
     await ui.unmount()
   }
 })
 
-test('the board says when ox fails', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'ox-board' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('session.surfaces', () => ({ value: ['desktop'] }))
-  const clock = mock.clock(on, { now: NOW })
-  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'Error: config not found\nusage' } }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-
+test('buttons send to the thread, start work here, or drop the ask', async ($, on) => {
+  const { seen } = world(on, ['desktop'])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.command.run({ command: 'ox-board' })
-
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /^ox:/ }))?.text).toBe('ox: Error: config not found')
+
+  expect(await ui.find({ type: 'Button', key: 'question:local_a:yes' })).toBeUndefined()
+  await ui.press({ key: 'question:local_b:yes' })
+  expect(seen.sent.at(-1)).toEqual({ to: 'local_b', text: 'Go ahead.' })
+
+  await ui.press({ key: 'question:local_a:reply' })
+  await ui.input({ key: 'question:local_a:answer', text: 'Not this quarter' })
+  expect(seen.sent.at(-1)).toEqual({ to: 'local_a', text: 'Not this quarter' })
+
+  await ui.press({ key: 'fix:frontend#9680:fix' })
+  expect(seen.sent.at(-1)?.to).toBe('local_f')
+  expect(seen.sent.at(-1)?.text).toMatch(/^Fix frontend#9680: CI failing: https:\/\/github.com\/CBX1\/frontend\/pull\/9680\. /)
+
+  await ui.press({ key: 'review:backend#6786:start' })
+  expect(seen.prompts.at(-1)).toBe('Review https://github.com/CBX1/backend/pull/6786')
+
+  await ui.press({ key: 'review:backend#6786:drop' })
+  expect(seen.runs.some(argv => argv.slice(-3).join(' ') === 'asks drop review:backend#6786')).toBe(true)
   await ui.unmount()
 })
 
 test('a session with no pane never runs ox until the board is asked for', async ($, on) => {
-  let runs = 0
-  on('command.register', () => ({ value: { command: 'ox-board' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('session.surfaces', () => ({ value: [] }))
-  const clock = mock.clock(on, { now: NOW })
-  on('process.run', () => {
-    runs++
-    return { value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } }
-  })
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-
+  const { seen, clock } = world(on, [])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(runs).toBe(0)
+  expect(seen.runs.length).toBe(0)
   await $.command.run({ command: 'ox-board' })
-  expect(runs).toBe(1)
+  expect(seen.runs.length).toBe(1)
   await clock.advance(60_000)
-  expect(runs).toBe(2)
+  expect(seen.runs.length).toBe(2)
 })
 
 test('the board says when ox prints something that is not JSON', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'ox-board' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('session.surfaces', () => ({ value: [] }))
-  const clock = mock.clock(on, { now: NOW })
-  on('process.run', () => ({ value: { exitCode: 0, stdout: 'Update available\n{', stderr: '' } }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-
+  world(on, [], 'Update available\n{')
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'ox-board' })
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /^ox:/ }))?.text).toBe("ox: ox printed something that isn't JSON")
+  expect(await text(ui, /^ox:/)).toBe("ox: ox printed something that isn't JSON")
   await ui.unmount()
 })

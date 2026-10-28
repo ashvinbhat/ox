@@ -12,7 +12,7 @@ func TestBuildRanksAndSplits(t *testing.T) {
 	ago := func(h int) time.Time { return now.Add(-time.Duration(h) * time.Hour) }
 	in := Inputs{
 		Threads: []Thread{
-			{ID: "local_a", Title: "A", Ask: "Ship it?", Since: ago(80), PRs: []string{"frontend#1"}},
+			{ID: "local_a", Title: "A", Ask: "Ship it?", Since: ago(80), PRs: []string{"frontend#1"}, Track: "durable"},
 			{ID: "local_b", Title: "B", Ask: "Which option?", Since: ago(2)},
 			{ID: "local_c", Title: "C", Since: ago(1), PRs: []string{"frontend#2"}},
 			{ID: "local_d", Title: "D", Ask: "Old one", Since: ago(300), Archived: true},
@@ -50,7 +50,8 @@ func TestBuildRanksAndSplits(t *testing.T) {
 	if q.Waiting[5].Minutes != 10 || q.Waiting[5].What != "Memory: 6 suggestions (/memory-check)" {
 		t.Errorf("memory = %+v", q.Waiting[5])
 	}
-	if len(q.Fixes) != 1 || q.Fixes[0].What != "frontend#1: merge conflict, CI failing" || q.Fixes[0].Where != "A" {
+	if len(q.Fixes) != 1 || q.Fixes[0].What != "frontend#1: merge conflict, CI failing" || q.Fixes[0].Where != "A" ||
+		q.Fixes[0].Thread != "local_a" || q.Fixes[0].Track != "durable" {
 		t.Errorf("fixes = %+v", q.Fixes)
 	}
 }
@@ -72,7 +73,7 @@ func TestPRWaitsOnNobodyWhileInReview(t *testing.T) {
 		{Repo: "CBX1/frontend", Number: 2, Mergeable: "MERGEABLE", Review: "APPROVED", Checks: ChecksPassing, Draft: true},
 		{Repo: "CBX1/frontend", Number: 3, Mergeable: "MERGEABLE", Review: "", Checks: ChecksPassing},
 	} {
-		if a, ok := prAsk(p, ""); ok {
+		if a, ok := prAsk(p, Thread{}); ok {
 			t.Errorf("%s: got %+v, want nothing", p.Ref(), a)
 		}
 	}

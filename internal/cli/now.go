@@ -83,6 +83,13 @@ type nowView struct {
 	Mention []string             `json:"mention,omitempty"`
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
+	Tracks  []trackName          `json:"tracks,omitempty"`
+}
+
+// trackName names a track for readers of --json: threads and asks carry Short.
+type trackName struct {
+	Short string `json:"short"`
+	Name  string `json:"name"`
 }
 
 func runNow(cmd *cobra.Command, args []string) error {
@@ -100,6 +107,9 @@ func runNow(cmd *cobra.Command, args []string) error {
 
 	parked, _ := park.Load(cfg.Home)
 	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(cfg.Home)}
+	for _, t := range ts {
+		view.Tracks = append(view.Tracks, trackName{Short: t.Label(), Name: t.Name})
+	}
 	if r, err := memcheck.Pending(cfg.Home); err == nil && len(r.Suggestions) > 0 {
 		view.Memory = &nowMemory{Suggestions: len(r.Suggestions), AuditedAt: r.At}
 	}
@@ -117,7 +127,7 @@ func runNow(cmd *cobra.Command, args []string) error {
 		view = filterTrack(view, ts, nowTrack)
 	}
 	// The brief must not wait on GitHub: it reads the PR cache the hook keeps.
-	q := collectAsks(cfg.Home, view.Threads, view.Reviews, now, !nowBrief)
+	q := collectAsks(cfg.Home, view.Threads, view.Reviews, ts, now, !nowBrief)
 	if nowTrack != "" {
 		q = trackAsks(q, view.Threads)
 	}

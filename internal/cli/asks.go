@@ -97,7 +97,7 @@ func runAsks(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
 	parked, _ := park.Load(cfg.Home)
-	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, parked, now), reviewsToDo(cfg.Home), now, !asksOffline)
+	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, parked, now), reviewsToDo(cfg.Home), ts, now, !asksOffline)
 	if asksJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -109,17 +109,22 @@ func runAsks(cmd *cobra.Command, args []string) error {
 
 // collectAsks builds the queue. With fetch, PR state older than prsEvery is
 // fetched from GitHub first; without it the cache is used as it is.
-func collectAsks(oxHome string, threads []nowThread, reviews []ghreview.QueueItem, now time.Time, fetch bool) asks.Queue {
+func collectAsks(oxHome string, threads []nowThread, reviews []ghreview.QueueItem, ts []tracks.Track, now time.Time, fetch bool) asks.Queue {
 	in := asks.Inputs{}
 	for _, t := range threads {
-		at := asks.Thread{ID: t.SessionID, Title: t.Title, Since: t.LastActive, PRs: t.PRs}
+		at := asks.Thread{ID: t.SessionID, Title: t.Title, Since: t.LastActive, PRs: t.PRs, Track: t.Track}
 		if t.State == desktop.StateNeedsYou {
 			at.Ask = askOrRecap(t)
 		}
 		in.Threads = append(in.Threads, at)
 	}
+	// Review asks have no thread; they belong to the track that claims reviews.
+	reviewTrack := ""
+	if tr := tracks.Of(ts, "review"); tr != nil {
+		reviewTrack = tr.Label()
+	}
 	for _, r := range reviews {
-		in.Reviews = append(in.Reviews, asks.Review{Ref: r.Ref, URL: r.URL, From: asker(r), Why: r.Why,
+		in.Reviews = append(in.Reviews, asks.Review{Ref: r.Ref, URL: r.URL, From: asker(r), Why: r.Why, Track: reviewTrack,
 			ReReview: r.Status == ghreview.QueueReReview, Since: r.Since})
 	}
 	in.PRs, in.PRsAt, _ = asks.LoadPRs(oxHome)
