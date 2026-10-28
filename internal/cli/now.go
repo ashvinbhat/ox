@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ashvinbhat/ox/internal/asks"
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/ghreview"
 	"github.com/ashvinbhat/ox/internal/journal"
@@ -72,6 +73,7 @@ type nowView struct {
 	Reviews []ghreview.QueueItem `json:"reviews,omitempty"`
 	Memory  *nowMemory           `json:"memory,omitempty"`
 	Journal *journal.Status      `json:"journal,omitempty"`
+	Asks    *asks.Queue          `json:"asks,omitempty"`
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 }
@@ -106,6 +108,12 @@ func runNow(cmd *cobra.Command, args []string) error {
 	if nowTrack != "" {
 		view = filterTrack(view, ts, nowTrack)
 	}
+	// The brief must not wait on GitHub: it reads the PR cache the hook keeps.
+	q := collectAsks(cfg.Home, view.Threads, view.Reviews, now, !nowBrief)
+	if nowTrack != "" {
+		q = trackAsks(q, view.Threads)
+	}
+	view.Asks = &q
 
 	switch {
 	case nowJSON:
@@ -143,6 +151,26 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, now time.Time) [
 		out = append(out, t)
 	}
 	return out
+}
+
+// trackAsks keeps the asks that belong to the filtered threads: their
+// questions and their PRs. Reviews follow the review filter already applied.
+func trackAsks(q asks.Queue, threads []nowThread) asks.Queue {
+	titles := map[string]bool{}
+	for _, t := range threads {
+		titles[t.Title] = true
+	}
+	keep := func(list []asks.Ask) []asks.Ask {
+		var out []asks.Ask
+		for _, a := range list {
+			if a.Kind == asks.KindReview || titles[a.Where] {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	q.Waiting, q.Fixes = keep(q.Waiting), keep(q.Fixes)
+	return q
 }
 
 // sessionTrack matches a thread to a track by its title, falling back to its
@@ -270,18 +298,8 @@ func renderBrief(v nowView) string {
 	groups := byState(v.Threads)
 	fmt.Fprintf(&b, "## ox now · %s\n", v.At.Format("Mon 2 Jan 15:04"))
 
-	needs := groups[desktop.StateNeedsYou]
-	if len(needs) == 0 {
-		b.WriteString("Needs you: nothing.\n")
-	} else {
-		fmt.Fprintf(&b, "Needs you (%d):\n", len(needs))
-		for i, t := range needs {
-			if i == 3 {
-				fmt.Fprintf(&b, "- +%d more\n", len(needs)-3)
-				break
-			}
-			fmt.Fprintf(&b, "- %s: %s (%s)\n", clip(t.Title, 48), clip(askOrRecap(t), 80), shortAge(v.At.Sub(t.LastActive)))
-		}
+	if v.Asks != nil {
+		b.WriteString(briefAsks(*v.Asks, v.At))
 	}
 
 	if review := groups[desktop.StateInReview]; len(review) > 0 {
@@ -299,30 +317,10 @@ func renderBrief(v nowView) string {
 		fmt.Fprintf(&b, "In review (%d): %s\n", len(review), strings.Join(refs, ", "))
 	}
 
-	if len(v.Reviews) > 0 {
-		var refs []string
-		for i, r := range v.Reviews {
-			if i == 3 {
-				refs = append(refs, fmt.Sprintf("+%d", len(v.Reviews)-3))
-				break
-			}
-			refs = append(refs, fmt.Sprintf("%s (%s)", r.Ref, reviewReason(r, v.At)))
-		}
-		fmt.Fprintf(&b, "Reviews to do (%d): %s\n", len(v.Reviews), strings.Join(refs, ", "))
-	}
-
-	if v.Memory != nil {
-		fmt.Fprintf(&b, "Memory: %s from the weekly check (/memory-check)\n", countSuggestions(v.Memory.Suggestions))
-	}
-
-	if v.Journal != nil && v.Journal.RecapDue {
-		fmt.Fprintf(&b, "Recap due: %s in the last 7 days (/recap)\n", countOf(v.Journal.DecisionsWeek, "decision"))
-	}
-
 	done := groups[desktop.StateDone]
 	line := fmt.Sprintf("Working %d · stuck %d · done %d", len(groups[desktop.StateWorking]), len(groups[desktop.StateStuck]), len(done))
 	if n := countArchivable(done); n > 0 {
-		line += fmt.Sprintf(" (%d can be archived)", n)
+		line += fmt.Sprintf(" (%d can be archived: /tidy)", n)
 	}
 	b.WriteString(line + "\n")
 
@@ -336,6 +334,10 @@ func renderBrief(v nowView) string {
 func renderFull(w io.Writer, v nowView) {
 	groups := byState(v.Threads)
 	fmt.Fprintf(w, "ox now · %s · %d threads\n", v.At.Format("Mon 2 Jan 15:04"), len(v.Threads))
+	if v.Asks != nil {
+		fmt.Fprintln(w)
+		renderAsks(w, *v.Asks, v.At)
+	}
 
 	for _, st := range desktop.States {
 		threads := groups[st]
@@ -353,18 +355,6 @@ func renderFull(w io.Writer, v nowView) {
 		if hidden := len(threads) - len(shown); hidden > 0 {
 			fmt.Fprintf(w, "  +%d older\n", hidden)
 		}
-	}
-
-	if len(v.Reviews) > 0 {
-		fmt.Fprintf(w, "\nREVIEWS TO DO · %d\n", len(v.Reviews))
-		for _, r := range v.Reviews {
-			fmt.Fprintf(w, "  %-24s %4s  %-44s %s\n", clip(r.Ref, 24), sinceAge(r.Since, v.At), clip(r.Title, 44), r.Why)
-		}
-	}
-
-	if v.Memory != nil {
-		fmt.Fprintf(w, "\nMEMORY · %s from the check on %s\n", countSuggestions(v.Memory.Suggestions), v.Memory.AuditedAt.Format("Mon 2 Jan"))
-		fmt.Fprintf(w, "  /memory-check in a thread walks through them; `ox memory audit` lists them\n")
 	}
 
 	if j := v.Journal; j != nil && (j.DecisionsWeek > 0 || j.OwnItToday > 0) {
@@ -424,26 +414,6 @@ func detail(t nowThread, now time.Time) string {
 		}
 	}
 	return clip(t.Recap, 70)
-}
-
-// reviewReason is the short form for the brief: "Neeraj, 3h" or "new commits".
-func reviewReason(r ghreview.QueueItem, now time.Time) string {
-	who, ok := strings.CutPrefix(r.Why, "asked again by ")
-	if !ok {
-		who, ok = strings.CutPrefix(r.Why, "asked by ")
-	}
-	if !ok {
-		return r.Why
-	}
-	who, _, _ = strings.Cut(who, " (")
-	return who + ", " + sinceAge(r.Since, now)
-}
-
-func sinceAge(t, now time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return shortAge(now.Sub(t))
 }
 
 func askOrRecap(t nowThread) string {

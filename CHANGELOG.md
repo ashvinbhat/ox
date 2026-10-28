@@ -74,6 +74,24 @@ mission harness is frozen.
   - `ox journal status`: today's decisions and own-it rounds, the week's
     own-it score, whether a recap is due, and this thread's track.
 
+- Asks queue.
+  - `ox asks`: one ranked queue of what only you can do: thread questions,
+    review asks, your PRs ready to merge (approved or in your own repo, CI
+    green), memory suggestions, a due recap. Oldest first within each; a
+    thread question older than 3 days is marked "still needed?". Rough
+    minutes per ask.
+  - PR conflicts, failing CI and requested changes are listed apart as
+    "Threads can fix", with the thread that owns the PR.
+  - `ox asks drop <id>` hides an ask until it changes.
+  - PR state is fetched with gh, cached in `~/.ox/asks/prs.json`, and
+    refreshed hourly in the background by the `ox-brief` hook.
+  - The brief's "Needs you", reviews, memory and recap lines become one
+    "Waiting on you" list (top three) plus a "Threads can fix" line; `ox now`
+    opens with the full queue.
+  - `/tidy` skill: proposes archiving finished threads, renaming threads that
+    share a title, a sidebar group per track, and what to do with stale
+    questions; applies what you approve with the app's session tools.
+
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp

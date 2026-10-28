@@ -90,19 +90,21 @@ func (m *Manager) generateBuiltInScript(name string) string {
 	case "ox-brief":
 		// Hooks run without the user's shell PATH, hence the go/bin fallback.
 		// Any failure prints nothing, so a broken ox never blocks a session.
-		// The prune and the memory audit run detached so their gh and repo
-		// searches never delay the brief.
+		// The prune, the memory audit and the PR refresh run detached so their
+		// gh calls and repo searches never delay the brief.
 		return `#!/bin/bash
 # ox hook: ox-brief
 # Starts every Claude Code thread with where things stand (ox now --brief).
-# In the background: removes worktrees whose PR merged (at most hourly) and
-# audits the memory store (at most weekly).
+# In the background: removes worktrees whose PR merged (at most hourly),
+# audits the memory store (at most weekly) and refreshes your PRs' state for
+# the asks queue (at most hourly).
 
 cat > /dev/null
 
 OX=$(command -v ox || echo "$HOME/go/bin/ox")
 ("$OX" worktrees prune --if-due >/dev/null 2>&1 &)
 ("$OX" memory audit --if-due >/dev/null 2>&1 &)
+("$OX" asks refresh --if-due >/dev/null 2>&1 &)
 BRIEF=$("$OX" now --brief 2>/dev/null) || exit 0
 [ -z "$BRIEF" ] && exit 0
 

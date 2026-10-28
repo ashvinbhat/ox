@@ -10,7 +10,8 @@ also read "Building ox".
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
-  what needs Ashvin, what's in review, what's running. It is background: don't
+  the top of what's waiting on Ashvin, PR fixes threads can make, what's in
+  review, what's running. It is background: don't
   bring it up unless he asks what needs him or the thread's work touches it.
   `ox now` is the full view, `--json` for parsing, `--track <short>` to filter.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
@@ -27,6 +28,13 @@ also read "Building ox".
   still holds, set `metadata.verified: YYYY-MM-DD`. `/memory-check` works
   through what the audit found. `~/.ox/memory.db` is an archive
   (`ox memory recall <query>`).
+- Asks: `ox asks` is one ranked queue of what only Ashvin can do (thread
+  questions, review asks, PRs ready to merge, memory, recap), plus PR fixes
+  threads can make. On his PRs, resolve conflicts, fix CI your change broke
+  and small review comments yourself; ask before any design, architecture,
+  big or breaking change, and never break main. `/tidy` archives finished
+  threads, renames duplicates and files threads into a sidebar group per
+  track, after his OK.
 - Decisions: when you make a real choice (an approach, a design, a trade-off,
   the root cause you act on), log it right then:
   `ox journal add --decided "…" --over "…" --why "…"`, a line each in his
@@ -75,6 +83,9 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   MEMORY.md drift, stale project memories, memories stranded in other
   projects' stores (the hook runs it weekly; the result is in
   `~/.ox/memory-check/last.json`)
+- `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
+  the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
+  refreshed hourly by the hook
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox repo add/list`, `ox personas`, `ox learnings` / `ox memory recall` (the
@@ -100,6 +111,9 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   and the code search (ripgrep over checkouts, then `git grep` at the default
   branch for what's still missing). Keeps and the last report are in
   `~/.ox/memory-check/`.
+- `internal/asks` — the asks queue: sources in, ranked asks and thread fixes
+  out (`Build`), PR state from gh (`FetchPRs`, cached), drops that lapse when
+  the ask changes.
 - `internal/journal` — the decision journal: day files in `~/.ox/journal/`
   (`### HH:MM · track · thread` then `- Key: value` lines; the first key
   names the kind), parsing, and the status the brief shows (recap due,
@@ -119,6 +133,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ├── repos/           # Cloned repos
 ├── reviews/         # Review rounds per PR
 ├── journal/         # Decision journal, one file a day
+├── asks/            # PR state cache and dropped asks
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs
