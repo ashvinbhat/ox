@@ -28,8 +28,8 @@ weekly recap or memory suggestions. The commands below are what threads use.
 - **`ox now`**: every desktop thread by state — needs you, in review, working,
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
-- **Board**: a side panel in every desktop thread: a line per track, then
-  what's for you and PRs to fix, one button each, in sync across threads
+- **Board**: a side panel in every desktop thread listing the threads that
+  need you and what each is waiting on, in sync across threads
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
 - **Asks**: one ranked queue of what only you can do (thread questions, review
   asks, PRs ready to merge, memory, recap); PR fixes go to threads. `/tidy`
