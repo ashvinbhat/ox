@@ -14,13 +14,14 @@ import (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Install ox into Claude Code: the start hook and ox's skills",
+	Short: "Install ox into Claude Code: the start hook, ox's skills and the board panel",
 	Long: `Installs what every Claude Code thread picks up from ox:
   - the ox-brief SessionStart hook (same as ox hooks init)
-  - ox's skills in ~/.claude/skills: /review-pr, /review-asks
+  - ox's skills in ~/.claude/skills: /review-pr, /review-asks, /tidy, …
+  - the ox board, a side panel of ox now, in ~/.claude/skills/ox-board
 
-Safe to re-run after every upgrade. A skill folder you wrote yourself under
-one of those names is left alone.`,
+Safe to re-run after every upgrade. A folder you wrote yourself under one of
+those names is left alone.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := requireConfig()
@@ -41,7 +42,7 @@ one of those names is left alone.`,
 		if err != nil {
 			return fmt.Errorf("install skills: %w", err)
 		}
-		fmt.Printf("Skills: %s\n", strings.Join(installed, ", "))
+		fmt.Printf("Skills and panel: %s\n", strings.Join(installed, ", "))
 		for _, s := range skipped {
 			fmt.Printf("Skipped %s: ~/.claude/skills/%s is yours, not ox's\n", s, s)
 		}

@@ -97,6 +97,23 @@ mission harness is frozen.
     share a title, a sidebar group per track, and what to do with stale
     questions; applies what you approve with the app's session tools.
 
+- Board panel. `ox setup` installs `ox-board`, a Claude Code plugin, into
+  `~/.claude/skills/ox-board`. In every desktop thread it opens a side panel:
+  - a table with a row per track: what needs you, and what threads are
+    handling (working, in review, stuck, parked, done);
+  - "Your turn": each ask with buttons. Reply and Go ahead send your words to
+    the thread that asked; Start review, Go through them and Do it now start
+    the review, memory check or recap in this thread; Dismiss drops the ask
+    until it changes;
+  - "PRs to fix": Ask its thread to fix sends the fix request to the PR's
+    thread (Fix it here when no thread owns it); Open PR;
+  - parked threads with their next step, and Tidy up when threads can be
+    archived.
+  It reads `ox now --brief --json` every minute once the panel opens;
+  terminal and headless sessions never poll.
+- `ox now --json` lists the tracks by name, and each ask carries its track
+  and the id of the thread it belongs to.
+
 - Parking. `/park` skill: when you leave a thread on purpose, it writes a
   resumption note as the thread's last message (goal, done, next, open,
   state) and runs `ox park --next "…"`, which records the next step in

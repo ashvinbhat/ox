@@ -35,8 +35,10 @@ type Ask struct {
 	ID      string    `json:"id"`
 	Kind    Kind      `json:"kind"`
 	What    string    `json:"what"`
-	Where   string    `json:"where,omitempty"` // the thread it belongs to
-	Link    string    `json:"link,omitempty"`  // PR URL or thread id
+	Where   string    `json:"where,omitempty"`  // the thread it belongs to
+	Link    string    `json:"link,omitempty"`   // PR URL or thread id
+	Thread  string    `json:"thread,omitempty"` // id of the thread it belongs to
+	Track   string    `json:"track,omitempty"`
 	Since   time.Time `json:"since"`
 	Minutes int       `json:"minutes,omitempty"` // rough size
 	Stale   bool      `json:"stale,omitempty"`
@@ -58,13 +60,14 @@ type Thread struct {
 	Since    time.Time
 	PRs      []string // short refs, as PR.Ref gives them
 	Archived bool
+	Track    string
 }
 
 // Review is a review ask from the ledger. From is who asked.
 type Review struct {
-	Ref, URL, From, Why string
-	ReReview            bool
-	Since               time.Time
+	Ref, URL, From, Why, Track string
+	ReReview                   bool
+	Since                      time.Time
 }
 
 // Inputs is everything the queue is built from.
@@ -88,14 +91,14 @@ func Build(in Inputs, dropped map[string]time.Time, now time.Time) Queue {
 			continue
 		}
 		all = append(all, Ask{ID: "question:" + t.ID, Kind: KindQuestion, What: t.Ask, Where: t.Title, Link: t.ID,
-			Since: t.Since, Minutes: 2, Stale: now.Sub(t.Since) > StaleAfter})
+			Thread: t.ID, Track: t.Track, Since: t.Since, Minutes: 2, Stale: now.Sub(t.Since) > StaleAfter})
 	}
 	for _, r := range in.Reviews {
 		what := fmt.Sprintf("Review %s for %s", r.Ref, firstName(r.From))
 		if r.ReReview {
 			what = fmt.Sprintf("Re-review %s (%s)", r.Ref, r.Why)
 		}
-		all = append(all, Ask{ID: "review:" + r.Ref, Kind: KindReview, What: what, Link: r.URL, Since: r.Since, Minutes: 30})
+		all = append(all, Ask{ID: "review:" + r.Ref, Kind: KindReview, What: what, Link: r.URL, Track: r.Track, Since: r.Since, Minutes: 30})
 	}
 	owners := prThreads(in.Threads)
 	for _, p := range in.PRs {
@@ -137,7 +140,7 @@ func Build(in Inputs, dropped map[string]time.Time, now time.Time) Queue {
 
 // prAsk turns a PR's state into a fix for its thread (conflict, failing CI,
 // changes requested) or a merge for Ashvin, or nothing while it's in review.
-func prAsk(p PR, thread string) (Ask, bool) {
+func prAsk(p PR, owner Thread) (Ask, bool) {
 	var problems []string
 	if p.Mergeable == "CONFLICTING" {
 		problems = append(problems, "merge conflict")
@@ -154,26 +157,28 @@ func prAsk(p PR, thread string) (Ask, bool) {
 		if p.Draft {
 			what += " (draft)"
 		}
-		return Ask{ID: "fix:" + ref, Kind: KindFix, What: what, Where: thread, Link: p.URL, Since: p.UpdatedAt, Minutes: 15}, true
+		return Ask{ID: "fix:" + ref, Kind: KindFix, What: what, Where: owner.Title, Link: p.URL, Thread: owner.ID, Track: owner.Track,
+			Since: p.UpdatedAt, Minutes: 15}, true
 	}
 	approved := p.Review == "APPROVED" || p.Mine && p.Review == ""
 	green := p.Checks == ChecksPassing || p.Checks == ChecksNone
 	if !p.Draft && p.Mergeable == "MERGEABLE" && green && approved {
-		return Ask{ID: "merge:" + ref, Kind: KindMerge, What: "Merge " + ref + ": " + p.Title, Where: thread, Link: p.URL, Since: p.UpdatedAt, Minutes: 1}, true
+		return Ask{ID: "merge:" + ref, Kind: KindMerge, What: "Merge " + ref + ": " + p.Title, Where: owner.Title, Link: p.URL,
+			Thread: owner.ID, Track: owner.Track, Since: p.UpdatedAt, Minutes: 1}, true
 	}
 	return Ask{}, false
 }
 
-// prThreads maps a PR's short ref to the title of the open thread that owns it.
-func prThreads(threads []Thread) map[string]string {
-	out := map[string]string{}
+// prThreads maps a PR's short ref to the open thread that owns it.
+func prThreads(threads []Thread) map[string]Thread {
+	out := map[string]Thread{}
 	for _, t := range threads {
 		if t.Archived {
 			continue
 		}
 		for _, pr := range t.PRs {
 			if _, ok := out[pr]; !ok {
-				out[pr] = t.Title
+				out[pr] = t
 			}
 		}
 	}
