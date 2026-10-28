@@ -94,3 +94,22 @@ func TestChecksState(t *testing.T) {
 		}
 	}
 }
+
+func TestClaimLetsOneRefreshThrough(t *testing.T) {
+	home := t.TempDir()
+	now := time.Now()
+	release, ok := Claim(home, now)
+	if !ok {
+		t.Fatal("first claim refused")
+	}
+	if _, ok := Claim(home, now); ok {
+		t.Fatal("second claim taken while the first holds it")
+	}
+	if _, ok := Claim(home, now.Add(3*time.Minute)); !ok {
+		t.Fatal("a claim older than two minutes should not block")
+	}
+	release()
+	if _, ok := Claim(home, now); !ok {
+		t.Fatal("claim not free after release")
+	}
+}

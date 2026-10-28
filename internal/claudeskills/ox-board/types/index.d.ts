@@ -20,7 +20,6 @@ export type Board = {
   fixes: Ask[]
   threads: Thread[]
   tracks: Track[]
-  archivable: number
   error?: string
 }
 

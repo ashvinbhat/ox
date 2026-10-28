@@ -84,7 +84,8 @@ mission harness is frozen.
     "Threads can fix", with the thread that owns the PR.
   - `ox asks drop <id>` hides an ask until it changes.
   - PR state is fetched with gh, cached in `~/.ox/asks/prs.json`, and
-    refreshed hourly in the background by the `ox-brief` hook.
+    refreshed in the background by the `ox-brief` hook and the board once
+    it's 10 minutes old. A claim file lets one refresh run at a time.
   - The brief's "Needs you", reviews, memory and recap lines become one
     "Waiting on you" list (top three) plus a "Threads can fix" line; `ox now`
     opens with the full queue.
@@ -99,18 +100,17 @@ mission harness is frozen.
 
 - Board panel. `ox setup` installs `ox-board`, a Claude Code plugin, into
   `~/.claude/skills/ox-board`. In every desktop thread it opens a side panel:
-  - a table with a row per track: what needs you, and what threads are
-    handling (working, in review, stuck, parked, done);
-  - "Your turn": each ask with buttons. Reply and Go ahead send your words to
-    the thread that asked; Start review, Go through them and Do it now start
-    the review, memory check or recap in this thread; Dismiss drops the ask
-    until it changes;
-  - "PRs to fix": Ask its thread to fix sends the fix request to the PR's
-    thread (Fix it here when no thread owns it); Open PR;
-  - parked threads with their next step, and Tidy up when threads can be
-    archived.
-  It reads `ox now --brief --json` every minute once the panel opens;
-  terminal and headless sessions never poll.
+  - one line per track: how many things are for you, then what threads are
+    handling (working, stuck, in review, parked, done);
+  - "For you" and "PRs to fix": each item with at most one button. Reply
+    sends your answer to the thread that asked; Fix sends the fix request to
+    the PR's thread (or runs it here when no thread owns it); Review and
+    Start begin a review, the memory check or the recap in this thread. A
+    PR's name opens it on GitHub;
+  - parked threads with their next step.
+  Every open panel reads `ox now --brief --json` every 15 seconds, so an
+  answer or a dropped ask in one thread shows in the others; terminal and
+  headless sessions never poll.
 - `ox now --json` lists the tracks by name, and each ask carries its track
   and the id of the thread it belongs to.
 

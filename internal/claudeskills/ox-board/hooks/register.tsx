@@ -1,11 +1,13 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderChildren } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Ask, Board, Thread, Track } from '../types'
 
 const PANE = 'ox-board'
 const TITLE = 'ox'
-const EVERY_MS = 60_000
+// Every open panel reads ox this often, so a change made in one thread (an
+// answer, a dropped ask) shows in the others within seconds.
+const EVERY_MS = 15_000
 const board = atom({ plugin: 'ox-board', key: 'board' } as const, null)
 const replyTo = atom({ plugin: 'ox-board', key: 'replyTo' } as const, null)
 
@@ -14,26 +16,12 @@ const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || ec
 
 type ViewAsk = Omit<Ask, 'age'> & { since: string }
 type View = {
-  threads?: { sessionId: string; title: string; track?: string; state: string; next?: string; archivable?: boolean }[]
+  threads?: { sessionId: string; title: string; track?: string; state: string; next?: string }[]
   asks?: { waiting?: ViewAsk[]; fixes?: ViewAsk[] }
   tracks?: Track[]
 }
 
-// Theme colors, so the panel follows light and dark.
-const COLOR: Record<string, string> = {
-  question: 'warning',
-  review: 'warning',
-  merge: 'warning',
-  fix: 'error',
-  working: 'suggestion',
-  'in review': 'merged',
-  stuck: 'error',
-  parked: 'success',
-  done: 'inactive',
-}
-
-// A question a plain yes answers gets a Go ahead button.
-const YES_NO = /go[- ]ahead|^(want|should|shall|can|do|ready|ok|okay)\b/i
+const STATES = ['working', 'stuck', 'in review', 'parked', 'done']
 
 function age(since: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(since)) / 60_000))
@@ -42,17 +30,16 @@ function age(since: string, now: number): string {
   return `${Math.round(minutes / 1440)}d`
 }
 
-function count(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`
-}
-
 async function refresh($: EngineInterface): Promise<void> {
+  // PR state is cached; this fetches it when it's 10 minutes old, and only
+  // one panel's call does the fetch.
+  void $.process.run(ox('asks', 'refresh', '--if-due'), { timeoutMs: 60_000 }).catch(() => undefined)
   const ran = await $.process
     .run(ox('now', '--brief', '--json'), { timeoutMs: 20_000 })
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
   const now = await $.clock.now()
   const fail = (error: string) =>
-    update($, board, b => (b ? { ...b, error } : { at: now, waiting: [], fixes: [], threads: [], tracks: [], archivable: 0, error }))
+    update($, board, b => (b ? { ...b, error } : { at: now, waiting: [], fixes: [], threads: [], tracks: [], error }))
   if (ran.exitCode !== 0) {
     await fail(ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`)
     return
@@ -65,14 +52,12 @@ async function refresh($: EngineInterface): Promise<void> {
     return
   }
   const ask = ({ since, ...a }: ViewAsk): Ask => ({ ...a, age: age(since, now) })
-  const threads = view.threads ?? []
   const next: Board = {
     at: now,
     waiting: (view.asks?.waiting ?? []).map(ask),
     fixes: (view.asks?.fixes ?? []).map(ask),
-    threads: threads.map((t): Thread => ({ id: t.sessionId, title: t.title, track: t.track, state: t.state, next: t.next })),
+    threads: (view.threads ?? []).map((t): Thread => ({ id: t.sessionId, title: t.title, track: t.track, state: t.state, next: t.next })),
     tracks: view.tracks ?? [],
-    archivable: threads.filter(t => t.archivable).length,
   }
   await update($, board, () => next)
 }
@@ -87,11 +72,6 @@ async function sendTo($: EngineInterface, a: Ask, text: string): Promise<void> {
 
 async function askHere($: EngineInterface, text: string): Promise<void> {
   await $.prompt.submit({ text, asUser: true })
-}
-
-async function dismiss($: EngineInterface, a: Ask): Promise<void> {
-  await $.process.run(ox('asks', 'drop', a.id)).catch(() => undefined)
-  await refresh($)
 }
 
 function fixText(a: Ask): string {
@@ -139,115 +119,66 @@ export const register: Register = on => {
     const b = await read($, board)
     if (!b) return <Text dimColor>Reading ox…</Text>
     const replying = await read($, replyTo)
-    const cols = e.props.bodyColumns
-    const nameCols = Math.min(18, Math.max(10, Math.floor(cols * 0.3)))
-    const half = Math.max(8, Math.floor((cols - nameCols) / 2))
-    const trackName = (short?: string) => b.tracks.find(t => t.short === short)?.name ?? 'No track'
+    const mine = b.waiting.filter(a => a.kind !== 'memory' && a.kind !== 'recap')
 
-    const chip = (key: string, label: string) => (
-      <Text key={key} color={COLOR[key]}>
-        ● {label}
-      </Text>
-    )
-    const yours = (asks: Ask[], fixes: Ask[]) => {
-      const n = (kind: string) => asks.filter(a => a.kind === kind).length
-      return [
-        n('question') > 0 && chip('question', count(n('question'), 'question')),
-        n('review') > 0 && chip('review', count(n('review'), 'review')),
-        n('merge') > 0 && chip('merge', `${n('merge')} to merge`),
-        fixes.length > 0 && chip('fix', count(fixes.length, 'PR to fix', 'PRs to fix')),
-      ].filter(Boolean)
-    }
-    const handling = (threads: Thread[]) =>
-      ['working', 'stuck', 'in review', 'parked', 'done']
-        .map(state => [state, threads.filter(t => t.state === state).length] as const)
+    const trackLine = (key: string, name: string, forYou: number, threads: Thread[]) => {
+      const rest = STATES.map(s => [s, threads.filter(t => t.state === s).length] as const)
         .filter(([, n]) => n > 0)
-        .map(([state, n]) => chip(state, `${n} ${state}`))
-
-    const rows = [...b.tracks.map(t => t.short), undefined]
-      .map(short => ({
-        short,
-        asks: b.waiting.filter(a => a.track === short && a.kind !== 'memory' && a.kind !== 'recap'),
-        fixes: b.fixes.filter(f => f.track === short),
-        threads: b.threads.filter(t => t.track === short && t.state !== 'needs you'),
-      }))
-      .filter(r => r.asks.length + r.fixes.length + r.threads.length > 0)
-
-    const table = (
-      <Box flexDirection="column" marginBottom={1}>
-        <Box flexDirection="row">
-          <Box width={nameCols} />
-          <Box width={half}>
-            <Text dimColor>
-              Needs you
-            </Text>
-          </Box>
-          <Box width={half}>
-            <Text dimColor>
-              Threads handling it
-            </Text>
-          </Box>
+        .map(([s, n]) => `${n} ${s}`)
+      return (
+        <Box key={key} flexDirection="row" justifyContent="space-between">
+          <Text wrap="truncate-end">{name}</Text>
+          <Text>
+            {forYou > 0 && <Text color="warning">{forYou} for you</Text>}
+            <Text dimColor>{(forYou > 0 && rest.length > 0 ? ' · ' : '') + rest.join(' · ')}</Text>
+          </Text>
         </Box>
-        {rows.map(r => (
-          <Box key={r.short ?? 'none'} flexDirection="row" marginTop={1}>
-            <Box width={nameCols}>
-              <Text wrap="truncate-end">{trackName(r.short)}</Text>
-            </Box>
-            <Box width={half} flexDirection="column">
-              {yours(r.asks, r.fixes)}
-            </Box>
-            <Box width={half} flexDirection="column">
-              {handling(r.threads)}
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    )
+      )
+    }
+    const tracks = [...b.tracks, { short: undefined, name: 'No track' }]
+      .map(t => ({
+        ...t,
+        forYou: mine.filter(a => a.track === t.short).length,
+        threads: b.threads.filter(th => th.track === t.short && th.state !== 'needs you'),
+      }))
+      .filter(t => t.forYou + t.threads.length > 0)
 
-    const item = (a: Ask) => {
-      const meta = [a.kind === 'question' ? trackName(a.track) : a.where, a.age].filter(Boolean).join(' · ')
-      const pr = a.link?.startsWith('https://') ? <Link key={`${a.id}:pr`} href={a.link} label="Open PR" /> : null
-      let title = a.what.replace(/\s*\(\/[a-z-]+\)$/, '')
-      let question: string | null = null
-      let buttons: RenderChildren[] = []
+    const action = (a: Ask) => {
       switch (a.kind) {
         case 'question':
-          title = a.where ?? 'A thread'
-          question = a.what
-          buttons = [
-            ...(Input ? [<Button key={`${a.id}:reply`} label="Reply" onPress={() => void update($, replyTo, () => a.id)} />] : []),
-            ...(YES_NO.test(a.what) ? [<Button key={`${a.id}:yes`} label="Go ahead" onPress={() => void sendTo($, a, 'Go ahead.')} />] : []),
-          ]
-          break
+          return Input ? (
+            <Button key={`${a.id}:reply`} label="Reply" onPress={() => void update($, replyTo, r => (r === a.id ? null : a.id))} />
+          ) : null
         case 'review':
-          buttons = [<Button key={`${a.id}:start`} label="Start review" onPress={() => void askHere($, `Review ${a.link}`)} />]
-          break
+          return <Button key={`${a.id}:start`} label="Review" onPress={() => void askHere($, `Review ${a.link}`)} />
         case 'memory':
-          buttons = [<Button key={`${a.id}:go`} label="Go through them" onPress={() => void askHere($, 'check my memory')} />]
-          break
+          return <Button key={`${a.id}:start`} label="Start" onPress={() => void askHere($, 'check my memory')} />
         case 'recap':
-          buttons = [<Button key={`${a.id}:go`} label="Do it now" onPress={() => void askHere($, 'recap')} />]
-          break
+          return <Button key={`${a.id}:start`} label="Start" onPress={() => void askHere($, 'recap')} />
         case 'fix':
-          buttons = [
-            a.thread ? (
-              <Button key={`${a.id}:fix`} label="Ask its thread to fix" onPress={() => void sendTo($, a, fixText(a))} />
-            ) : (
-              <Button key={`${a.id}:fix`} label="Fix it here" onPress={() => void askHere($, fixText(a))} />
-            ),
-          ]
-          break
+          return a.thread ? (
+            <Button key={`${a.id}:fix`} label="Fix" onPress={() => void sendTo($, a, fixText(a))} />
+          ) : (
+            <Button key={`${a.id}:fix`} label="Fix" onPress={() => void askHere($, fixText(a))} />
+          )
+        default:
+          return null
       }
-      if (a.kind !== 'fix') buttons.push(<Button key={`${a.id}:drop`} label="Dismiss" onPress={() => void dismiss($, a)} />)
+    }
+    const item = (a: Ask) => {
+      const what = a.what.replace(/\s*\(\/[a-z-]+\)$/, '')
+      const meta = [a.where, a.age].filter(Boolean).join(' · ')
       return (
         <Box key={a.id} flexDirection="column" marginBottom={1}>
-          <Text bold wrap="truncate-end">
-            {title}
-          </Text>
-          {question && <Text wrap="wrap">{question}</Text>}
-          <Text dimColor wrap="truncate-end">
-            {meta}
-          </Text>
+          <Box flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box flexDirection="column" flexShrink={1}>
+              {a.link?.startsWith('https://') ? <Link href={a.link} label={what} /> : <Text wrap="wrap">{what}</Text>}
+              <Text dimColor wrap="truncate-end">
+                {meta}
+              </Text>
+            </Box>
+            {action(a)}
+          </Box>
           {replying === a.id && Input && (
             <Input
               key={`${a.id}:answer`}
@@ -260,48 +191,36 @@ export const register: Register = on => {
               }}
             />
           )}
-          <Box flexDirection="row" flexWrap="wrap" gap={1}>
-            {buttons}
-            {pr}
-          </Box>
         </Box>
       )
     }
-
+    const section = (title: string, asks: Ask[]) =>
+      asks.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>{title}</Text>
+          {asks.map(item)}
+        </Box>
+      )
     const parked = b.threads.filter(t => t.state === 'parked')
-    const heading = (text: string) => (
-      <Text bold>
-        {text}
-      </Text>
-    )
 
     return (
-      <Box flexDirection="column" width={cols}>
-        <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-          <Text dimColor>
-            {b.error ? `ox: ${b.error}` : 'Updates every minute'}
-          </Text>
-          <Button key="refresh" label="Refresh" onPress={() => void refresh($)} />
-        </Box>
-        {table}
-        {heading(`Your turn · ${b.waiting.length}`)}
-        {b.waiting.length === 0 && <Text dimColor>Nothing waits on you.</Text>}
-        {b.waiting.map(item)}
-        {b.fixes.length > 0 && heading(`PRs to fix · ${b.fixes.length}`)}
-        {b.fixes.map(item)}
-        {parked.length > 0 && heading(`Parked · ${parked.length}`)}
-        {parked.map(t => (
-          <Box key={t.id} flexDirection="column" marginBottom={1}>
-            <Text wrap="truncate-end">{t.title}</Text>
-            <Text dimColor wrap="truncate-end">
-              Next: {t.next}
-            </Text>
-          </Box>
-        ))}
-        {b.archivable > 0 && (
-          <Box flexDirection="row" gap={1}>
-            <Text dimColor>{count(b.archivable, 'finished thread')} to archive</Text>
-            <Button key="tidy" label="Tidy up" onPress={() => void askHere($, 'clean up my threads')} />
+      <Box flexDirection="column" width={e.props.bodyColumns}>
+        {b.error && <Text color="error">ox: {b.error}</Text>}
+        {tracks.map(t => trackLine(t.short ?? 'none', t.name, t.forYou, t.threads))}
+        {section('For you', b.waiting)}
+        {section('PRs to fix', b.fixes)}
+        {b.waiting.length + b.fixes.length === 0 && <Text dimColor>Nothing needs you.</Text>}
+        {parked.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text bold>Parked</Text>
+            {parked.map(t => (
+              <Box key={t.id} flexDirection="column" marginBottom={1}>
+                <Text wrap="truncate-end">{t.title}</Text>
+                <Text dimColor wrap="truncate-end">
+                  Next: {t.next}
+                </Text>
+              </Box>
+            ))}
           </Box>
         )}
       </Box>

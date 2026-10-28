@@ -28,8 +28,8 @@ weekly recap or memory suggestions. The commands below are what threads use.
 - **`ox now`**: every desktop thread by state — needs you, in review, working,
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
-- **Board**: a side panel in every desktop thread with what's waiting on you,
-  what threads can fix, and threads by state, refreshed every minute
+- **Board**: a side panel in every desktop thread: a line per track, then
+  what's for you and PRs to fix, one button each, in sync across threads
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
 - **Asks**: one ranked queue of what only you can do (thread questions, review
   asks, PRs ready to merge, memory, recap); PR fixes go to threads. `/tidy`
@@ -139,8 +139,8 @@ Workers and jobs default to claude; the orchestrator can put one on opencode
 ox asks [--offline]      # What waits on you, ranked; PR fixes for threads
 ox asks drop <id>        # Hide one until it changes (ids in --json)
 ```
-The brief shows the top three. PR state is cached and refreshed hourly in
-the background. `/tidy` in a thread proposes archiving finished threads,
+The brief shows the top three. PR state is cached and refreshed in the
+background once it's 10 minutes old. `/tidy` in a thread proposes archiving finished threads,
 renaming duplicates and grouping by track, and applies what you approve.
 
 ### Parking
