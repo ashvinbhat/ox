@@ -2,11 +2,13 @@ package cli
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/journal"
+	"github.com/ashvinbhat/ox/internal/park"
 	"github.com/ashvinbhat/ox/internal/tracks"
 )
 
@@ -46,5 +48,39 @@ func TestMentionOnceADay(t *testing.T) {
 	}
 	if none := mentionOnce(t.TempDir(), nowView{}, day); none != nil {
 		t.Errorf("nothing due = %v", none)
+	}
+}
+
+// A parked thread shows as parked with its next step, never archivable,
+// until it is active again after the park.
+func TestParkedThreads(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	parkedAt := now.Add(-72 * time.Hour)
+	done := &desktop.Summary{Status: "completed"}
+	ms := func(t time.Time) float64 { return float64(t.UnixMilli()) }
+	sessions := []desktop.Session{
+		{ID: "a", Title: "Left on purpose", Summary: done, LastActiveMs: ms(parkedAt.Add(time.Minute))},
+		{ID: "b", Title: "Came back", Summary: done, LastActiveMs: ms(parkedAt.Add(time.Hour))},
+		{ID: "c", Title: "Never parked", Summary: done, LastActiveMs: ms(parkedAt)},
+	}
+	parked := map[string]park.Record{
+		"a": {SessionID: "a", Next: "Rebase on main", At: parkedAt},
+		"b": {SessionID: "b", Next: "Old step", At: parkedAt},
+	}
+	got := map[string]nowThread{}
+	for _, th := range threadsFrom(sessions, nil, parked, now) {
+		got[th.SessionID] = th
+	}
+	if a := got["a"]; a.State != desktop.StateParked || a.Next != "Rebase on main" || a.Archivable {
+		t.Errorf("parked thread = %+v", a)
+	}
+	if b := got["b"]; b.State != desktop.StateDone || b.Next != "" || !b.Archivable {
+		t.Errorf("resumed thread = %+v", b)
+	}
+	if c := got["c"]; c.State != desktop.StateDone || !c.Archivable {
+		t.Errorf("unparked thread = %+v", c)
+	}
+	if brief := renderBrief(nowView{At: now, Threads: threadsFrom(sessions, nil, parked, now)}); !strings.Contains(brief, "· parked 1 · done 2") {
+		t.Errorf("brief counts:\n%s", brief)
 	}
 }

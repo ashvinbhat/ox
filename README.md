@@ -18,6 +18,7 @@ You never need to type an `ox` command. Ask a thread in your own words:
 | "check my memory" | the memory check |
 | "clean up my threads" | tidy |
 | "any review asks?" / "review <PR>" | the review desk |
+| "park this" / "I'll come back to this" | park: a resumption note, and the thread shows as parked |
 
 The first thread each day also mentions, in one line, anything due: the
 weekly recap or memory suggestions. The commands below are what threads use.
@@ -140,6 +141,15 @@ The brief shows the top three. PR state is cached and refreshed hourly in
 the background. `/tidy` in a thread proposes archiving finished threads,
 renaming duplicates and grouping by track, and applies what you approve.
 
+### Parking
+`/park` in a thread writes a resumption note as its last message (goal, done,
+next, open, state) and records the next step:
+```bash
+ox park --next "Rebase on main and rerun the build"
+```
+`ox now` shows the thread as parked with that step until it's active again.
+Parked threads are never asks and never archived.
+
 ### Journal
 Threads log decisions as they make them; ox adds the time, thread and track.
 ```bash
@@ -155,7 +165,7 @@ round (2 a day). `/recap`: three concepts from the week, explained back.
 Claude Code's auto-memory is the one store. `ox memory audit` checks it; the
 `ox-brief` hook runs the audit weekly and the brief shows the count.
 ```bash
-ox memory audit [--json]         # What may be stale or broken
+ox memory audit [--json]         # What may be stale, changed, duplicated or broken
 ox memory audit --keep <id>      # Fine as is; never flag it again
 ox memory recall "query"         # Search the memory.db archive
 ox learnings [--tag x]           # Same archive, by tag
@@ -163,7 +173,7 @@ ox learnings [--tag x]           # Same archive, by tag
 In a thread, `/memory-check` goes through the suggestions five at a time and
 applies only the fixes you approve. A memory can cite what it depends on
 (`metadata.cites: ["backend:SegmentService", "~/.ox/tracks.yaml"]`) so the
-audit checks exactly that.
+audit checks exactly that: gone, or changed since the memory was confirmed.
 
 ### Repos, personas, hooks, budgets
 ```bash

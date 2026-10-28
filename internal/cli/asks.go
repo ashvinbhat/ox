@@ -15,6 +15,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/ghreview"
 	"github.com/ashvinbhat/ox/internal/memcheck"
+	"github.com/ashvinbhat/ox/internal/park"
 	"github.com/ashvinbhat/ox/internal/tracks"
 )
 
@@ -95,7 +96,8 @@ func runAsks(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
-	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, now), reviewsToDo(cfg.Home), now, !asksOffline)
+	parked, _ := park.Load(cfg.Home)
+	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, parked, now), reviewsToDo(cfg.Home), now, !asksOffline)
 	if asksJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
