@@ -55,12 +55,17 @@ endpoint or event:
    hold the contract: nullability, ordering, units, errors, defaults?
 2. **Siblings.** Check other implementations of the interface, other cases of
    the switch or enum, and the parallel path (LinkedIn vs Google, DM1 vs DM2,
-   email vs ads, sync vs async). Did they need the same change?
+   email vs ads, sync vs async). Did they need the same change? When the change
+   hooks into one place traffic passes through (a client factory, a filter, a
+   base class), find every other way the same traffic leaves: a second client,
+   a server action, a direct call. Each one bypasses the hook.
 3. **Consumers outside this repo.** Check the FE generated client, the
    api-automation generated client, python-backend, Temporal workflow and
    activity signatures (replay safety), stored Mongo documents (is a migration
    needed?), and feature flags. Read any counterpart PR the body links (the FE
    change that sends the new header): its values bound what this side accepts.
+   Check every flag the new code sits behind, not only its own. A rollout that
+   turns one flag on for orgs without the other does nothing.
 4. **Duplication.** Does an existing helper already do this?
 5. **Tests.** Do they assert the behaviour or just run it? Is each behaviour
    tested at the lowest layer that catches it? Is every deleted or disabled
@@ -101,6 +106,9 @@ list, so he sees it was checked.
 ## 6. Show Ashvin, in chat
 
 1. **Verdict:** approve, comment or request changes, with one line why.
+   Recommend approve when no finding blocks the merge, and list the rest as
+   follow-ups he can raise or drop. Comment is for findings he should raise
+   before merge that don't need another round.
 2. **Intent:** two sentences.
 3. **Findings**, blocker → issue → suggest → nit. Each gets `file:line`,
    severity, a one-line claim, the evidence (name the file outside the diff

@@ -134,6 +134,9 @@ mission harness is frozen.
   code on through real wiring, checks claims in the PR body, draws a
   walkthrough of changes with a flow, and ends each round by proposing edits
   to itself.
+- `/review-pr` recommends approve when no finding blocks the merge, looks for
+  every other way traffic leaves when a change hooks into one choke point, and
+  checks every flag the new code sits behind.
 - A thread's track comes from its title first, then its PRs' repos and
   branches, so an ox thread that opened a review-desk PR stays on ox.
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
