@@ -129,6 +129,11 @@ mission harness is frozen.
   (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
+- `/review-pr` checks that a change can do what it is for, reads red CI to its
+  cause, applies the repo's own skills, looks for the test that turns guarded
+  code on through real wiring, checks claims in the PR body, draws a
+  walkthrough of changes with a flow, and ends each round by proposing edits
+  to itself.
 - A thread's track comes from its title first, then its PRs' repos and
   branches, so an ox thread that opened a review-desk PR stays on ox.
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
