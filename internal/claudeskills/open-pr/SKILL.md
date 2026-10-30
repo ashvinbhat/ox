@@ -55,7 +55,10 @@ Read the log (`Tests run:`, `BUILD SUCCESS`), not the exit code alone.
   it). Tell him in one line.
 - **Red from this change:** fix, push, run again. It stays a draft until a
   run is green.
-- **Red from something else:** leave it draft, show him the failure, ask.
+- **Red from something else** (it fails before the changed code runs, or in
+  code the change doesn't touch): ignore it. Name it in the body's testing
+  section, say why it isn't this change, and go ready as on green. Some
+  e2e specs fail on main too.
 
 ## Rules
 
