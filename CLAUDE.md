@@ -16,6 +16,8 @@ also read "Building ox".
   - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
   - "check my memory" → memory-check; "any review asks?" → review-asks;
     "review <PR>" → review-pr; "park this" / "I'll come back to this" → park
+  - "open the PR" / "put it up" → open-pr: draft first, ready once the
+    targeted tests pass locally
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
