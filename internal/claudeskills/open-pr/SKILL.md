@@ -8,8 +8,9 @@ metadata:
 # Open a PR
 
 Ashvin wants the PR up early so he can start reading, and out of draft only
-once the tests this change wrote or touched pass locally. On CBX1 repos the
-build skips drafts, so CI starts when the PR goes ready.
+once the tests this change wrote or touched pass locally. On CBX1 repos CI
+runs off the `ready-for-review` label and skips drafts, so it starts when the
+PR goes ready and gets the label.
 
 ## 1. Title
 
@@ -38,9 +39,8 @@ One build per checkout: no formatter or second build while it compiles.
 ## 3. Open the draft while they run
 
 - Stage by path, check `git diff --cached --name-status`, commit, push.
-- `gh pr create --draft --base main --title … --body-file …`, plus
-  `--label ready-for-review` on CBX1 repos: CI and Auto-fix key off it,
-  drafts included.
+- `gh pr create --draft --base main --title … --body-file …`, with no
+  labels. `ready-for-review` goes on only when the PR goes ready.
 - Body: the problem first, then what changes, what's not covered, and
   testing ("local run in progress"). No yoke, ox or thread references.
 - Bind it to the thread: `get_status`, then `bind_pr` if it isn't bound.
@@ -50,7 +50,9 @@ One build per checkout: no formatter or second build while it compiles.
 Read the log (`Tests run:`, `BUILD SUCCESS`), not the exit code alone.
 
 - **Green:** update the body's testing section with the classes and counts,
-  then `gh pr ready <number>`. Tell him in one line.
+  then `gh pr ready <number>` and, on CBX1 repos,
+  `gh pr edit <number> --add-label ready-for-review` (CI and Auto-fix key off
+  it). Tell him in one line.
 - **Red from this change:** fix, push, run again. It stays a draft until a
   run is green.
 - **Red from something else:** leave it draft, show him the failure, ask.
@@ -58,6 +60,7 @@ Read the log (`Tests run:`, `BUILD SUCCESS`), not the exit code alone.
 ## Rules
 
 - Never mark ready on a partial run, a skipped run or an assumption.
+- Never label a draft.
 - The wider suite (whole module, full reactor) is his call: offer it, run it
   on a yes.
 - One logical change per PR. Merging is his.
