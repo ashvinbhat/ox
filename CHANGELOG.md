@@ -122,6 +122,11 @@ mission harness is frozen.
     0.4+) that one may restate the other.
   - `frontmatter`: YAML that doesn't parse, which made the audit read the
     memory as having no type, verified date or cites.
+- `/open-pr` skill: formats, starts the targeted tests in the background,
+  opens the PR as an unlabelled draft while they run, and once they pass
+  locally marks it ready for review and adds `ready-for-review` on CBX1
+  repos. A red run keeps it a draft. It's ox's own, so repos' shared PR
+  skills stay as they are.
 
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.
