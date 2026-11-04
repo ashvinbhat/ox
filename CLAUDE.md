@@ -14,6 +14,8 @@ also read "Building ox".
   - "what's waiting on me?" → `ox asks`; "where are things?" → `ox now`
   - "what did we decide today / this week?" → `ox journal [--days 7]`
   - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
+  - "clean up the board" → tidy, board items only: drop questions that repeat
+    another thread's, archive threads that finished, pass on his answers
   - "check my memory" → memory-check; "any review asks?" → review-asks;
     "review <PR>" → review-pr; "park this" / "I'll come back to this" → park
   - "open the PR" / "put it up" → open-pr: draft first, ready once the
@@ -50,8 +52,8 @@ also read "Building ox".
   threads can make. On his PRs, resolve conflicts, fix CI your change broke
   and small review comments yourself; ask before any design, architecture,
   big or breaking change, and never break main. `/tidy` archives finished
-  threads, renames duplicates and files threads into a sidebar group per
-  track, after his OK.
+  threads, renames duplicates, files threads into a sidebar group per track
+  and clears board items, after his OK.
 - Decisions: when you make a real choice (an approach, a design, a trade-off,
   the root cause you act on), log it right then:
   `ox journal add --decided "…" --over "…" --why "…"`, a line each in his
