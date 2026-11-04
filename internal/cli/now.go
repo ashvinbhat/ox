@@ -57,7 +57,8 @@ type nowThread struct {
 	PRs        []string      `json:"prs,omitempty"`
 	LastActive time.Time     `json:"lastActive"`
 	Archivable bool          `json:"archivable,omitempty"`
-	Next       string        `json:"next,omitempty"` // a parked thread's first step back
+	Next       string        `json:"next,omitempty"`    // a parked thread's first step back
+	Dropped    bool          `json:"dropped,omitempty"` // a stuck thread cleared from the board
 }
 
 type nowPR struct {
@@ -107,6 +108,9 @@ func runNow(cmd *cobra.Command, args []string) error {
 
 	parked, _ := park.Load(cfg.Home)
 	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(cfg.Home)}
+	if dropped, err := asks.LoadDropped(cfg.Home); err == nil {
+		markDropped(view.Threads, dropped)
+	}
 	for _, t := range ts {
 		view.Tracks = append(view.Tracks, trackName{Short: t.Label(), Name: t.Name})
 	}
@@ -175,6 +179,16 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[strin
 		out = append(out, t)
 	}
 	return out
+}
+
+// markDropped flags stuck threads cleared from the board. A drop of
+// "stuck:<id>" holds until the thread does something again.
+func markDropped(threads []nowThread, dropped map[string]time.Time) {
+	for i, t := range threads {
+		if at, ok := dropped["stuck:"+t.SessionID]; ok && t.State == desktop.StateStuck && !t.LastActive.After(at) {
+			threads[i].Dropped = true
+		}
+	}
 }
 
 // mentionOnce returns the reminders Ashvin should hear today: a due recap and

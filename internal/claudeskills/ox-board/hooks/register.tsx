@@ -14,7 +14,7 @@ const board = atom({ plugin: 'ox-board', key: 'board' } as const, null)
 const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || echo "$HOME/go/bin/ox")" "$@"', 'ox', ...args]
 
 type View = {
-  threads?: { sessionId: string; title: string; state: string; lastActive: string }[]
+  threads?: { sessionId: string; title: string; state: string; lastActive: string; dropped?: boolean }[]
   asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string }[] }
 }
 
@@ -39,7 +39,7 @@ function attention(view: View, now: number): Item[] {
     }
   }
   for (const t of view.threads ?? []) {
-    if (t.state === 'stuck') {
+    if (t.state === 'stuck' && !t.dropped) {
       items.push({ id: `stuck:${t.sessionId}`, title: t.title, waiting: 'Went quiet mid-turn; it may have stopped', age: age(t.lastActive, now) })
     }
   }
@@ -67,6 +67,21 @@ async function refresh($: EngineInterface): Promise<void> {
     return
   }
   await update($, board, () => ({ at: now, items: attention(view, now) }))
+}
+
+// Clear drops every item shown, through ox, so every panel loses them. Each
+// comes back when its thread asks something new or moves again.
+async function clear($: EngineInterface, ids: string[]): Promise<void> {
+  const ran = await $.process
+    .run(ox('asks', 'drop', ...ids), { timeoutMs: 20_000 })
+    .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
+  if (ran.exitCode !== 0) {
+    const error = ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`
+    await update($, board, b => (b ? { ...b, error } : b))
+    return
+  }
+  $.ui.toast(`Cleared ${ids.length}. Each comes back when its thread asks again.`)
+  await refresh($)
 }
 
 const escape = (s: string) => s.replace(/([\\`*_[\]<>#|])/g, '\\$1')
@@ -110,9 +125,19 @@ export const register: Register = on => {
 
   // Markdown draws with the chat's own type, so the panel reads like a reply.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Markdown, Text } = $.ui.resolve(e)
+    const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const b = await read($, board)
     if (!b) return <Text dimColor>Reading ox…</Text>
-    return <Markdown key="threads" text={markdown(b)} />
+    const list = <Markdown key="threads" text={markdown(b)} />
+    if (b.items.length === 0) return list
+    const ids = b.items.map(i => i.id)
+    return (
+      <Box flexDirection="column" gap={1}>
+        {list}
+        <Box flexDirection="row">
+          <Button key="clear" label="Clear" dimColor onPress={() => void clear($, ids)} />
+        </Box>
+      </Box>
+    )
   })
 }
