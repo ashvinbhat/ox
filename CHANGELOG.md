@@ -127,6 +127,11 @@ mission harness is frozen.
   locally marks it ready for review and adds `ready-for-review` on CBX1
   repos. A red run keeps it a draft. It's ox's own, so repos' shared PR
   skills stay as they are.
+- Board cleanup. "Clean up the board" runs `/tidy` on the board's items only.
+  For each thread question it offers drop, archive, or passing on the answer
+  you give in chat, word for word. It recommends dropping a question that
+  only repeats another thread's. A thread marked stuck whose last turn
+  finished gets archived; one that stopped mid-work can be told to carry on.
 
 ### Fixed
 - Review rounds saved `reviewedAt` as zero.

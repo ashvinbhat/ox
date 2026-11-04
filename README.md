@@ -17,6 +17,7 @@ You never need to type an `ox` command. Ask a thread in your own words:
 | "recap" | the weekly recap |
 | "check my memory" | the memory check |
 | "clean up my threads" | tidy |
+| "clean up the board" | tidy, for what the board lists only |
 | "any review asks?" / "review <PR>" | the review desk |
 | "park this" / "I'll come back to this" | park: a resumption note, and the thread shows as parked |
 
@@ -141,7 +142,8 @@ ox asks drop <id>        # Hide one until it changes (ids in --json)
 ```
 The brief shows the top three. PR state is cached and refreshed in the
 background once it's 10 minutes old. `/tidy` in a thread proposes archiving finished threads,
-renaming duplicates and grouping by track, and applies what you approve.
+renaming duplicates, grouping by track and clearing board items, and applies
+what you approve.
 
 ### Parking
 `/park` in a thread writes a resumption note as its last message (goal, done,
