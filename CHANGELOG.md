@@ -138,6 +138,9 @@ mission harness is frozen.
   finished gets archived; one that stopped mid-work can be told to carry on.
 
 ### Fixed
+- `ox now` called a thread stuck when it was opened and never used, such as
+  a side chat forked from another thread and left. Nothing ran in it, so it
+  is done now, and the board no longer lists it.
 - Review rounds saved `reviewedAt` as zero.
 - `ox --version` and `ox version` read one build stamp
   (`internal/version.Version`); the release workflow and Makefile both set it.

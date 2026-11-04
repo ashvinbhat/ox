@@ -65,6 +65,7 @@ type Session struct {
 	Title        string          `json:"title"`
 	Cwd          string          `json:"cwd"`
 	Archived     bool            `json:"isArchived"`
+	CreatedMs    float64         `json:"createdAt"`
 	LastActiveMs float64         `json:"lastActivityAt"`
 	PRs          []PR            `json:"prs"`
 	Summary      *Summary        `json:"postTurnSummary"`
@@ -167,6 +168,8 @@ func (s Session) State(now time.Time) State {
 	switch {
 	case s.Ask() != "" || s.status() == "blocked" || isSet(s.Interrupted):
 		return StateNeedsYou
+	case s.neverRan():
+		return StateDone
 	case s.status() == "":
 		if now.Sub(s.LastActive()) < stuckAfter {
 			return StateWorking
@@ -182,6 +185,13 @@ func (s Session) State(now time.Time) State {
 // Archivable reports a finished thread nobody has touched in two days.
 func (s Session) Archivable(now time.Time) bool {
 	return s.State(now) == StateDone && now.Sub(s.LastActive()) > archiveAfter
+}
+
+// neverRan reports a thread with no activity since it was opened, such as a
+// side chat forked and left unused. It has no post-turn summary because no
+// turn ran, not because one is in flight.
+func (s Session) neverRan() bool {
+	return s.CreatedMs > 0 && s.LastActiveMs <= s.CreatedMs
 }
 
 func (s Session) status() string {
