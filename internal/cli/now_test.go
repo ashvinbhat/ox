@@ -84,3 +84,20 @@ func TestParkedThreads(t *testing.T) {
 		t.Errorf("brief counts:\n%s", brief)
 	}
 }
+
+func TestDroppedStuckThreads(t *testing.T) {
+	clearedAt := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	threads := []nowThread{
+		{SessionID: "a", State: desktop.StateStuck, LastActive: clearedAt.Add(-time.Hour)},
+		{SessionID: "b", State: desktop.StateStuck, LastActive: clearedAt.Add(time.Minute)},
+		{SessionID: "c", State: desktop.StateStuck, LastActive: clearedAt.Add(-time.Hour)},
+		{SessionID: "d", State: desktop.StateDone, LastActive: clearedAt.Add(-time.Hour)},
+	}
+	markDropped(threads, map[string]time.Time{"stuck:a": clearedAt, "stuck:b": clearedAt, "stuck:d": clearedAt})
+	want := map[string]bool{"a": true, "b": false, "c": false, "d": false}
+	for _, th := range threads {
+		if th.Dropped != want[th.SessionID] {
+			t.Errorf("%s: dropped = %v, want %v", th.SessionID, th.Dropped, want[th.SessionID])
+		}
+	}
+}
