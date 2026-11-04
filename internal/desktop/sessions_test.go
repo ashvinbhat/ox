@@ -22,6 +22,9 @@ func TestState(t *testing.T) {
 		{"interrupted", Session{LastActiveMs: ago(time.Minute), Interrupted: json.RawMessage(`{"at":1}`)}, StateNeedsYou},
 		{"turn running", Session{LastActiveMs: ago(2 * time.Minute)}, StateWorking},
 		{"turn died", Session{LastActiveMs: ago(3 * time.Hour), Interrupted: json.RawMessage(`null`)}, StateStuck},
+		{"opened, never used", Session{CreatedMs: ago(20 * time.Hour), LastActiveMs: ago(20 * time.Hour)}, StateDone},
+		{"first turn running", Session{CreatedMs: ago(3 * time.Minute), LastActiveMs: ago(2 * time.Minute)}, StateWorking},
+		{"first turn died", Session{CreatedMs: ago(3 * time.Hour), LastActiveMs: ago(3*time.Hour - time.Minute)}, StateStuck},
 		{"open PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 9670, State: "OPEN"}}}, StateInReview},
 		{"review ready", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}}, StateInReview},
 		{"merged PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 2195, State: "MERGED"}}}, StateDone},
@@ -31,6 +34,17 @@ func TestState(t *testing.T) {
 		if got := c.s.State(now); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestUnusedSideChatIsDone(t *testing.T) {
+	var s Session
+	body := `{"sessionId":"local_s","title":"Side chat","createdAt":1793707920703,"lastActivityAt":1793707920703,"interruptedAwaitingPerson":null,"btwLoweredFrom":"xhigh","turnBoxDeclared":true}`
+	if err := json.Unmarshal([]byte(body), &s); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.State(time.UnixMilli(1_793_800_000_000)); got != StateDone {
+		t.Errorf("side chat opened and never used: got %q, want %q", got, StateDone)
 	}
 }
 
