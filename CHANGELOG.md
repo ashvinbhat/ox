@@ -145,6 +145,12 @@ mission harness is frozen.
 - `ox setup` runs the start hook the way a thread would, with a bare PATH,
   and puts `settings.json` back as it was if the hook fails.
 
+- Word budget: `ox memory audit` adds up what every thread loads at start
+  (the user and project CLAUDE.md files, and MEMORY.md's first 200 lines).
+  Past 3,000 words it flags a `budget` suggestion naming the largest
+  sections, and `/memory-check` proposes cuts that move rules rather than
+  drop them.
+
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
   with ox's. It now replaces only ox's entry and keeps the rest.
