@@ -24,11 +24,10 @@ const WordBudget = 3000
 func AlwaysLoaded(claudeHome, store string, cwds []string) []string {
 	candidates := []string{filepath.Join(claudeHome, "CLAUDE.md")}
 	if dir := projectDir(store, cwds); dir != "" {
-		for d := dir; ; d = filepath.Dir(d) {
+		d := dir
+		for range strings.Count(dir, string(filepath.Separator)) + 1 {
 			candidates = append(candidates, filepath.Join(d, "CLAUDE.md"), filepath.Join(d, "CLAUDE.local.md"))
-			if d == filepath.Dir(d) {
-				break
-			}
+			d = filepath.Dir(d)
 		}
 	}
 	candidates = append(candidates, filepath.Join(store, IndexFile))
