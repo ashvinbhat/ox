@@ -135,11 +135,12 @@ func collectAsks(oxHome string, threads []nowThread, reviews []ghreview.QueueIte
 			ReReview: r.Status == ghreview.QueueReReview, Since: r.Since})
 	}
 	in.PRs, in.PRsAt, _ = asks.LoadPRs(oxHome)
+	in.Merged = asks.LoadMerged(oxHome)
 	if fetch && now.Sub(in.PRsAt) >= prsEvery {
 		prs, at, err := refreshPRs(oxHome)
 		jobs.Note(oxHome, jobPRs, err)
 		if err == nil {
-			in.PRs, in.PRsAt = prs, at
+			in.PRs, in.PRsAt, in.Merged = prs, at, asks.LoadMerged(oxHome)
 		}
 	}
 	if r, err := memcheck.Pending(oxHome); err == nil {
@@ -174,7 +175,11 @@ func refreshPRs(oxHome string) ([]asks.PR, time.Time, error) {
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	return prs, now, asks.SavePRs(oxHome, prs, now)
+	merged, err := asks.FetchMerged(ctx, now)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return prs, now, asks.SavePRs(oxHome, prs, merged, now)
 }
 
 func renderAsks(w io.Writer, q asks.Queue, now time.Time) {
@@ -195,7 +200,10 @@ func renderAsks(w io.Writer, q asks.Queue, now time.Time) {
 			if a.Kind == asks.KindQuestion {
 				line = clip(a.Where, 40) + ": " + a.What
 			}
-			if a.Stale {
+			switch {
+			case a.Settled != "":
+				line += " (" + a.Settled + "; still needed?)"
+			case a.Stale:
 				line += " (still needed?)"
 			}
 			fmt.Fprintf(w, "  %-8s %4s  %-4s %s\n", a.Kind, shortAge(now.Sub(a.Since)), minutes(a.Minutes), clip(line, 100))
@@ -257,7 +265,10 @@ func briefAsk(a asks.Ask, now time.Time) string {
 	switch a.Kind {
 	case asks.KindQuestion:
 		s := fmt.Sprintf("%s: %s (%s", clip(a.Where, 48), clip(a.What, 80), age)
-		if a.Stale {
+		switch {
+		case a.Settled != "":
+			s += ", " + a.Settled + "; still needed?"
+		case a.Stale:
 			s += ", still needed?"
 		}
 		return s + ")"
