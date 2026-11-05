@@ -105,8 +105,8 @@ mission harness is frozen.
   quiet. No buttons; it reads like a chat reply (Markdown). Every open panel
   rereads `ox now --brief --json` every 15 seconds, so a change in one
   thread shows in the others; terminal and headless sessions never poll.
-- Board: one Clear button under the list drops every item shown, for every
-  panel. Each comes back when its thread asks something new or, for a stuck
+- Board: a small × beside each item drops that one, and Clear all under the
+  list drops every item shown, for every panel. Each comes back when its thread asks something new or, for a stuck
   thread, does anything again. `ox asks drop stuck:<thread id>` hides a stuck
   thread; `ox now --json` marks it `dropped`.
 - `ox now --json` lists the tracks by name, and each ask carries its track

@@ -56,19 +56,34 @@ test('the panel lists only threads that need you, with what each waits on', asyn
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Markdown' }))?.props.text).toBe(
-      [
-        '**Durable chat turns**  \nIs a move to GCP planned? · 45h',
-        '**Board panel**  \nox\\#24 is ready to merge · 30m',
-        '**Valkey clusters**  \nWent quiet mid-turn; it may have stopped · 2h',
-      ].join('\n\n'),
-    )
-    expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['clear'])
+    expect((await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)).toEqual([
+      '**Durable chat turns**  \nIs a move to GCP planned? · 45h',
+      '**Board panel**  \nox\\#24 is ready to merge · 30m',
+      '**Valkey clusters**  \nWent quiet mid-turn; it may have stopped · 2h',
+    ])
+    expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual([
+      'question:local_a:clear',
+      'merge:ox#24:clear',
+      'stuck:local_s:clear',
+      'clear',
+    ])
     await ui.unmount()
   }
 })
 
-test('Clear drops every item shown, then rereads ox', async ($, on) => {
+test('× drops only its own item, then rereads ox', async ($, on) => {
+  const { runs } = world(on, [])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'ox-board' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'merge:ox#24:clear' })
+  const drop = runs.find(argv => argv.includes('drop'))
+  expect(drop?.slice(drop.indexOf('asks'))).toEqual(['asks', 'drop', 'merge:ox#24'])
+  expect(nows(runs)).toBe(2)
+  await ui.unmount()
+})
+
+test('Clear all drops every item shown, then rereads ox', async ($, on) => {
   const { runs } = world(on, [])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'ox-board' })
@@ -98,5 +113,26 @@ test('the panel says when nothing needs you, and when ox fails', async ($, on) =
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Markdown' }))?.props.text).toBe("Nothing needs you right now.\n\n_ox: ox printed something that isn't JSON_")
   expect(await ui.findAll({ type: 'Button' })).toEqual([])
+  await ui.unmount()
+})
+
+test('a failed clear keeps the items and says why', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'ox-board' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.surfaces', () => ({ value: [] }))
+  on('process.run', (_, e) =>
+    e.argv.includes('drop')
+      ? { value: { exitCode: 1, stdout: '', stderr: 'Error: locked\n' } }
+      : { value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } },
+  )
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  mock.clock(on, { now: NOW })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'ox-board' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'clear' })
+  const texts = (await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)
+  expect(texts.length).toBe(4)
+  expect(texts[3]).toBe('_ox: Error: locked_')
   await ui.unmount()
 })
