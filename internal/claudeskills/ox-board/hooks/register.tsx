@@ -69,8 +69,8 @@ async function refresh($: EngineInterface): Promise<void> {
   await update($, board, () => ({ at: now, items: attention(view, now) }))
 }
 
-// Clear drops every item shown, through ox, so every panel loses them. Each
-// comes back when its thread asks something new or moves again.
+// Clear drops items through ox, so every panel loses them. Each comes back
+// when its thread asks something new or moves again.
 async function clear($: EngineInterface, ids: string[]): Promise<void> {
   const ran = await $.process
     .run(ox('asks', 'drop', ...ids), { timeoutMs: 20_000 })
@@ -80,18 +80,19 @@ async function clear($: EngineInterface, ids: string[]): Promise<void> {
     await update($, board, b => (b ? { ...b, error } : b))
     return
   }
-  $.ui.toast(`Cleared ${ids.length}. Each comes back when its thread asks again.`)
+  $.ui.toast(
+    ids.length === 1
+      ? 'Cleared. It comes back when its thread asks again.'
+      : `Cleared ${ids.length}. Each comes back when its thread asks again.`,
+  )
   await refresh($)
 }
 
 const escape = (s: string) => s.replace(/([\\`*_[\]<>#|])/g, '\\$1')
 
-function markdown(b: Board): string {
-  const lines = b.items.map(i => `**${escape(i.title)}**  \n${escape(i.waiting)} · ${i.age}`)
-  if (lines.length === 0) lines.push('Nothing needs you right now.')
-  if (b.error) lines.push(`_ox: ${escape(b.error)}_`)
-  return lines.join('\n\n')
-}
+const line = (i: Item) => `**${escape(i.title)}**  \n${escape(i.waiting)} · ${i.age}`
+
+const note = (b: Board) => (b.error ? `_ox: ${escape(b.error)}_` : '')
 
 // Polling starts with the first pane, so a terminal or headless session that
 // never shows one never runs ox.
@@ -128,14 +129,24 @@ export const register: Register = on => {
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const b = await read($, board)
     if (!b) return <Text dimColor>Reading ox…</Text>
-    const list = <Markdown key="threads" text={markdown(b)} />
-    if (b.items.length === 0) return list
+    if (b.items.length === 0) {
+      return <Markdown key="threads" text={['Nothing needs you right now.', note(b)].filter(Boolean).join('\n\n')} />
+    }
+    const rows = b.items.map(i => (
+      <Box key={i.id} flexDirection="row" gap={1}>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+          <Markdown key={`${i.id}:text`} text={line(i)} />
+        </Box>
+        <Button key={`${i.id}:clear`} label="×" plain dimColor onPress={() => void clear($, [i.id])} />
+      </Box>
+    ))
     const ids = b.items.map(i => i.id)
     return (
       <Box flexDirection="column" gap={1}>
-        {list}
+        {rows}
+        {b.error ? <Markdown key="error" text={note(b)} /> : []}
         <Box flexDirection="row">
-          <Button key="clear" label="Clear" dimColor onPress={() => void clear($, ids)} />
+          <Button key="clear" label="Clear all" dimColor onPress={() => void clear($, ids)} />
         </Box>
       </Box>
     )

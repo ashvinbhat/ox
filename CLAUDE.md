@@ -32,8 +32,8 @@ also read "Building ox".
   parsing, `--track <short>` to filter.
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
   `ox setup` installs): the threads that need him, each with one line on
-  what it's waiting on, and one Clear button that hides them all until each
-  asks something new. It's how he sees what's waiting without asking.
+  what it's waiting on. A small × hides one, Clear all hides every item; each
+  comes back when its thread asks something new. It's how he sees what's waiting without asking.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
