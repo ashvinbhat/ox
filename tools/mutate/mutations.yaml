@@ -56,3 +56,18 @@
   file: internal/livepath/livepath.go
   from: "if testing.Testing() && !inside(path, os.TempDir()) {"
   to: "if testing.Testing() && false && !inside(path, os.TempDir()) {"
+
+- why: text under the word budget isn't flagged
+  file: internal/memcheck/budget.go
+  from: "if total <= limit {"
+  to: "if total < 0 {"
+
+- why: MEMORY.md counts only the 200 lines Claude Code reads
+  file: internal/memcheck/budget.go
+  from: "firstLines(text, IndexLimit)"
+  to: "firstLines(text, 1<<30)"
+
+- why: the project folder is matched by Claude Code's name for it
+  file: internal/memcheck/budget.go
+  from: "if c = filepath.Clean(c); notAlnum"
+  to: "if c = c; notAlnum"

@@ -110,7 +110,8 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 - `ox memory audit [--json] [--keep <id>]` — gone paths, code and ox commands,
   cited files changed since the memory was confirmed, near-duplicate
   memories, broken frontmatter, MEMORY.md drift, stale project memories,
-  memories stranded in other projects' stores (the hook runs it weekly; the
+  memories stranded in other projects' stores, always-loaded text over 3,000
+  words (the hook runs it weekly; the
   result is in `~/.ox/memory-check/last.json`)
 - `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
   the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
