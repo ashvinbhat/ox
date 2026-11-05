@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/livepath"
 	"github.com/ashvinbhat/ox/internal/mission"
 )
 
@@ -268,7 +269,7 @@ func jobCWD(cfg *config.Config, m *mission.Mission, j *Job) string {
 // env, and a detached job doesn't inherit the interactive shell that sources
 // secrets, so we inject them here.
 func oxSecretsEnv() []string {
-	home, err := os.UserHomeDir()
+	home, err := livepath.Home()
 	if err != nil {
 		return nil
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/hooks"
 	"github.com/ashvinbhat/ox/internal/jobs"
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // The background jobs every thread start kicks off. Each is a status file in
@@ -100,7 +101,7 @@ func sessionStart(stdin io.Reader, stdout io.Writer) (code int) {
 	if cfgErr != nil || cfg == nil {
 		return 0
 	}
-	if home, err := os.UserHomeDir(); err == nil {
+	if home, err := livepath.Home(); err == nil {
 		_ = os.Setenv("PATH", toolPath(os.Getenv("PATH"), home))
 	}
 	check := os.Getenv(hooks.CheckEnv) == "1"

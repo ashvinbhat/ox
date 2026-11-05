@@ -17,6 +17,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/harness"
+	"github.com/ashvinbhat/ox/internal/livepath"
 	"github.com/ashvinbhat/ox/internal/mission"
 )
 
@@ -76,7 +77,7 @@ func run(args ...string) (string, error) {
 }
 
 func secretsValue(key string) string {
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	data, err := os.ReadFile(filepath.Join(home, ".ox", "secrets.env"))
 	if err != nil {
 		return ""

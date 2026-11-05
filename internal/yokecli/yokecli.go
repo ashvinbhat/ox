@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // Task mirrors yoke's `show --json` / `list --json` output contract.
@@ -70,7 +72,7 @@ func BinaryPath() string {
 	if path, err := exec.LookPath("yoke"); err == nil {
 		return path
 	}
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	for _, loc := range []string{
 		filepath.Join(home, "go", "bin", "yoke"),
 		"/usr/local/bin/yoke",

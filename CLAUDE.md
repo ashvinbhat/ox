@@ -87,7 +87,12 @@ PR to ashvinbhat/ox (main is protected; Ashvin merges) with an entry under
 go build -o ox ./cmd/ox    # dev build
 make install               # version-stamped build into ~/go/bin/ox
 go test ./...
+make mutate                # each rule in tools/mutate/mutations.yaml, off, fails a test
 ```
+
+A test that guards a rule gets a `mutations.yaml` entry. Tests get paths
+from `t.TempDir()`: `internal/livepath` panics when one reaches the real
+home.
 
 Hooks and MCP servers keep the binary they started with: restart threads after
 `make install`.
