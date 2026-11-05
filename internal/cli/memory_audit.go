@@ -13,6 +13,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/jobs"
+	"github.com/ashvinbhat/ox/internal/livepath"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 )
 
@@ -42,6 +43,8 @@ archive) and lists what may need an edit:
                 the 200 lines Claude Code reads
   stale         a project memory nobody touched or verified in 30 days
   stranded      a memory in another project's store, which ox threads never load
+  budget        CLAUDE.md files plus MEMORY.md, which every thread loads, run
+                past 3,000 words
 
 Nothing is changed. Work through the list with /memory-check in a thread; it
 proposes each fix and applies only what you approve. A suggestion that's fine
@@ -94,6 +97,13 @@ func auditMemory(cfg *config.Config) (memcheck.Report, error) {
 		return memcheck.Report{}, fmt.Errorf("read keep list: %w", err)
 	}
 	sessions, _ := desktop.List(desktop.DefaultDir(), false)
+	var cwds []string
+	for _, s := range sessions {
+		cwds = append(cwds, s.Cwd)
+	}
+	if wd, err := os.Getwd(); err == nil {
+		cwds = append(cwds, wd)
+	}
 	report, err := memcheck.Audit(memcheck.Options{
 		Dir:    store,
 		Others: others,
@@ -101,6 +111,8 @@ func auditMemory(cfg *config.Config) (memcheck.Report, error) {
 		Known:  knownOxCommand,
 		Keep:   keep,
 		Now:    time.Now(),
+		Loaded: memcheck.AlwaysLoaded(claudeHome(), store, cwds),
+		Label:  loadedLabel,
 	})
 	if err != nil {
 		return memcheck.Report{}, err
@@ -131,6 +143,9 @@ func keepSuggestions(oxHome string, ids []string, note string) error {
 		}
 		if s.Kind == memcheck.KindStale {
 			return fmt.Errorf("%s: confirm a stale memory by setting metadata.verified to today's date, not by keeping it", id)
+		}
+		if s.Kind == memcheck.KindBudget {
+			return fmt.Errorf("%s: trim what every thread loads instead; keeping it would hide the budget for good", id)
 		}
 		keep[id] = memcheck.Keep{At: time.Now().UTC(), Note: note}
 	}
@@ -205,16 +220,25 @@ func knownOxCommand(words []string) bool {
 	return cmd.Runnable() || len(rest) == 0
 }
 
+// loadedLabel names an always-loaded file: the index by name, a CLAUDE.md by
+// where it sits.
+func loadedLabel(path string) string {
+	if filepath.Base(path) == memcheck.IndexFile {
+		return memcheck.IndexFile
+	}
+	return tildePath(path)
+}
+
 func claudeHome() string {
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		return dir
+		return livepath.Guard(dir)
 	}
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	return filepath.Join(home, ".claude")
 }
 
 func tildePath(p string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+"/") {
+	if home, err := livepath.Home(); err == nil && strings.HasPrefix(p, home+"/") {
 		return "~" + p[len(home):]
 	}
 	return p

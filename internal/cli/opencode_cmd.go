@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 var (
@@ -85,7 +87,7 @@ func runOpencode(cmd *cobra.Command, args []string) error {
 // loadSecretsEnv reads ~/.ox/secrets.env into KEY=VALUE entries so opencode's
 // {env:...} provider-key references resolve in the launched process.
 func loadSecretsEnv() []string {
-	home, err := os.UserHomeDir()
+	home, err := livepath.Home()
 	if err != nil {
 		return nil
 	}

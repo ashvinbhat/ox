@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // Price is USD per million tokens.
@@ -66,7 +68,7 @@ func (u Usage) CostUSD(model string) float64 {
 // TranscriptPath returns the claude transcript file for a session launched in
 // cwd. Claude Code munges the cwd by replacing '/' and '.' with '-'.
 func TranscriptPath(cwd, sessionID string) string {
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	munged := strings.NewReplacer("/", "-", ".", "-").Replace(cwd)
 	return filepath.Join(home, ".claude", "projects", munged, sessionID+".jsonl")
 }

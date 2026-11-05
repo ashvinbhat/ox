@@ -16,6 +16,7 @@ import (
 
 func TestSessionStartPrintsTheBriefOrNothing(t *testing.T) {
 	t.Setenv(hooks.CheckEnv, "1")
+	t.Setenv("HOME", t.TempDir())
 	defer func(c *config.Config, e error, b func(string, time.Time) string, d time.Duration) {
 		cfg, cfgErr, hookBrief, briefBudget = c, e, b, d
 	}(cfg, cfgErr, hookBrief, briefBudget)

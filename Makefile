@@ -1,4 +1,4 @@
-.PHONY: build install clean test
+.PHONY: build install clean test mutate
 
 BINARY=ox
 BUILD_DIR=./cmd/ox
@@ -17,6 +17,10 @@ clean:
 
 test:
 	go test ./...
+
+# Each rule in tools/mutate/mutations.yaml, turned off, must fail a test.
+mutate:
+	go run ./tools/mutate
 
 run:
 	go run $(BUILD_DIR) $(ARGS)
