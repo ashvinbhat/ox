@@ -9,6 +9,7 @@ package worktrees
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -97,6 +98,8 @@ func Decide(wt Worktree, pr PR, inUse map[string]bool, dirty bool, head string) 
 // and that Decide clears. With dryRun nothing changes on disk.
 func Prune(repos []string, inUse map[string]bool, dryRun bool) ([]Outcome, error) {
 	var outcomes []Outcome
+	var lookups, failed int
+	var lastErr error
 	for _, repo := range repos {
 		if !dryRun {
 			// Drops registrations of worktree dirs deleted by hand.
@@ -107,7 +110,13 @@ func Prune(repos []string, inUse map[string]bool, dryRun bool) ([]Outcome, error
 			continue
 		}
 		for _, wt := range list {
-			pr, ok := mergedPR(repo, wt.Branch)
+			pr, ok, err := mergedPR(repo, wt.Branch)
+			lookups++
+			if err != nil {
+				failed++
+				lastErr = err
+				continue
+			}
 			if !ok {
 				continue
 			}
@@ -134,46 +143,67 @@ func Prune(repos []string, inUse map[string]bool, dryRun bool) ([]Outcome, error
 			outcomes = append(outcomes, o)
 		}
 	}
+	// A repo that isn't on GitHub fails its lookups too, so only a run where
+	// every lookup failed points at gh itself.
+	if lookups > 0 && failed == lookups {
+		return outcomes, fmt.Errorf("gh failed on all %d PR lookups: %w", lookups, lastErr)
+	}
 	return outcomes, nil
 }
 
 // mergedPR asks GitHub for the merged PR whose head is branch, in the repo
 // behind dir's origin remote. A review/pr-<n> branch is looked up by number
-// and counts once that PR merged or closed.
-func mergedPR(dir, branch string) (PR, bool) {
+// and counts once that PR merged or closed. err is a gh call that failed.
+func mergedPR(dir, branch string) (PR, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if n, ok := strings.CutPrefix(branch, "review/pr-"); ok {
-		cmd := exec.CommandContext(ctx, "gh", "pr", "view", n, "--json", "number,state")
-		cmd.Dir = dir
-		out, err := cmd.Output()
+		out, err := gh(ctx, dir, "pr", "view", n, "--json", "number,state")
 		if err != nil {
-			return PR{}, false
+			return PR{}, false, err
 		}
 		var found struct {
 			Number int    `json:"number"`
 			State  string `json:"state"`
 		}
 		if json.Unmarshal(out, &found) != nil || (found.State != "MERGED" && found.State != "CLOSED") {
-			return PR{}, false
+			return PR{}, false, nil
 		}
-		return PR{Number: found.Number, Review: true}, true
+		return PR{Number: found.Number, Review: true}, true, nil
 	}
-	cmd := exec.CommandContext(ctx, "gh", "pr", "list", "--head", branch, "--state", "merged",
+	out, err := gh(ctx, dir, "pr", "list", "--head", branch, "--state", "merged",
 		"--limit", "1", "--json", "number,headRefOid")
-	cmd.Dir = dir
-	out, err := cmd.Output()
 	if err != nil {
-		return PR{}, false
+		return PR{}, false, err
 	}
 	var found []struct {
 		Number     int    `json:"number"`
 		HeadRefOid string `json:"headRefOid"`
 	}
 	if json.Unmarshal(out, &found) != nil || len(found) == 0 {
-		return PR{}, false
+		return PR{}, false, nil
 	}
-	return PR{Number: found[0].Number, HeadSHA: found[0].HeadRefOid}, true
+	return PR{Number: found[0].Number, HeadSHA: found[0].HeadRefOid}, true, nil
+}
+
+// gh runs gh in dir; a failure carries gh's own first line of stderr.
+func gh(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err == nil {
+		return out, nil
+	}
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("gh %s timed out", args[0])
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if line := firstLine(strings.TrimSpace(string(exit.Stderr))); line != "" {
+			return nil, errors.New(line)
+		}
+	}
+	return nil, err
 }
 
 // MainCheckout returns the main worktree of the repo containing dir.

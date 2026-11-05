@@ -16,23 +16,25 @@ var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Install ox into Claude Code: the start hook, ox's skills and the board panel",
 	Long: `Installs what every Claude Code thread picks up from ox:
-  - the ox-brief SessionStart hook (same as ox hooks init)
+  - the ox-brief SessionStart hook, ` + "`ox hook session-start`" + `, then runs it once the
+    way a thread would; if it fails, settings.json goes back as it was
   - ox's skills in ~/.claude/skills: /review-pr, /review-asks, /tidy, …
   - the ox board, a side panel of ox now, in ~/.claude/skills/ox-board
 
 Safe to re-run after every upgrade. A folder you wrote yourself under one of
 those names is left alone.`,
-	Args: cobra.NoArgs,
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := requireConfig()
-		mgr := hooks.NewManager(cfg.Home)
-		if err := mgr.Init(); err != nil {
-			return fmt.Errorf("init hooks: %w", err)
+		settings, err := hooks.SettingsPath()
+		if err != nil {
+			return err
 		}
-		if err := mgr.InstallToClaudeCode(); err != nil {
-			return fmt.Errorf("install hooks: %w", err)
+		if err := hooks.NewManager(cfg.Home).Setup(settings); err != nil {
+			return err
 		}
-		fmt.Println("Hook: ox-brief (SessionStart)")
+		fmt.Println("Hook: ox-brief (SessionStart), checked: it prints the brief")
 
 		home, err := os.UserHomeDir()
 		if err != nil {

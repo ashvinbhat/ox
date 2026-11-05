@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ashvinbhat/ox/internal/desktop"
+	"github.com/ashvinbhat/ox/internal/jobs"
 	"github.com/ashvinbhat/ox/internal/worktrees"
 )
 
@@ -20,8 +21,8 @@ var (
 	pruneJSON   bool
 )
 
-// The ox-brief hook calls prune --if-due at every thread start; once an hour
-// is enough to catch merges without a gh call per thread.
+// The start hook calls prune --if-due at every thread start; once an hour is
+// enough to catch merges without a gh call per thread.
 const pruneEvery = time.Hour
 
 var worktreesCmd = &cobra.Command{
@@ -46,19 +47,35 @@ Removals are logged to ~/.ox/logs/worktrees.log.`,
 
 func runWorktreesPrune(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	stamp := filepath.Join(cfg.Home, "logs", "worktrees.last")
+	var outcomes []worktrees.Outcome
+	prune := func() error {
+		var err error
+		outcomes, err = pruneWorktrees(cfg.Home, pruneDryRun)
+		return err
+	}
 	if pruneIfDue {
-		if info, err := os.Stat(stamp); err == nil && time.Since(info.ModTime()) < pruneEvery {
-			return nil
-		}
+		_, err := jobs.Run(cfg.Home, jobWorktrees, pruneEvery, pruneLimit, prune)
+		return err
 	}
-	// Stamp before the slow gh calls so threads starting together don't all prune.
+	err := prune()
 	if !pruneDryRun {
-		if err := os.MkdirAll(filepath.Dir(stamp), 0o755); err == nil {
-			_ = os.WriteFile(stamp, nil, 0o644)
-		}
+		jobs.Note(cfg.Home, jobWorktrees, err)
 	}
+	if err != nil {
+		return err
+	}
+	if pruneJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(outcomes)
+	}
+	printPrune(outcomes, pruneDryRun)
+	return nil
+}
 
+// pruneWorktrees removes what Prune clears and logs each removal, even on a
+// run that also failed some lookups.
+func pruneWorktrees(oxHome string, dryRun bool) ([]worktrees.Outcome, error) {
 	sessions, _ := desktop.List(desktop.DefaultDir(), false)
 	inUse := map[string]bool{}
 	for _, s := range sessions {
@@ -69,22 +86,13 @@ func runWorktreesPrune(cmd *cobra.Command, args []string) error {
 	if wd, err := os.Getwd(); err == nil {
 		inUse[filepath.Clean(wd)] = true
 	}
-
-	outcomes, err := worktrees.Prune(knownRepos(cfg.Home, sessions), inUse, pruneDryRun)
-	if err != nil {
-		return err
+	outcomes, err := worktrees.Prune(knownRepos(oxHome, sessions), inUse, dryRun)
+	if !dryRun {
+		if mkErr := os.MkdirAll(filepath.Join(oxHome, "logs"), 0o755); mkErr == nil {
+			logRemovals(filepath.Join(oxHome, "logs", "worktrees.log"), outcomes)
+		}
 	}
-	if !pruneDryRun {
-		logRemovals(filepath.Join(cfg.Home, "logs", "worktrees.log"), outcomes)
-	}
-
-	if pruneJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(outcomes)
-	}
-	printPrune(outcomes, pruneDryRun)
-	return nil
+	return outcomes, err
 }
 
 // knownRepos is every clone in ~/.ox/repos plus the main checkout of every
@@ -158,7 +166,7 @@ func logRemovals(path string, outcomes []worktrees.Outcome) {
 
 func init() {
 	worktreesPruneCmd.Flags().BoolVar(&pruneDryRun, "dry-run", false, "Show what would be removed")
-	worktreesPruneCmd.Flags().BoolVar(&pruneIfDue, "if-due", false, "Skip if a prune ran in the last hour")
+	worktreesPruneCmd.Flags().BoolVar(&pruneIfDue, "if-due", false, "Skip unless the last good prune is an hour old (the start hook uses this)")
 	worktreesPruneCmd.Flags().BoolVar(&pruneJSON, "json", false, "Machine-readable output")
 	worktreesCmd.AddCommand(worktreesPruneCmd)
 	rootCmd.AddCommand(worktreesCmd)

@@ -136,8 +136,18 @@ mission harness is frozen.
   you give in chat, word for word. It recommends dropping a question that
   only repeats another thread's. A thread marked stuck whose last turn
   finished gets archived; one that stopped mid-work can be told to carry on.
+- Background jobs (worktree prune, memory audit, PR refresh) keep a status in
+  `~/.ox/jobs/`. Each runs at most once per interval, retries a failure after
+  5 minutes, and is killed past its time limit. Its lock names the holder's
+  pid, so a crashed run never blocks the next. Two failures in a row put a
+  line in the brief and on the board, such as "PR state is 2h old: gh auth
+  login", until the job succeeds again.
+- `ox setup` runs the start hook the way a thread would, with a bare PATH,
+  and puts `settings.json` back as it was if the hook fails.
 
 ### Fixed
+- `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
+  with ox's. It now replaces only ox's entry and keeps the rest.
 - `ox now` called a thread stuck when it was opened and never used, such as
   a side chat forked from another thread and left. Nothing ran in it, so it
   is done now, and the board no longer lists it.
@@ -146,6 +156,13 @@ mission harness is frozen.
   (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
+- The start hook is `ox hook session-start`, ox itself, not a bash script. It
+  needs no `jq`, has a 15s timeout, and prints nothing on a panic, a missing
+  config or a brief slower than 10s. It adds brew's and Go's bin folders to
+  PATH, so the jobs find `gh`. `ox setup` deletes `~/.ox/hooks/ox-brief.sh`
+  once the new hook passes its check.
+- A failed `gh` call in the PR refresh or the worktree prune carries gh's own
+  message instead of an exit status.
 - `/review-pr` checks that a change can do what it is for, reads red CI to its
   cause, applies the repo's own skills, looks for the test that turns guarded
   code on through real wiring, checks claims in the PR body, draws a

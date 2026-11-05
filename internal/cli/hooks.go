@@ -13,28 +13,27 @@ var hooksCmd = &cobra.Command{
 	Long: `Manages hooks that inject context into Claude Code sessions.
 
 Built-in hooks:
-  ox-brief   Start every thread with ` + "`ox now --brief`" + `
+  ox-brief   Start every thread with ` + "`ox now --brief`" + ` (runs ` + "`ox hook session-start`" + `)
 
-Hooks are shell scripts in ~/.ox/hooks/ that output JSON for Claude Code.`,
+Custom hooks are shell scripts in ~/.ox/hooks/ that output JSON for Claude Code.`,
 	RunE: runHooksList,
 }
 
 var hooksInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize hooks and install to Claude Code",
-	Long: `Creates built-in hook scripts and installs them to Claude Code settings.
-
-This command:
-1. Creates ~/.ox/hooks/ with built-in hook scripts
-2. Updates ~/.claude/settings.json to register the hooks`,
-	RunE: runHooksInit,
+	Short: "Register ox's hooks in Claude Code and check the start hook",
+	Long: `Registers ox's SessionStart hooks in ~/.claude/settings.json, keeping every
+hook that isn't ox's, then runs the start hook the way a thread would. If the
+check fails, settings.json goes back as it was. ox setup does this too.`,
+	SilenceUsage: true,
+	RunE:         runHooksInit,
 }
 
 var hooksInstallCmd = &cobra.Command{
-	Use:   "install",
-	Short: "Install hooks to Claude Code settings",
-	Long:  `Updates ~/.claude/settings.json to register ox hooks with Claude Code.`,
-	RunE:  runHooksInstall,
+	Use:          "install",
+	Short:        "Same as ox hooks init",
+	SilenceUsage: true,
+	RunE:         runHooksInit,
 }
 
 var hooksRunCmd = &cobra.Command{
@@ -79,42 +78,14 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 
 func runHooksInit(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-
-	mgr := hooks.NewManager(cfg.Home)
-
-	fmt.Println("Initializing hooks...")
-	if err := mgr.Init(); err != nil {
-		return fmt.Errorf("init hooks: %w", err)
+	settings, err := hooks.SettingsPath()
+	if err != nil {
+		return err
 	}
-
-	fmt.Println("Created built-in hook scripts:")
-	for _, h := range mgr.BuiltInHooks() {
-		fmt.Printf("  - %s\n", h.Name)
+	if err := hooks.NewManager(cfg.Home).Setup(settings); err != nil {
+		return err
 	}
-
-	fmt.Println("\nInstalling to Claude Code...")
-	if err := mgr.InstallToClaudeCode(); err != nil {
-		return fmt.Errorf("install to Claude Code: %w", err)
-	}
-
-	fmt.Println("Done! Hooks will run at next Claude Code session start.")
-	fmt.Printf("\nHooks directory: %s\n", mgr.HooksDir())
-
-	return nil
-}
-
-func runHooksInstall(cmd *cobra.Command, args []string) error {
-	cfg := requireConfig()
-
-	mgr := hooks.NewManager(cfg.Home)
-
-	fmt.Println("Installing hooks to Claude Code...")
-	if err := mgr.InstallToClaudeCode(); err != nil {
-		return fmt.Errorf("install: %w", err)
-	}
-
-	fmt.Println("Done! Updated ~/.claude/settings.json")
-
+	fmt.Printf("Registered and checked in %s. New threads run it; restart open ones.\n", settings)
 	return nil
 }
 

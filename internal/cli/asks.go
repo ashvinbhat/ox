@@ -14,6 +14,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/asks"
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/ghreview"
+	"github.com/ashvinbhat/ox/internal/jobs"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 	"github.com/ashvinbhat/ox/internal/park"
 	"github.com/ashvinbhat/ox/internal/tracks"
@@ -79,18 +80,17 @@ var asksRefreshCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := requireConfig()
-		if asksIfDue {
-			if _, at, err := asks.LoadPRs(cfg.Home); err == nil && time.Since(at) < prsEvery {
-				return nil
-			}
-			// Every open board asks at once; one fetch is enough.
-			release, ok := asks.Claim(cfg.Home, time.Now())
-			if !ok {
-				return nil
-			}
-			defer release()
+		refresh := func() error {
+			_, _, err := refreshPRs(cfg.Home)
+			return err
 		}
-		_, _, err := refreshPRs(cfg.Home)
+		if asksIfDue {
+			// Every open board asks at once; the job's lock lets one fetch through.
+			_, err := jobs.Run(cfg.Home, jobPRs, prsEvery, prsLimit, refresh)
+			return err
+		}
+		err := refresh()
+		jobs.Note(cfg.Home, jobPRs, err)
 		return err
 	},
 }
@@ -136,7 +136,9 @@ func collectAsks(oxHome string, threads []nowThread, reviews []ghreview.QueueIte
 	}
 	in.PRs, in.PRsAt, _ = asks.LoadPRs(oxHome)
 	if fetch && now.Sub(in.PRsAt) >= prsEvery {
-		if prs, at, err := refreshPRs(oxHome); err == nil {
+		prs, at, err := refreshPRs(oxHome)
+		jobs.Note(oxHome, jobPRs, err)
+		if err == nil {
 			in.PRs, in.PRsAt = prs, at
 		}
 	}
@@ -276,7 +278,7 @@ func minutes(m int) string {
 func init() {
 	asksCmd.Flags().BoolVar(&asksJSON, "json", false, "Machine-readable output, with ask ids")
 	asksCmd.Flags().BoolVar(&asksOffline, "offline", false, "Use cached PR state; don't call GitHub")
-	asksRefreshCmd.Flags().BoolVar(&asksIfDue, "if-due", false, "Skip if PR state was fetched in the last hour")
+	asksRefreshCmd.Flags().BoolVar(&asksIfDue, "if-due", false, "Skip unless PR state is 10 minutes old (the board and hook use this)")
 	asksCmd.AddCommand(asksDropCmd, asksRefreshCmd)
 	rootCmd.AddCommand(asksCmd)
 }

@@ -22,14 +22,16 @@ also read "Building ox".
     targeted tests pass locally
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
-- Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook):
+- Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook,
+  `ox hook session-start`):
   the top of what's waiting on Ashvin, PR fixes threads can make, what's in
   review, what's running. It is background: don't bring it up unless he asks
   what needs him or the thread's work touches it. One exception: a "Mention
   once" line (only the first thread of the day gets it). Say it as a
   one-sentence offer at the end of your first reply ("Also: the weekly recap
-  is due. Want to do it now?"). `ox now` is the full view, `--json` for
-  parsing, `--track <short>` to filter.
+  is due. Want to do it now?"). An "ox problem:" line is a background job
+  that keeps failing; raise it only when it blocks this thread's work. `ox now`
+  is the full view, `--json` for parsing, `--track <short>` to filter.
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
   `ox setup` installs): the threads that need him, each with one line on
   what it's waiting on. A small × hides one, Clear all hides every item; each
@@ -93,8 +95,9 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ### Commands
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
-- `ox setup` — install the `ox-brief` hook (retiring pre-1.0 hooks), ox's
-  skills and the board panel; re-run after `make install`
+- `ox setup` — install the `ox-brief` hook and check it runs (rolling back
+  `settings.json` if not), ox's skills and the board panel; re-run after
+  `make install`
 - `ox reviews`, `ox review ask|start|post|record` — the review desk the
   `/review-pr` and `/review-asks` skills drive
 - `ox worktrees prune [--dry-run]` — remove worktrees whose PR merged (the
@@ -146,8 +149,12 @@ Hooks and MCP servers keep the binary they started with: restart threads after
   names the kind), parsing, and the status the brief shows (recap due,
   own-it rounds today).
 - `internal/memory` — `~/.ox/memory.db`, the archive (FTS5 + embeddings).
-- `internal/hooks` — SessionStart hook scripts in `~/.ox/hooks/`, registered
-  in `~/.claude/settings.json`.
+- `internal/hooks` — registers the start hook (`ox hook session-start`, in
+  `internal/cli/hook.go`) and any custom scripts in `~/.ox/hooks/` in
+  `~/.claude/settings.json`, and runs setup's check with rollback.
+- `internal/jobs` — background job status and locks in `~/.ox/jobs/`: two
+  clocks (last success sets the cadence, last attempt paces retries), a pid
+  lock with stale takeover, a time limit; `Failing` feeds "ox problem:".
 - Frozen harness: `internal/{harness,mission,watcher,job,mcpserver}`. A mission
   is `~/.ox/missions/m<seq>-<slug>/` (mission.yaml, plan.md, events.jsonl,
   ledger.jsonl, agents.json, jobs.json); files are truth, every process is
@@ -161,6 +168,7 @@ Hooks and MCP servers keep the binary they started with: restart threads after
 ├── reviews/         # Review rounds per PR
 ├── journal/         # Decision journal, one file a day
 ├── asks/            # PR state cache and dropped asks
+├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
