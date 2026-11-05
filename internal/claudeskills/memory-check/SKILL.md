@@ -1,6 +1,6 @@
 ---
 name: memory-check
-description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, cite files that changed since they were confirmed, duplicate each other, have broken frontmatter, drift from MEMORY.md, or sit stranded in other projects' stores — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
+description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, cite files that changed since they were confirmed, duplicate each other, have broken frontmatter, drift from MEMORY.md, sit stranded in other projects' stores, or push what every thread loads past its word budget — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
 metadata:
   owner: ox
 ---
@@ -52,6 +52,14 @@ Read each flagged memory file. Then, by kind:
   (move it), or obsolete (delete it).
 - **index**: fix mechanically: add the missing line, drop the dead link, or
   trim MEMORY.md back under 200 lines.
+- **budget**: the CLAUDE.md files and MEMORY.md, which every thread loads,
+  run past 3,000 words; the detail names the largest sections. Propose cuts
+  that keep each rule's effect, largest first, each with the words it saves,
+  until the total is under budget: a rule only one workflow needs moves into
+  that skill; a command or code-map line that `--help` or the code already
+  says goes; a MEMORY.md line shrinks to the words that decide when to open
+  the memory; overlapping memories merge. Never drop a rule he stated; move
+  it. A change to the ox repo's CLAUDE.md or a skill ships as an ox PR.
 
 ## 3. Propose, a batch at a time
 
@@ -90,7 +98,8 @@ or change a proposal ("2: say X instead").
   description, metadata.type), add its MEMORY.md line under the right heading,
   then delete the original.
 - **keep**: `ox memory audit --keep <id> --note "<why>"` (repeat `--keep` for
-  several). A stale memory can't be kept; verify it instead.
+  several). A stale memory can't be kept; verify it instead. A budget
+  suggestion can't be kept; trim instead.
 
 Then show the next batch. Anything he skips stays for the next audit.
 
