@@ -16,7 +16,7 @@ const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || ec
 type View = {
   problems?: string[]
   threads?: { sessionId: string; title: string; state: string; lastActive: string; dropped?: boolean }[]
-  asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string }[] }
+  asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string; settled?: string }[] }
 }
 
 function age(since: string, now: number): string {
@@ -33,7 +33,10 @@ function attention(view: View, now: number): Item[] {
   const items: Item[] = []
   for (const a of view.asks?.waiting ?? []) {
     if (!a.thread || !a.where) continue
-    if (a.kind === 'question') items.push({ id: a.id, title: a.where, waiting: a.what, age: age(a.since, now) })
+    if (a.kind === 'question') {
+      const waiting = a.settled ? `${a.what} (${a.settled}; still needed?)` : a.what
+      items.push({ id: a.id, title: a.where, waiting, age: age(a.since, now) })
+    }
     if (a.kind === 'merge') {
       const ref = a.what.replace(/^Merge /, '').split(':')[0]
       items.push({ id: a.id, title: a.where, waiting: `${ref} is ready to merge`, age: age(a.since, now) })

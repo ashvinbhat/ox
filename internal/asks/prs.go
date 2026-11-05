@@ -102,6 +102,36 @@ func FetchPRs(ctx context.Context, now time.Time) ([]PR, error) {
 	return prs, nil
 }
 
+// FetchMerged reads when each of Ashvin's PRs merged in the last two weeks,
+// by short ref. A thread's question asked before its PR merged may be moot.
+func FetchMerged(ctx context.Context, now time.Time) (map[string]time.Time, error) {
+	out, err := gh(ctx, "search", "prs", "--author=@me", "--merged",
+		"--merged-at", ">="+now.Add(-Parked).Format("2006-01-02"), "--limit", "100",
+		"--json", "repository,number,closedAt")
+	if err != nil {
+		return nil, err
+	}
+	return parseMerged(out)
+}
+
+func parseMerged(out string) (map[string]time.Time, error) {
+	var found []struct {
+		Repository struct {
+			NameWithOwner string `json:"nameWithOwner"`
+		} `json:"repository"`
+		Number   int       `json:"number"`
+		ClosedAt time.Time `json:"closedAt"`
+	}
+	if err := json.Unmarshal([]byte(out), &found); err != nil {
+		return nil, fmt.Errorf("parse gh search: %w", err)
+	}
+	merged := map[string]time.Time{}
+	for _, f := range found {
+		merged[PR{Repo: f.Repository.NameWithOwner, Number: f.Number}.Ref()] = f.ClosedAt
+	}
+	return merged, nil
+}
+
 func fetchPR(ctx context.Context, repo string, n int) (PR, error) {
 	out, err := gh(ctx, "pr", "view", fmt.Sprint(n), "-R", repo,
 		"--json", "title,url,isDraft,reviewDecision,mergeable,statusCheckRollup,updatedAt")
@@ -172,8 +202,9 @@ func gh(ctx context.Context, args ...string) (string, error) {
 func Dir(oxHome string) string { return filepath.Join(oxHome, "asks") }
 
 type prCache struct {
-	At  time.Time `json:"at"`
-	PRs []PR      `json:"prs"`
+	At     time.Time            `json:"at"`
+	PRs    []PR                 `json:"prs"`
+	Merged map[string]time.Time `json:"merged,omitempty"` // short ref → when it merged
 }
 
 // LoadPRs reads the cached PR state and when it was fetched.
@@ -183,8 +214,15 @@ func LoadPRs(oxHome string) ([]PR, time.Time, error) {
 	return c.PRs, c.At, err
 }
 
-func SavePRs(oxHome string, prs []PR, at time.Time) error {
-	return writeJSON(filepath.Join(Dir(oxHome), "prs.json"), prCache{At: at, PRs: prs})
+// LoadMerged reads when each recently merged PR merged, by short ref.
+func LoadMerged(oxHome string) map[string]time.Time {
+	var c prCache
+	_ = readJSON(filepath.Join(Dir(oxHome), "prs.json"), &c)
+	return c.Merged
+}
+
+func SavePRs(oxHome string, prs []PR, merged map[string]time.Time, at time.Time) error {
+	return writeJSON(filepath.Join(Dir(oxHome), "prs.json"), prCache{At: at, PRs: prs, Merged: merged})
 }
 
 // LoadDropped reads the asks Ashvin dropped, by id, with when.

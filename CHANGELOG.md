@@ -145,6 +145,11 @@ mission harness is frozen.
 - `ox setup` runs the start hook the way a thread would, with a bare PATH,
   and puts `settings.json` back as it was if the hook fails.
 
+- A thread's question asked before its PR merged is marked "ox#35 merged
+  since; still needed?" in `ox asks`, the brief and the board. The PR
+  refresh also reads your PRs merged in the last two weeks. `/tidy`
+  recommends archive when the merge answered the question, else drop.
+
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
   with ox's. It now replaces only ox's entry and keeps the rest.

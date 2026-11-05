@@ -42,6 +42,9 @@ type Ask struct {
 	Since   time.Time `json:"since"`
 	Minutes int       `json:"minutes,omitempty"` // rough size
 	Stale   bool      `json:"stale,omitempty"`
+	// Settled names what happened elsewhere since a question was asked, such
+	// as "ox#35 merged since". The question may be moot; tidy checks.
+	Settled string `json:"settled,omitempty"`
 }
 
 // Queue is the ranked list for Ashvin and the fixes left to threads.
@@ -76,6 +79,7 @@ type Inputs struct {
 	Reviews           []Review
 	PRs               []PR
 	PRsAt             time.Time
+	Merged            map[string]time.Time // short ref → when it merged
 	MemorySuggestions int
 	MemoryAt          time.Time
 	RecapDue          bool
@@ -91,7 +95,8 @@ func Build(in Inputs, dropped map[string]time.Time, now time.Time) Queue {
 			continue
 		}
 		all = append(all, Ask{ID: "question:" + t.ID, Kind: KindQuestion, What: t.Ask, Where: t.Title, Link: t.ID,
-			Thread: t.ID, Track: t.Track, Since: t.Since, Minutes: 2, Stale: now.Sub(t.Since) > StaleAfter})
+			Thread: t.ID, Track: t.Track, Since: t.Since, Minutes: 2, Stale: now.Sub(t.Since) > StaleAfter,
+			Settled: mergedSince(t, in.Merged)})
 	}
 	for _, r := range in.Reviews {
 		what := fmt.Sprintf("Review %s for %s", r.Ref, firstName(r.From))
@@ -167,6 +172,21 @@ func prAsk(p PR, owner Thread) (Ask, bool) {
 			Thread: owner.ID, Track: owner.Track, Since: p.UpdatedAt, Minutes: 1}, true
 	}
 	return Ask{}, false
+}
+
+// mergedSince names the thread's PRs that merged after it asked. Flagged, not
+// dropped: a question can outlive its PR.
+func mergedSince(t Thread, merged map[string]time.Time) string {
+	var refs []string
+	for _, ref := range t.PRs {
+		if at, ok := merged[ref]; ok && at.After(t.Since) {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) == 0 {
+		return ""
+	}
+	return strings.Join(refs, ", ") + " merged since"
 }
 
 // prThreads maps a PR's short ref to the open thread that owns it.

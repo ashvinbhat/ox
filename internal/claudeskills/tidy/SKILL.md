@@ -55,7 +55,10 @@ has no track, or if it sits in a group he made that isn't a track's group.
   answer it here, drop it (`ox asks drop <id>`: hidden until that thread asks
   something new), or archive the thread. Recommend drop when the question
   only points at another thread's question, or a later message settled it.
-  Say "stale" for one `ox asks` marks stale.
+  Say "stale" for one `ox asks` marks stale. One marked `settled` ("ox#35
+  merged since") was asked before its PR merged: read the question; if the
+  merge answered it (a merge, reinstall or go-ahead ask), recommend archive
+  when the thread has nothing else open, else drop.
 - A PR ready to merge (kind `merge`). Merging is his: list it, nothing more.
 - A thread `ox now` marks `stuck`. Read its last messages (`list_events`,
   limit 6). If its last turn ended with a full answer, it's done, not stuck:
