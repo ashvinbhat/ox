@@ -47,7 +47,11 @@ also read "Building ox".
   rests on specific code or files, add `metadata.cites`
   (`["backend:SegmentService", "ox:internal/cli/now.go", "~/.ox/tracks.yaml"]`)
   so the weekly audit checks exactly those. When Ashvin confirms a memory
-  still holds, set `metadata.verified: YYYY-MM-DD`. `/memory-check` works
+  still holds, set `metadata.verified: YYYY-MM-DD`. Write a feedback memory
+  when he states a rule or corrects the same thing twice; log a one-off
+  correction with `ox journal add`. When he corrects something a feedback
+  memory covers, add the day to its `metadata.misses`; the audit then asks
+  to move the rule up to its skill, then a check. `/memory-check` works
   through what the audit found. `~/.ox/memory.db` is an archive
   (`ox memory recall <query>`).
 - Asks: `ox asks` is one ranked queue of what only Ashvin can do (thread

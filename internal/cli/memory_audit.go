@@ -42,6 +42,8 @@ archive) and lists what may need an edit:
                 the 200 lines Claude Code reads
   stale         a project memory nobody touched or verified in 30 days
   stranded      a memory in another project's store, which ox threads never load
+  missed        a feedback rule broken again (metadata.misses) since it was
+                written or moved up: move it to the next rung
 
 Nothing is changed. Work through the list with /memory-check in a thread; it
 proposes each fix and applies only what you approve. A suggestion that's fine
@@ -174,7 +176,7 @@ func printAudit(r memcheck.Report) {
 			fmt.Printf("\n%s\n", file)
 		}
 		line := s.Detail
-		if s.Subject != "" && s.Kind != memcheck.KindIndex {
+		if s.Subject != "" && s.Kind != memcheck.KindIndex && s.Kind != memcheck.KindMissed {
 			line = s.Subject + " — " + s.Detail
 		}
 		fmt.Printf("  %-13s %s\n", s.Kind, line)

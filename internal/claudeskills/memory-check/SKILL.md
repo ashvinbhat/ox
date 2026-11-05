@@ -1,6 +1,6 @@
 ---
 name: memory-check
-description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, cite files that changed since they were confirmed, duplicate each other, have broken frontmatter, drift from MEMORY.md, or sit stranded in other projects' stores — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
+description: Walk Ashvin through the memory audit (`ox memory audit`) — Claude memories that are stale, point at gone paths, code or ox commands, cite files that changed since they were confirmed, duplicate each other, have broken frontmatter, drift from MEMORY.md, sit stranded in other projects' stores, or are feedback rules broken again since they were written — five at a time, applying only the fixes he approves. Use when he says "memory check", "clean up memory", "are my memories stale?", or asks about the memory line in the thread brief.
 metadata:
   owner: ox
 ---
@@ -52,6 +52,14 @@ Read each flagged memory file. Then, by kind:
   (move it), or obsolete (delete it).
 - **index**: fix mechanically: add the missing line, drop the dead link, or
   trim MEMORY.md back under 200 lines.
+- **missed**: a feedback rule he had to correct again (`metadata.misses`)
+  after it was written or last moved up. A memory alone didn't hold it, so
+  propose the next rung, lowest that will hold: a line in the skill whose
+  step it governs, at that step (`metadata.rung: skill`); then a check in
+  code, an audit check or a test with a `mutations.yaml` entry
+  (`rung: check`). Find the step from the miss: what was the thread doing?
+  On apply, set `rung` and `promoted: YYYY-MM-DD`; keep the memory as the
+  why. A skill or code change ships as a PR to its repo.
 
 ## 3. Propose, a batch at a time
 
