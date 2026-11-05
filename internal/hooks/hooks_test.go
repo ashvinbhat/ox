@@ -1,8 +1,12 @@
 package hooks
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -12,26 +16,154 @@ func TestInitRetiresOldBuiltInsAndKeepsCustomHooks(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"ox-instructions.sh", "yoke-ready-tasks.sh", "workspace-context.sh", "my-own.sh"} {
+	for _, name := range []string{"ox-brief.sh", "ox-instructions.sh", "yoke-ready-tasks.sh", "workspace-context.sh", "my-own.sh"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/bash\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	m := NewManager(home)
+	if names := hookNames(m); !reflect.DeepEqual(names, []string{"ox-brief", "my-own"}) {
+		t.Fatalf("hooks before Init = %v, want [ox-brief my-own]: a retired script is never listed", names)
+	}
 	if err := m.Init(); err != nil {
 		t.Fatal(err)
 	}
+	left, _ := os.ReadDir(dir)
+	if len(left) != 1 || left[0].Name() != "my-own.sh" {
+		t.Fatalf("hooks dir after Init = %v, want only my-own.sh", left)
+	}
+	if h, _ := m.Get("ox-brief"); h == nil || !h.BuiltIn || h.Script != Command {
+		t.Fatalf("ox-brief = %+v, want the built-in command", h)
+	}
+}
 
+const theirs = `{
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "guard.sh"}]}],
+    "SessionStart": [
+      {"matcher": "", "hooks": [
+        {"type": "command", "command": "/Users/me/bin/their-own.sh"},
+        {"type": "command", "command": "/Users/me/.ox/hooks/ox-brief.sh"}
+      ]},
+      {"matcher": "startup", "hooks": [{"type": "command", "command": "/Users/me/.ox/hooks/yoke-ready-tasks.sh"}]}
+    ]
+  }
+}
+`
+
+func TestInstallReplacesOnlyOxsEntry(t *testing.T) {
+	home := t.TempDir()
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(settings, []byte(theirs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(home)
+	if err := m.Install(settings); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := os.ReadFile(settings)
+	if err := m.Install(settings); err != nil {
+		t.Fatal(err)
+	}
+	if second, _ := os.ReadFile(settings); string(second) != string(first) {
+		t.Fatalf("a second install changed settings:\n%s\nthen\n%s", first, second)
+	}
+
+	var got struct {
+		Model string `json:"model"`
+		Hooks map[string][]struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Command string `json:"command"`
+				Timeout int    `json:"timeout"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(first, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Model != "opus" || len(got.Hooks["PreToolUse"]) != 1 {
+		t.Errorf("other settings lost: model=%q PreToolUse=%v", got.Model, got.Hooks["PreToolUse"])
+	}
+	start := got.Hooks["SessionStart"]
+	if len(start) != 2 {
+		t.Fatalf("SessionStart = %+v, want their group and ox's", start)
+	}
+	if len(start[0].Hooks) != 1 || start[0].Hooks[0].Command != "/Users/me/bin/their-own.sh" {
+		t.Errorf("their group = %+v, want only their-own.sh", start[0])
+	}
+	if len(start[1].Hooks) != 1 || start[1].Hooks[0].Command != Command || start[1].Hooks[0].Timeout != Timeout {
+		t.Errorf("ox's group = %+v, want the built-in with a %ds timeout", start[1], Timeout)
+	}
+}
+
+func TestSetupPutsSettingsBackWhenTheCheckFails(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldScript := filepath.Join(home, "hooks", "ox-brief.sh")
+	if err := os.WriteFile(oldScript, []byte("#!/bin/bash\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(settings, []byte(theirs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewManager(home)
+	m.check = func() error { return errors.New("exit status 1: unknown command \"hook\"") }
+	err := m.Setup(settings)
+	if err == nil || !strings.Contains(err.Error(), `unknown command "hook"`) {
+		t.Fatalf("Setup = %v, want the check's failure", err)
+	}
+	if got, _ := os.ReadFile(settings); string(got) != theirs {
+		t.Errorf("settings after a failed check:\n%s\nwant the original bytes", got)
+	}
+	if _, err := os.Stat(oldScript); err != nil {
+		t.Errorf("the old script went with a failed check, so the restored settings can't run it: %v", err)
+	}
+
+	missing := filepath.Join(t.TempDir(), "settings.json")
+	if err := m.Setup(missing); err == nil {
+		t.Fatal("Setup with a failing check returned nil")
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Errorf("a settings file ox created stayed after a failed check: %v", err)
+	}
+
+	m.check = func() error { return nil }
+	if err := m.Setup(settings); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(settings); !strings.Contains(string(got), "hook session-start") {
+		t.Errorf("settings after a passing check don't run ox hook session-start:\n%s", got)
+	}
+	if _, err := os.Stat(oldScript); !os.IsNotExist(err) {
+		t.Errorf("ox-brief.sh kept after a passing check: %v", err)
+	}
+}
+
+func TestInstallLeavesBrokenSettingsAlone(t *testing.T) {
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	broken := `{"model": "opus",`
+	if err := os.WriteFile(settings, []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewManager(t.TempDir()).Install(settings); err == nil {
+		t.Fatal("Install over invalid JSON returned nil")
+	}
+	if got, _ := os.ReadFile(settings); string(got) != broken {
+		t.Errorf("invalid settings rewritten to %s", got)
+	}
+}
+
+func hookNames(m *Manager) []string {
 	var names []string
 	for _, h := range m.List() {
 		names = append(names, h.Name)
 	}
-	if len(names) != 2 || names[0] != "my-own" || names[1] != "ox-brief" {
-		t.Fatalf("hooks after Init = %v, want [my-own ox-brief]", names)
-	}
-	info, err := os.Stat(filepath.Join(dir, "ox-brief.sh"))
-	if err != nil || info.Mode()&0o100 == 0 {
-		t.Fatalf("ox-brief.sh missing or not executable: %v", err)
-	}
+	return names
 }

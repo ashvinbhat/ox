@@ -1,194 +1,134 @@
-// Package hooks manages Claude Code hooks for context injection.
+// Package hooks registers ox's Claude Code hooks in ~/.claude/settings.json.
+//
+// The one built-in, ox-brief, is `ox hook session-start`: ox itself, not a
+// script, so it needs no jq and a panic or a slow brief prints nothing.
+// Custom hooks are shell scripts in ~/.ox/hooks.
 package hooks
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 )
 
-// Hook represents a hook script that injects context into Claude Code.
+// Command is what Claude Code runs at every thread start. The desktop app's
+// PATH may not reach ~/go/bin, where make install puts ox.
+const Command = `/bin/sh -c 'exec "$(command -v ox || echo "$HOME/go/bin/ox")" hook session-start'`
+
+// Timeout is the seconds Claude Code gives the hook before killing it.
+const Timeout = 15
+
+// CheckEnv set to 1 runs the hook as ox setup's check: no background jobs,
+// and the day's reminders stay for the first real thread.
+const CheckEnv = "OX_HOOK_CHECK"
+
+// checkPath is the PATH a hook can count on: the desktop app may pass no more.
+const checkPath = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+// Hook is one SessionStart hook ox registers.
 type Hook struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Enabled     bool   `yaml:"enabled"`
-	Script      string `yaml:"-"` // Path to script
-	BuiltIn     bool   `yaml:"-"` // Is this a built-in hook?
+	Name        string
+	Description string
+	Enabled     bool
+	Script      string // the command for the built-in, else the script's path
+	BuiltIn     bool
 }
 
-// Manager manages hooks for ox.
+// Manager registers ox's hooks.
 type Manager struct {
 	oxHome   string
 	hooksDir string
-	hooks    map[string]*Hook
+	check    func() error
 }
 
-// NewManager creates a new hook manager.
+// NewManager creates a hook manager for the given OX_HOME.
 func NewManager(oxHome string) *Manager {
-	return &Manager{
-		oxHome:   oxHome,
-		hooksDir: filepath.Join(oxHome, "hooks"),
-		hooks:    make(map[string]*Hook),
-	}
+	return &Manager{oxHome: oxHome, hooksDir: filepath.Join(oxHome, "hooks"), check: Check}
 }
 
-// Init initializes the hooks directory and built-in hooks.
+// retiredBuiltIns are scripts earlier ox versions installed. Every .sh in the
+// hooks dir is registered, so a retired one left on disk would keep running.
+// ox-brief.sh became `ox hook session-start`; the rest pointed threads at
+// missions, which are frozen.
+var retiredBuiltIns = []string{"ox-brief", "ox-instructions", "yoke-ready-tasks", "workspace-context"}
+
+// Init creates the hooks dir and removes retired scripts. Setup runs it only
+// once the new hook passed its check, so a failed check leaves the old script
+// for the restored settings to run.
 func (m *Manager) Init() error {
 	if err := os.MkdirAll(m.hooksDir, 0o755); err != nil {
 		return fmt.Errorf("create hooks dir: %w", err)
 	}
-
-	// Every .sh in the hooks dir gets registered, so a retired built-in left on
-	// disk would keep running at every session start.
 	for _, name := range retiredBuiltIns {
 		if err := os.Remove(filepath.Join(m.hooksDir, name+".sh")); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove retired hook %s: %w", name, err)
 		}
 	}
-
-	// Built-in scripts are owned by ox: rewrite them whenever the embedded
-	// content changes, otherwise stale copies advertise removed commands.
-	builtins := m.BuiltInHooks()
-	for _, h := range builtins {
-		scriptPath := filepath.Join(m.hooksDir, h.Name+".sh")
-		content := m.generateBuiltInScript(h.Name)
-		existing, err := os.ReadFile(scriptPath)
-		if err != nil || string(existing) != content {
-			if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
-				return fmt.Errorf("write hook %s: %w", h.Name, err)
-			}
-		}
-		h.Script = scriptPath
-		m.hooks[h.Name] = h
-	}
-
 	return nil
 }
 
-// retiredBuiltIns are hooks earlier ox versions installed. They pointed
-// threads at missions, which are frozen in 1.0.
-var retiredBuiltIns = []string{"ox-instructions", "yoke-ready-tasks", "workspace-context"}
-
-// BuiltInHooks returns the default built-in hooks.
+// BuiltInHooks returns the hooks ox ships.
 func (m *Manager) BuiltInHooks() []*Hook {
-	return []*Hook{
-		{
-			Name:        "ox-brief",
-			Description: "Start every thread with `ox now --brief`",
-			Enabled:     true,
-			BuiltIn:     true,
-		},
-	}
+	return []*Hook{{
+		Name:        "ox-brief",
+		Description: "Start every thread with `ox now --brief`",
+		Enabled:     true,
+		Script:      Command,
+		BuiltIn:     true,
+	}}
 }
 
-// generateBuiltInScript creates the script content for a built-in hook.
-func (m *Manager) generateBuiltInScript(name string) string {
-	switch name {
-	case "ox-brief":
-		// Hooks run without the user's shell PATH, hence the go/bin fallback.
-		// Any failure prints nothing, so a broken ox never blocks a session.
-		// The prune, the memory audit and the PR refresh run detached so their
-		// gh calls and repo searches never delay the brief.
-		return `#!/bin/bash
-# ox hook: ox-brief
-# Starts every Claude Code thread with where things stand (ox now --brief).
-# In the background: removes worktrees whose PR merged (at most hourly),
-# audits the memory store (at most weekly) and refreshes your PRs' state for
-# the asks queue (at most hourly).
-
-cat > /dev/null
-
-OX=$(command -v ox || echo "$HOME/go/bin/ox")
-("$OX" worktrees prune --if-due >/dev/null 2>&1 &)
-("$OX" memory audit --if-due >/dev/null 2>&1 &)
-("$OX" asks refresh --if-due >/dev/null 2>&1 &)
-BRIEF=$("$OX" now --brief --mention 2>/dev/null) || exit 0
-[ -z "$BRIEF" ] && exit 0
-
-jq -n --arg ctx "$BRIEF" '{
-  hookSpecificOutput: {
-    hookEventName: "SessionStart",
-    additionalContext: $ctx
-  }
-}'
-`
-	default:
-		return `#!/bin/bash
-# Custom hook: ` + name + `
-INPUT=$(cat)
-echo '{}'
-`
-	}
-}
-
-// List returns all available hooks.
+// List returns the built-in hook, then each custom script in the hooks dir.
 func (m *Manager) List() []*Hook {
-	// Load from directory
+	hooks := m.BuiltInHooks()
 	entries, err := os.ReadDir(m.hooksDir)
 	if err != nil {
-		return m.BuiltInHooks()
+		return hooks
 	}
-
-	var hooks []*Hook
-	builtinNames := make(map[string]bool)
-	for _, h := range m.BuiltInHooks() {
-		builtinNames[h.Name] = true
-	}
-
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sh") {
+		name, ok := strings.CutSuffix(e.Name(), ".sh")
+		if e.IsDir() || !ok || slices.Contains(retiredBuiltIns, name) {
 			continue
 		}
-		name := strings.TrimSuffix(e.Name(), ".sh")
-		hooks = append(hooks, &Hook{
-			Name:    name,
-			Script:  filepath.Join(m.hooksDir, e.Name()),
-			BuiltIn: builtinNames[name],
-			Enabled: true, // TODO: Check config
-		})
+		hooks = append(hooks, &Hook{Name: name, Script: filepath.Join(m.hooksDir, e.Name()), Enabled: true})
 	}
-
 	return hooks
 }
 
 // Get returns a hook by name.
 func (m *Manager) Get(name string) (*Hook, bool) {
-	scriptPath := filepath.Join(m.hooksDir, name+".sh")
-	if _, err := os.Stat(scriptPath); err != nil {
-		return nil, false
+	for _, h := range m.List() {
+		if h.Name == name {
+			return h, true
+		}
 	}
-
-	builtinNames := make(map[string]bool)
-	for _, h := range m.BuiltInHooks() {
-		builtinNames[h.Name] = true
-	}
-
-	return &Hook{
-		Name:    name,
-		Script:  scriptPath,
-		BuiltIn: builtinNames[name],
-		Enabled: true,
-	}, true
+	return nil, false
 }
 
-// Run executes a hook and returns its output.
+// Run executes a hook with input on stdin and returns what it printed.
 func (m *Manager) Run(name string, input string) (string, error) {
-	hook, ok := m.Get(name)
+	h, ok := m.Get(name)
 	if !ok {
 		return "", fmt.Errorf("hook %q not found", name)
 	}
-
-	cmd := exec.Command("bash", hook.Script)
+	cmd := exec.Command("bash", h.Script)
+	if h.BuiltIn {
+		cmd = exec.Command("/bin/sh", "-c", h.Script)
+	}
 	cmd.Stdin = strings.NewReader(input)
-	output, err := cmd.Output()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("run hook: %w", err)
 	}
-
-	return string(output), nil
+	return string(out), nil
 }
 
 // HooksDir returns the hooks directory.
@@ -196,105 +136,160 @@ func (m *Manager) HooksDir() string {
 	return m.hooksDir
 }
 
-// ClaudeCodeHookHandler represents a single hook handler.
-type ClaudeCodeHookHandler struct {
-	Type    string `json:"type"`
-	Command string `json:"command"`
-}
-
-// ClaudeCodeMatcherGroup represents a matcher group with its hooks.
-type ClaudeCodeMatcherGroup struct {
-	Matcher string                  `json:"matcher"`
-	Hooks   []ClaudeCodeHookHandler `json:"hooks"`
-}
-
-// ClaudeCodeHooks represents the new hooks format keyed by event name.
-type ClaudeCodeHooks map[string][]ClaudeCodeMatcherGroup
-
-// GenerateClaudeCodeSettings generates the hooks section for Claude Code settings.
-func (m *Manager) GenerateClaudeCodeSettings() (ClaudeCodeHooks, error) {
-	hooks := m.List()
-	if len(hooks) == 0 {
-		return nil, nil
-	}
-
-	// Create handlers for all enabled hooks
-	var handlers []ClaudeCodeHookHandler
-	for _, h := range hooks {
-		if !h.Enabled {
-			continue
-		}
-		handlers = append(handlers, ClaudeCodeHookHandler{
-			Type:    "command",
-			Command: h.Script,
-		})
-	}
-
-	if len(handlers) == 0 {
-		return nil, nil
-	}
-
-	// Create matcher group (empty matcher = match all)
-	matcherGroup := ClaudeCodeMatcherGroup{
-		Matcher: "",
-		Hooks:   handlers,
-	}
-
-	// Return hooks keyed by SessionStart event
-	return ClaudeCodeHooks{
-		"SessionStart": []ClaudeCodeMatcherGroup{matcherGroup},
-	}, nil
-}
-
-// InstallToClaudeCode adds ox hooks to Claude Code settings.json.
-func (m *Manager) InstallToClaudeCode() error {
+// SettingsPath is Claude Code's user settings file.
+func SettingsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".claude", "settings.json"), nil
+}
+
+// Setup registers ox's hooks and runs the start hook the way a thread would.
+// When the check fails, settings.json goes back to the bytes it had.
+func (m *Manager) Setup(settingsPath string) error {
+	prev, readErr := os.ReadFile(settingsPath)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
+	}
+	if err := m.Install(settingsPath); err != nil {
 		return err
 	}
+	if err := m.check(); err != nil {
+		if readErr == nil {
+			_ = writeAtomic(settingsPath, prev)
+		} else {
+			_ = os.Remove(settingsPath)
+		}
+		return fmt.Errorf("the start hook failed its check, so %s is back as it was: %w", settingsPath, err)
+	}
+	return m.Init()
+}
 
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
-
-	// Read existing settings
-	var settings map[string]interface{}
+// Install writes ox's SessionStart entry into settings.json, replacing any
+// earlier ox entry and keeping every other hook and setting.
+func (m *Manager) Install(settingsPath string) error {
+	settings := map[string]any{}
 	if data, err := os.ReadFile(settingsPath); err == nil {
 		if err := json.Unmarshal(data, &settings); err != nil {
-			settings = make(map[string]interface{})
+			return fmt.Errorf("%s isn't valid JSON, so ox left it alone: %w", settingsPath, err)
 		}
-	} else {
-		settings = make(map[string]interface{})
 	}
-
-	// Generate hook entries
-	hooksConfig, err := m.GenerateClaudeCodeSettings()
-	if err != nil {
-		return err
+	events, _ := settings["hooks"].(map[string]any)
+	if events == nil {
+		events = map[string]any{}
 	}
-
-	// Update hooks section (new format: object keyed by event name)
-	if len(hooksConfig) > 0 {
-		// Get existing hooks or create new map
-		existingHooks, ok := settings["hooks"].(map[string]interface{})
-		if !ok {
-			existingHooks = make(map[string]interface{})
+	groups, _ := events["SessionStart"].([]any)
+	kept := []any{}
+	for _, g := range groups {
+		group, ok := g.(map[string]any)
+		handlers, _ := group["hooks"].([]any)
+		if !ok || len(handlers) == 0 {
+			kept = append(kept, g)
+			continue
 		}
-
-		// Merge ox hooks into SessionStart
-		existingHooks["SessionStart"] = hooksConfig["SessionStart"]
-		settings["hooks"] = existingHooks
+		var rest []any
+		for _, h := range handlers {
+			if handler, ok := h.(map[string]any); ok {
+				if c, _ := handler["command"].(string); m.owns(c) {
+					continue
+				}
+			}
+			rest = append(rest, h)
+		}
+		if len(rest) > 0 {
+			group["hooks"] = rest
+			kept = append(kept, group)
+		}
 	}
-
-	// Ensure .claude directory exists
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
-		return err
+	var ours []any
+	for _, h := range m.List() {
+		handler := map[string]any{"type": "command", "command": h.Script}
+		if h.BuiltIn {
+			handler["timeout"] = Timeout
+		}
+		ours = append(ours, handler)
 	}
+	events["SessionStart"] = append(kept, map[string]any{"matcher": "", "hooks": ours})
+	settings["hooks"] = events
 
-	// Write back
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		return err
+	}
+	return writeAtomic(settingsPath, append(data, '\n'))
+}
 
-	return os.WriteFile(settingsPath, data, 0o644)
+// InstallToClaudeCode installs into ~/.claude/settings.json.
+func (m *Manager) InstallToClaudeCode() error {
+	path, err := SettingsPath()
+	if err != nil {
+		return err
+	}
+	return m.Install(path)
+}
+
+// owns reports a hook command ox registered: the built-in, a script in the
+// hooks dir, or a pre-1.0 script under another OX_HOME.
+func (m *Manager) owns(command string) bool {
+	return command == Command ||
+		strings.HasPrefix(command, m.hooksDir+string(filepath.Separator)) ||
+		strings.Contains(command, "/.ox/hooks/")
+}
+
+// Check runs the start hook as Claude Code would, with the bare PATH and a
+// SessionStart payload, and wants the brief back as SessionStart context.
+func Check() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*Timeout*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", Command)
+	home, _ := os.UserHomeDir()
+	cmd.Env = []string{"PATH=" + checkPath, "HOME=" + home, CheckEnv + "=1"}
+	if v := os.Getenv("OX_HOME"); v != "" {
+		cmd.Env = append(cmd.Env, "OX_HOME="+v)
+	}
+	cmd.Stdin = strings.NewReader(`{"session_id":"ox-setup-check","hook_event_name":"SessionStart","source":"startup"}`)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	switch {
+	case ctx.Err() != nil:
+		return fmt.Errorf("it ran past %ds", 2*Timeout)
+	case err != nil:
+		return fmt.Errorf("%v: %s", err, firstLine(stderr.String()))
+	case len(bytes.TrimSpace(out)) == 0:
+		return errors.New("it printed nothing: no ox config at the default OX_HOME, or the brief took over 10s")
+	}
+	var got struct {
+		Out struct {
+			Event   string `json:"hookEventName"`
+			Context string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		return fmt.Errorf("it printed something that isn't JSON: %s", firstLine(string(out)))
+	}
+	if got.Out.Event != "SessionStart" || !strings.Contains(got.Out.Context, "ox now") {
+		return fmt.Errorf("it printed no brief: %s", firstLine(string(out)))
+	}
+	return nil
+}
+
+func writeAtomic(path string, data []byte) error {
+	tmp := path + ".ox-tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	if len(line) > 200 {
+		line = line[:200] + "…"
+	}
+	return line
 }

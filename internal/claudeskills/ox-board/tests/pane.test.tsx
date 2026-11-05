@@ -116,6 +116,27 @@ test('the panel says when nothing needs you, and when ox fails', async ($, on) =
   await ui.unmount()
 })
 
+test('a job that keeps failing shows under the items until it succeeds', async ($, on) => {
+  const problem = 'PR state is 2h old: gh: authentication failed'
+  let view: object = { ...VIEW, problems: [problem] }
+  on('command.register', () => ({ value: { command: 'ox-board' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.surfaces', () => ({ value: [] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify(view), stderr: '' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  const clock = mock.clock(on, { now: NOW })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'ox-board' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const texts = async () => (await ui.findAll({ type: 'Markdown' })).map(m => String(m.props.text))
+  expect((await texts()).at(-1)).toBe(`_ox: ${problem}_`)
+
+  view = VIEW
+  await clock.advance(15_000)
+  expect((await texts()).some(t => t.startsWith('_ox:'))).toBe(false)
+  await ui.unmount()
+})
+
 test('a failed clear keeps the items and says why', async ($, on) => {
   on('command.register', () => ({ value: { command: 'ox-board' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))

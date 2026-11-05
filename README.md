@@ -29,6 +29,8 @@ weekly recap or memory suggestions. The commands below are what threads use.
 - **`ox now`**: every desktop thread by state — needs you, in review, working,
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
+  and starts the background jobs; a job that keeps failing says so in the
+  brief and on the board until it succeeds
 - **Board**: a side panel in every desktop thread listing the threads that
   need you and what each is waiting on, in sync across threads; × hides
   one and Clear all hides every item until each asks something new
@@ -168,7 +170,7 @@ round (2 a day). `/recap`: three concepts from the week, explained back.
 
 ### Memory
 Claude Code's auto-memory is the one store. `ox memory audit` checks it; the
-`ox-brief` hook runs the audit weekly and the brief shows the count.
+start hook runs the audit weekly and the brief shows the count.
 ```bash
 ox memory audit [--json]         # What may be stale, changed, duplicated or broken
 ox memory audit --keep <id>      # Fine as is; never flag it again
@@ -219,10 +221,20 @@ A persona is a system-prompt + model preset applied to a worker or job.
 
 ## Hooks
 
-`ox hooks init` installs the `ox-brief` SessionStart hook into Claude Code's
-native hook system (`~/.claude/settings.json`), so every new thread starts with
-`ox now --brief`. It also deletes the pre-1.0 `ox-instructions` and
+`ox setup` (or `ox hooks init`) registers the `ox-brief` SessionStart hook in
+`~/.claude/settings.json`, replacing only ox's entry. The hook is
+`ox hook session-start`: it starts the worktree prune, the memory audit and the
+PR refresh in the background, each only when due, and prints `ox now --brief`.
+A panic, a missing config or a slow brief prints nothing, so ox never blocks a
+thread.
+
+Setup then runs the hook the way a thread would, with a bare PATH. If it fails,
+`settings.json` goes back as it was and setup says why. Once it passes, setup
+deletes the old `ox-brief.sh` and the pre-1.0 `ox-instructions` and
 `yoke-ready-tasks` scripts.
+
+Each job keeps a status in `~/.ox/jobs/`. A failure retries after 5 minutes;
+two in a row show in the brief and on the board until the job succeeds.
 
 ## Directory Structure
 
@@ -234,6 +246,7 @@ native hook system (`~/.claude/settings.json`), so every new thread starts with
 ├── reviews/             # Review rounds per PR
 ├── journal/             # Decision journal, one file a day
 ├── asks/                # PR state cache and dropped asks
+├── jobs/                # Background job status and locks
 ├── worktrees/           # Git worktrees: <repo>/m<seq>-<agent>, m<seq>-integration
 ├── missions/            # Missions (frozen harness)
 │   └── m<seq>-<slug>/   # mission.yaml, plan.md, events.jsonl, workers/, jobs/…

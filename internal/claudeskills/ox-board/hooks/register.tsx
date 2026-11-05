@@ -14,6 +14,7 @@ const board = atom({ plugin: 'ox-board', key: 'board' } as const, null)
 const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || echo "$HOME/go/bin/ox")" "$@"', 'ox', ...args]
 
 type View = {
+  problems?: string[]
   threads?: { sessionId: string; title: string; state: string; lastActive: string; dropped?: boolean }[]
   asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string }[] }
 }
@@ -66,7 +67,7 @@ async function refresh($: EngineInterface): Promise<void> {
     await fail("ox printed something that isn't JSON")
     return
   }
-  await update($, board, () => ({ at: now, items: attention(view, now) }))
+  await update($, board, () => ({ at: now, items: attention(view, now), problems: view.problems ?? [] }))
 }
 
 // Clear drops items through ox, so every panel loses them. Each comes back
@@ -92,7 +93,10 @@ const escape = (s: string) => s.replace(/([\\`*_[\]<>#|])/g, '\\$1')
 
 const line = (i: Item) => `**${escape(i.title)}**  \n${escape(i.waiting)} · ${i.age}`
 
-const note = (b: Board) => (b.error ? `_ox: ${escape(b.error)}_` : '')
+// A job that keeps failing (gh logged out, say) leaves the board quietly stale,
+// so it says so under the items until the job succeeds again.
+const note = (b: Board) =>
+  [...(b.problems ?? []), ...(b.error ? [b.error] : [])].map(t => `_ox: ${escape(t)}_`).join('\n\n')
 
 // Polling starts with the first pane, so a terminal or headless session that
 // never shows one never runs ox.
@@ -144,7 +148,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" gap={1}>
         {rows}
-        {b.error ? <Markdown key="error" text={note(b)} /> : []}
+        {note(b) ? <Markdown key="notes" text={note(b)} /> : []}
         <Box flexDirection="row">
           <Button key="clear" label="Clear all" dimColor onPress={() => void clear($, ids)} />
         </Box>

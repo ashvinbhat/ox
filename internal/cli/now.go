@@ -85,6 +85,8 @@ type nowView struct {
 	Tasks   []yokecli.Task       `json:"tasks,omitempty"`
 	PRs     []nowPR              `json:"prsWithoutThread,omitempty"`
 	Tracks  []trackName          `json:"tracks,omitempty"`
+	// Problems are ox's own background jobs that keep failing.
+	Problems []string `json:"problems,omitempty"`
 }
 
 // trackName names a track for readers of --json: threads and asks carry Short.
@@ -95,9 +97,23 @@ type trackName struct {
 
 func runNow(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
-	now := time.Now()
+	view := buildNow(cfg.Home, time.Now())
+	switch {
+	case nowJSON:
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(view)
+	case nowBrief:
+		fmt.Print(renderBrief(view))
+	default:
+		renderFull(os.Stdout, view)
+	}
+	return nil
+}
 
-	ts, err := tracks.Load(cfg.Home)
+// buildNow gathers the view `ox now` prints, honoring its flags.
+func buildNow(oxHome string, now time.Time) nowView {
+	ts, err := tracks.Load(oxHome)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
@@ -106,18 +122,18 @@ func runNow(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
 
-	parked, _ := park.Load(cfg.Home)
-	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(cfg.Home)}
-	if dropped, err := asks.LoadDropped(cfg.Home); err == nil {
+	parked, _ := park.Load(oxHome)
+	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(oxHome)}
+	if dropped, err := asks.LoadDropped(oxHome); err == nil {
 		markDropped(view.Threads, dropped)
 	}
 	for _, t := range ts {
 		view.Tracks = append(view.Tracks, trackName{Short: t.Label(), Name: t.Name})
 	}
-	if r, err := memcheck.Pending(cfg.Home); err == nil && len(r.Suggestions) > 0 {
+	if r, err := memcheck.Pending(oxHome); err == nil && len(r.Suggestions) > 0 {
 		view.Memory = &nowMemory{Suggestions: len(r.Suggestions), AuditedAt: r.At}
 	}
-	if st, err := journalStatus(cfg.Home, now); err == nil {
+	if st, err := journalStatus(oxHome, now); err == nil {
 		view.Journal = &st
 	}
 	// yoke missing or failing only costs the tasks section.
@@ -131,26 +147,16 @@ func runNow(cmd *cobra.Command, args []string) error {
 		view = filterTrack(view, ts, nowTrack)
 	}
 	// The brief must not wait on GitHub: it reads the PR cache the hook keeps.
-	q := collectAsks(cfg.Home, view.Threads, view.Reviews, ts, now, !nowBrief)
+	q := collectAsks(oxHome, view.Threads, view.Reviews, ts, now, !nowBrief)
 	if nowTrack != "" {
 		q = trackAsks(q, view.Threads)
 	}
 	view.Asks = &q
+	view.Problems = jobProblems(oxHome, now)
 	if nowBrief && nowMention {
-		view.Mention = mentionOnce(cfg.Home, view, now)
+		view.Mention = mentionOnce(oxHome, view, now)
 	}
-
-	switch {
-	case nowJSON:
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(view)
-	case nowBrief:
-		fmt.Print(renderBrief(view))
-	default:
-		renderFull(os.Stdout, view)
-	}
-	return nil
+	return view
 }
 
 func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, now time.Time) []nowThread {
@@ -368,6 +374,9 @@ func renderBrief(v nowView) string {
 	if len(v.Mention) > 0 {
 		fmt.Fprintf(&b, "Mention once, as a plain offer at the end of your first reply: %s.\n", strings.Join(v.Mention, "; "))
 	}
+	for _, p := range v.Problems {
+		fmt.Fprintf(&b, "ox problem: %s\n", p)
+	}
 
 	if review := groups[desktop.StateInReview]; len(review) > 0 {
 		var refs []string
@@ -405,6 +414,9 @@ func renderBrief(v nowView) string {
 func renderFull(w io.Writer, v nowView) {
 	groups := byState(v.Threads)
 	fmt.Fprintf(w, "ox now · %s · %d threads\n", v.At.Format("Mon 2 Jan 15:04"), len(v.Threads))
+	for _, p := range v.Problems {
+		fmt.Fprintf(w, "ox problem: %s\n", p)
+	}
 	if v.Asks != nil {
 		fmt.Fprintln(w)
 		renderAsks(w, *v.Asks, v.At)

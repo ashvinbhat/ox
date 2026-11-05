@@ -10,7 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/desktop"
+	"github.com/ashvinbhat/ox/internal/jobs"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 )
 
@@ -21,8 +23,8 @@ var (
 	auditNote  string
 )
 
-// The ox-brief hook calls audit --if-due at every thread start. Memories
-// drift over weeks, so once a week is enough.
+// The start hook calls audit --if-due at every thread start. Memories drift
+// over weeks, so once a week is enough.
 const auditEvery = 7 * 24 * time.Hour
 
 var memoryAuditCmd = &cobra.Command{
@@ -57,19 +59,39 @@ func runMemoryAudit(cmd *cobra.Command, args []string) error {
 	if len(auditKeep) > 0 {
 		return keepSuggestions(cfg.Home, auditKeep, auditNote)
 	}
-	if auditIfDue {
-		if last, err := memcheck.LoadReport(cfg.Home); err == nil && time.Since(last.At) < auditEvery {
-			return nil
-		}
+	var report memcheck.Report
+	audit := func() error {
+		var err error
+		report, err = auditMemory(cfg)
+		return err
 	}
+	if auditIfDue {
+		_, err := jobs.Run(cfg.Home, jobMemory, auditEvery, auditLimit, audit)
+		return err
+	}
+	err := audit()
+	jobs.Note(cfg.Home, jobMemory, err)
+	if err != nil {
+		return err
+	}
+	if auditJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(report)
+	}
+	printAudit(report)
+	return nil
+}
 
+// auditMemory runs the audit and saves the report the brief counts from.
+func auditMemory(cfg *config.Config) (memcheck.Report, error) {
 	store, others := memcheck.FindStore(claudeHome(), cfg.Memory.ClaudeDir)
 	if store == "" {
-		return fmt.Errorf("no Claude Code memory store under %s", filepath.Join(claudeHome(), "projects"))
+		return memcheck.Report{}, fmt.Errorf("no Claude Code memory store under %s", filepath.Join(claudeHome(), "projects"))
 	}
 	keep, err := memcheck.LoadKeep(cfg.Home)
 	if err != nil {
-		return fmt.Errorf("read keep list: %w", err)
+		return memcheck.Report{}, fmt.Errorf("read keep list: %w", err)
 	}
 	sessions, _ := desktop.List(desktop.DefaultDir(), false)
 	report, err := memcheck.Audit(memcheck.Options{
@@ -81,21 +103,12 @@ func runMemoryAudit(cmd *cobra.Command, args []string) error {
 		Now:    time.Now(),
 	})
 	if err != nil {
-		return err
+		return memcheck.Report{}, err
 	}
 	if err := memcheck.SaveReport(cfg.Home, report); err != nil {
-		return fmt.Errorf("save report: %w", err)
+		return memcheck.Report{}, fmt.Errorf("save report: %w", err)
 	}
-
-	if auditJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(report)
-	}
-	if !auditIfDue {
-		printAudit(report)
-	}
-	return nil
+	return report, nil
 }
 
 func keepSuggestions(oxHome string, ids []string, note string) error {
@@ -209,7 +222,7 @@ func tildePath(p string) string {
 
 func init() {
 	memoryAuditCmd.Flags().BoolVar(&auditJSON, "json", false, "Machine-readable output, with suggestion ids")
-	memoryAuditCmd.Flags().BoolVar(&auditIfDue, "if-due", false, "Skip if an audit ran in the last week")
+	memoryAuditCmd.Flags().BoolVar(&auditIfDue, "if-due", false, "Skip unless the last good audit is a week old (the start hook uses this)")
 	memoryAuditCmd.Flags().StringArrayVar(&auditKeep, "keep", nil, "Keep a suggestion as is (id from --json); repeatable")
 	memoryAuditCmd.Flags().StringVar(&auditNote, "note", "", "Why it's kept, with --keep")
 	memoryCmd.AddCommand(memoryAuditCmd)
