@@ -28,6 +28,7 @@ func TestCodeRefs(t *testing.T) {
 }
 
 func TestGonePaths(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	spaced := filepath.Join(dir, "Application Support")
 	if err := os.Mkdir(spaced, 0o755); err != nil {
@@ -117,6 +118,7 @@ func TestCodeSearchChecksDefaultBranch(t *testing.T) {
 	if _, err := exec.LookPath("rg"); err != nil {
 		t.Skip("ripgrep not installed")
 	}
+	t.Setenv("HOME", t.TempDir())
 	upstream := t.TempDir()
 	run(t, upstream, "git", "init", "-q", "-b", "main")
 	write(t, upstream, "src/FooService.go", "type FooService struct{}\n")

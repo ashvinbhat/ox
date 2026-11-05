@@ -17,6 +17,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // Command is what Claude Code runs at every thread start. The desktop app's
@@ -138,7 +140,7 @@ func (m *Manager) HooksDir() string {
 
 // SettingsPath is Claude Code's user settings file.
 func SettingsPath() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := livepath.Home()
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +248,7 @@ func Check() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*Timeout*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", Command)
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	cmd.Env = []string{"PATH=" + checkPath, "HOME=" + home, CheckEnv + "=1"}
 	if v := os.Getenv("OX_HOME"); v != "" {
 		cmd.Env = append(cmd.Env, "OX_HOME="+v)

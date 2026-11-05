@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // Suggestion kinds.
@@ -402,7 +404,7 @@ func countMemories(dir string) int {
 
 func expandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
+		if home, err := livepath.Home(); err == nil {
 			return filepath.Join(home, p[1:])
 		}
 	}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // RepoConfig holds per-repo configuration.
@@ -149,10 +151,10 @@ func DefaultConfig() *Config {
 // Resolution order: OX_HOME env var → ~/.ox
 func ResolveHome() (string, error) {
 	if env := os.Getenv("OX_HOME"); env != "" {
-		return env, nil
+		return livepath.Guard(env), nil
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := livepath.Home()
 	if err != nil {
 		return "", fmt.Errorf("get home dir: %w", err)
 	}

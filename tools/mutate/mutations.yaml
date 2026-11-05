@@ -1,0 +1,58 @@
+# Each entry turns one rule off; the tests of the file's package must fail.
+# `from` must appear exactly once in `file`. When code moves, update the
+# entry; a rule worth a test is worth keeping on this list.
+
+- why: the settings merge keeps hooks that aren't ox's
+  file: internal/hooks/hooks.go
+  from: "m.owns(c) {"
+  to: "false && m.owns(c) {"
+
+- why: a failed setup check puts settings.json back
+  file: internal/hooks/hooks.go
+  from: "_ = writeAtomic(settingsPath, prev)"
+  to: "_ = prev"
+
+- why: the old script is retired only after the check passes
+  file: internal/hooks/hooks.go
+  from: "\treturn m.Init()\n}\n"
+  to: "\treturn nil\n}\n"
+
+- why: a panic in the brief prints nothing
+  file: internal/cli/hook.go
+  from: "\t\t\tif recover() != nil {\n\t\t\t\tbrief <- \"\"\n"
+  to: "\t\t\tif false {\n\t\t\t\tbrief <- \"\"\n"
+
+- why: a slow brief prints nothing
+  file: internal/cli/hook.go
+  from: "case <-time.After(briefBudget):"
+  to: "case <-time.After(time.Hour):"
+
+- why: a job past its limit frees its lock before it's stopped
+  file: internal/jobs/jobs.go
+  from: "\t\trelease()\n\t\tstop()\n"
+  to: "\t\tstop()\n"
+
+- why: a failed job waits RetryAfter before it runs again
+  file: internal/jobs/jobs.go
+  from: "now.Sub(s.LastAttempt) >= RetryAfter"
+  to: "true"
+
+- why: a lock held by a dead process is taken over
+  file: internal/jobs/jobs.go
+  from: "return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)"
+  to: "return false"
+
+- why: a thread opened and never used is done, not stuck
+  file: internal/desktop/sessions.go
+  from: "\tcase s.neverRan():\n\t\treturn StateDone\n"
+  to: ""
+
+- why: a stuck thread cleared from the board stays cleared until it moves
+  file: internal/cli/now.go
+  from: "t.State == desktop.StateStuck && !t.LastActive.After(at)"
+  to: "t.State == desktop.StateStuck && (true || !t.LastActive.After(at))"
+
+- why: tests can't reach the real home
+  file: internal/livepath/livepath.go
+  from: "if testing.Testing() && !inside(path, os.TempDir()) {"
+  to: "if testing.Testing() && false && !inside(path, os.TempDir()) {"

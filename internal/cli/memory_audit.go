@@ -13,6 +13,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/config"
 	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/jobs"
+	"github.com/ashvinbhat/ox/internal/livepath"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 )
 
@@ -207,14 +208,14 @@ func knownOxCommand(words []string) bool {
 
 func claudeHome() string {
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		return dir
+		return livepath.Guard(dir)
 	}
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	return filepath.Join(home, ".claude")
 }
 
 func tildePath(p string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+"/") {
+	if home, err := livepath.Home(); err == nil && strings.HasPrefix(p, home+"/") {
 		return "~" + p[len(home):]
 	}
 	return p

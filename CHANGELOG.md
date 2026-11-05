@@ -145,6 +145,15 @@ mission harness is frozen.
 - `ox setup` runs the start hook the way a thread would, with a bare PATH,
   and puts `settings.json` back as it was if the hook fails.
 
+- Tests can't reach live paths. Every lookup of the home folder, `OX_HOME`
+  and `CLAUDE_CONFIG_DIR` goes through `internal/livepath`, which panics
+  under `go test` for a path outside the temp dir. Three tests that read the
+  real home now use a temp one.
+- `make mutate` (and CI) runs `tools/mutate/mutations.yaml`: each entry
+  turns one rule off in a copy of the repo, and its package's tests must
+  fail. A survivor, a mutation that doesn't compile, or an entry whose code
+  is gone fails the run. It starts with 11 rules from the last four PRs.
+
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
   with ox's. It now replaces only ox's entry and keeps the rest.
