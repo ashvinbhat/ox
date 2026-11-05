@@ -161,6 +161,12 @@ mission harness is frozen.
   since; still needed?" in `ox asks`, the brief and the board. The PR
   refresh also reads your PRs merged in the last two weeks. `/tidy`
   recommends archive when the merge answered the question, else drop.
+- Fix ladder. A feedback memory is written when Ashvin states a rule or
+  corrects the same thing twice; a one-off goes in the journal. Each time a
+  covered rule is broken again, its day goes in `metadata.misses`, and
+  `ox memory audit` flags it `missed` until the rule moves up a rung: a
+  line in the skill whose step it governs, then a check in code
+  (`metadata.rung`, `metadata.promoted`). `/memory-check` proposes the move.
 
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`

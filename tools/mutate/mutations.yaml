@@ -76,3 +76,8 @@
   file: internal/asks/asks.go
   from: "if at, ok := merged[ref]; ok && at.After(t.Since) {"
   to: "if _, ok := merged[ref]; ok {"
+
+- why: a miss before the rule moved up is spent
+  file: internal/memcheck/ladder.go
+  from: "if t.After(m.Promoted) {"
+  to: "if true {"

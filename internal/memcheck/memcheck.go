@@ -57,6 +57,11 @@ type Memory struct {
 	Cites       []string  // metadata.cites: "repo:path", "repo:Symbol" or "~/path"
 	Body        string
 	BadFront    bool // frontmatter present but not valid YAML, so its fields are lost
+	// The fix ladder, for feedback: where the rule lives now (memory, skill,
+	// check), when it last moved up, and each day it was broken again.
+	Rung     string
+	Promoted time.Time
+	Misses   []time.Time
 }
 
 // Suggestion is one thing in the store that may need an edit.
@@ -117,6 +122,7 @@ func Audit(o Options) (Report, error) {
 			all = append(all, suggest(KindFront, m.File, "",
 				"frontmatter isn't valid YAML (quote a description that has a colon), so its type, verified date and cites are ignored"))
 		}
+		all = append(all, missed(m)...)
 		text := m.Description + "\n" + m.Body
 		all = append(all, gonePaths(m.File, text)...)
 		if o.Known != nil {
@@ -237,6 +243,9 @@ func parse(path string) (Memory, error) {
 			Modified string
 			Verified string
 			Cites    []string
+			Rung     string
+			Promoted string
+			Misses   []string
 		}
 	}
 	if yaml.Unmarshal([]byte(front), &fm) != nil {
@@ -245,6 +254,12 @@ func parse(path string) (Memory, error) {
 	}
 	m.Name, m.Description, m.Type, m.Cites, m.Body = fm.Name, fm.Description, fm.Metadata.Type, fm.Metadata.Cites, body
 	m.Verified = parseDate(fm.Metadata.Verified)
+	m.Rung, m.Promoted = fm.Metadata.Rung, parseDate(fm.Metadata.Promoted)
+	for _, d := range fm.Metadata.Misses {
+		if t := parseDate(d); !t.IsZero() {
+			m.Misses = append(m.Misses, t)
+		}
+	}
 	for _, t := range []time.Time{m.Verified, parseDate(fm.Metadata.Modified)} {
 		if t.After(m.Touched) {
 			m.Touched = t
