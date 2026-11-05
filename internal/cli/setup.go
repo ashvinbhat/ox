@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/ashvinbhat/ox/internal/claudeskills"
 	"github.com/ashvinbhat/ox/internal/hooks"
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 var setupCmd = &cobra.Command{
@@ -36,7 +36,7 @@ those names is left alone.`,
 		}
 		fmt.Println("Hook: ox-brief (SessionStart), checked: it prints the brief")
 
-		home, err := os.UserHomeDir()
+		home, err := livepath.Home()
 		if err != nil {
 			return err
 		}

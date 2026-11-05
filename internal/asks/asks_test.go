@@ -94,3 +94,41 @@ func TestChecksState(t *testing.T) {
 		}
 	}
 }
+
+func TestQuestionAskedBeforeItsPRMergedIsFlagged(t *testing.T) {
+	now := time.Date(2026, 11, 5, 16, 0, 0, 0, time.UTC)
+	asked := now.Add(-3 * time.Hour)
+	threads := []Thread{
+		{ID: "a", Title: "Hook in Go", Ask: "Turn on Auto-fix?", Since: asked, PRs: []string{"ox#35"}},
+		{ID: "b", Title: "Budget", Ask: "Build the four?", Since: asked, PRs: []string{"ox#34"}},
+		{ID: "c", Title: "No PR", Ask: "Which first?", Since: asked},
+	}
+	merged := map[string]time.Time{
+		"ox#35": now.Add(-time.Hour),     // after the question
+		"ox#34": now.Add(-5 * time.Hour), // before it
+	}
+	q := Build(Inputs{Threads: threads, Merged: merged}, nil, now)
+	got := map[string]string{}
+	for _, a := range q.Waiting {
+		got[a.Thread] = a.Settled
+	}
+	want := map[string]string{"a": "ox#35 merged since", "b": "", "c": ""}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("settled = %v, want %v", got, want)
+	}
+}
+
+func TestMergedPRsRoundTripTheCache(t *testing.T) {
+	home := t.TempDir()
+	merged, err := parseMerged(`[{"closedAt":"2026-11-05T10:59:04Z","number":35,"repository":{"name":"ox","nameWithOwner":"ashvinbhat/ox"}}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SavePRs(home, nil, merged, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	at := LoadMerged(home)["ox#35"]
+	if want := time.Date(2026, 11, 5, 10, 59, 4, 0, time.UTC); !at.Equal(want) {
+		t.Errorf("ox#35 merged at %v, want %v", at, want)
+	}
+}

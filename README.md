@@ -169,8 +169,10 @@ and explains each gap. Tracks with `own: true` in `tracks.yaml` get offered a
 round (2 a day). `/recap`: three concepts from the week, explained back.
 
 ### Memory
-Claude Code's auto-memory is the one store. `ox memory audit` checks it; the
-start hook runs the audit weekly and the brief shows the count.
+Claude Code's auto-memory is the one store. `ox memory audit` checks it,
+including whether CLAUDE.md plus MEMORY.md, which every thread loads, stay
+under 3,000 words. The start hook runs the audit weekly and the brief shows
+the count.
 ```bash
 ox memory audit [--json]         # What may be stale, changed, duplicated or broken
 ox memory audit --keep <id>      # Fine as is; never flag it again

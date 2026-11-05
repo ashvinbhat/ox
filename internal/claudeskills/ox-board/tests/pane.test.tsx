@@ -26,7 +26,7 @@ const VIEW = {
   ],
   asks: {
     waiting: [
-      { id: 'question:local_a', kind: 'question', what: 'Is a move to GCP planned?', where: 'Durable chat turns', thread: 'local_a', since: '2026-10-26T15:00:00+05:30' },
+      { id: 'question:local_a', kind: 'question', what: 'Is a move to GCP planned?', where: 'Durable chat turns', thread: 'local_a', since: '2026-10-26T15:00:00+05:30', settled: 'backend#6900 merged since' },
       { id: 'review:backend#6786', kind: 'review', what: 'Review backend#6786 for Neeraj', since: '2026-10-27T13:00:00+05:30' },
       { id: 'merge:ox#24', kind: 'merge', what: 'Merge ox#24: feat: ox board', where: 'Board panel', thread: 'local_b', since: '2026-10-28T11:30:00+05:30' },
       { id: 'memory', kind: 'memory', what: 'Memory: 2 suggestions (/memory-check)', since: '2026-10-28T11:00:00+05:30' },
@@ -57,7 +57,7 @@ test('the panel lists only threads that need you, with what each waits on', asyn
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)).toEqual([
-      '**Durable chat turns**  \nIs a move to GCP planned? · 45h',
+      '**Durable chat turns**  \nIs a move to GCP planned? (backend\\#6900 merged since; still needed?) · 45h',
       '**Board panel**  \nox\\#24 is ready to merge · 30m',
       '**Valkey clusters**  \nWent quiet mid-turn; it may have stopped · 2h',
     ])

@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // State is where a thread stands from the user's side.
@@ -75,7 +77,7 @@ type Session struct {
 
 // DefaultDir is where the desktop app keeps thread state on macOS.
 func DefaultDir() string {
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	return filepath.Join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
 }
 

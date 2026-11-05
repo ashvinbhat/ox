@@ -144,7 +144,23 @@ mission harness is frozen.
   login", until the job succeeds again.
 - `ox setup` runs the start hook the way a thread would, with a bare PATH,
   and puts `settings.json` back as it was if the hook fails.
-
+- Word budget: `ox memory audit` adds up what every thread loads at start
+  (the user and project CLAUDE.md files, and MEMORY.md's first 200 lines).
+  Past 3,000 words it flags a `budget` suggestion naming the largest
+  sections, and `/memory-check` proposes cuts that move rules rather than
+  drop them.
+- Tests can't reach live paths. Every lookup of the home folder, `OX_HOME`
+  and `CLAUDE_CONFIG_DIR` goes through `internal/livepath`, which panics
+  under `go test` for a path outside the temp dir. Three tests that read the
+  real home now use a temp one.
+- `make mutate` (and CI) runs `tools/mutate/mutations.yaml`: each entry
+  turns one rule off in a copy of the repo, and its package's tests must
+  fail. A survivor, a mutation that doesn't compile, or an entry whose code
+  is gone fails the run. It starts with 14 rules from the last five PRs.
+- A thread's question asked before its PR merged is marked "ox#35 merged
+  since; still needed?" in `ox asks`, the brief and the board. The PR
+  refresh also reads your PRs merged in the last two weeks. `/tidy`
+  recommends archive when the merge answered the question, else drop.
 - Fix ladder. A feedback memory is written when Ashvin states a rule or
   corrects the same thing twice; a one-off goes in the journal. Each time a
   covered rule is broken again, its day goes in `metadata.misses`, and

@@ -2,7 +2,8 @@
 // memories live: paths, code and ox commands a memory names that no longer
 // exist, MEMORY.md drift, project memories nobody has confirmed lately, and
 // memories stranded in other projects' stores, cited files that changed
-// since a memory was confirmed, and memories that cover the same ground.
+// since a memory was confirmed, memories that cover the same ground, and
+// always-loaded text over its word budget.
 package memcheck
 
 import (
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 // Suggestion kinds.
@@ -90,6 +93,10 @@ type Options struct {
 	Known func(words []string) bool
 	Keep  map[string]Keep
 	Now   time.Time
+	// Loaded is what every thread reads at start (AlwaysLoaded), held to
+	// WordBudget; Label names each file in the suggestion.
+	Loaded []string
+	Label  func(path string) string
 }
 
 // Audit checks every memory in the store and returns what needs a look,
@@ -103,6 +110,11 @@ func Audit(o Options) (Report, error) {
 
 	all := indexDrift(o.Dir, mems)
 	all = append(all, duplicates(mems)...)
+	label := o.Label
+	if label == nil {
+		label = filepath.Base
+	}
+	all = append(all, budget(o.Loaded, WordBudget, label)...)
 	refs := map[string][]string{}  // identifier → memory files naming it
 	files := map[string][]string{} // repo-relative path → memory files naming it
 	for _, m := range mems {
@@ -417,7 +429,7 @@ func countMemories(dir string) int {
 
 func expandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
+		if home, err := livepath.Home(); err == nil {
 			return filepath.Join(home, p[1:])
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/livepath"
 )
 
 const (
@@ -180,7 +181,7 @@ func apiKey(cfg config.EmbeddingsConfig, defaultEnv string) string {
 }
 
 func secretsEnv(name string) string {
-	home, err := os.UserHomeDir()
+	home, err := livepath.Home()
 	if err != nil {
 		return ""
 	}

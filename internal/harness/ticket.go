@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ashvinbhat/ox/internal/livepath"
 	"github.com/ashvinbhat/ox/internal/mission"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
@@ -109,7 +110,7 @@ func notionUniqueID(pageURL string) string {
 }
 
 func yokeEnvValue(key string) string {
-	home, _ := os.UserHomeDir()
+	home, _ := livepath.Home()
 	data, err := os.ReadFile(filepath.Join(home, ".yoke", ".env"))
 	if err != nil {
 		return ""
