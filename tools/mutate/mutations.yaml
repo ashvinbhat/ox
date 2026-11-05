@@ -71,3 +71,8 @@
   file: internal/memcheck/budget.go
   from: "if c = filepath.Clean(c); notAlnum"
   to: "if c = c; notAlnum"
+
+- why: only a PR merged after the question flags it
+  file: internal/asks/asks.go
+  from: "if at, ok := merged[ref]; ok && at.After(t.Since) {"
+  to: "if _, ok := merged[ref]; ok {"

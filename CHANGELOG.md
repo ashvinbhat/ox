@@ -157,7 +157,6 @@ mission harness is frozen.
   turns one rule off in a copy of the repo, and its package's tests must
   fail. A survivor, a mutation that doesn't compile, or an entry whose code
   is gone fails the run. It starts with 14 rules from the last five PRs.
-
 - A thread's question asked before its PR merged is marked "ox#35 merged
   since; still needed?" in `ox asks`, the brief and the board. The PR
   refresh also reads your PRs merged in the last two weeks. `/tidy`
