@@ -179,6 +179,10 @@ mission harness is frozen.
   (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
+- CLAUDE.md's commands, code map, `~/.ox` layout and common issues moved to
+  `internal/CLAUDE.md`, which Claude Code loads only when a thread opens a
+  file under `internal/`. Every thread loads about 750 fewer words: 2,614,
+  under the 3,000 budget.
 - The start hook is `ox hook session-start`, ox itself, not a bash script. It
   needs no `jq`, has a 15s timeout, and prints nothing on a panic, a missing
   config or a brief slower than 10s. It adds brew's and Go's bin folders to
