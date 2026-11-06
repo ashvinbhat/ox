@@ -96,3 +96,20 @@ func TestToolPathAddsBrewAndGoBin(t *testing.T) {
 		t.Errorf("toolPath = %q, want %q", got, want)
 	}
 }
+
+func TestSessionStartTellsTheThreadItsKey(t *testing.T) {
+	t.Setenv(hooks.CheckEnv, "1")
+	t.Setenv("HOME", t.TempDir())
+	defer func(c *config.Config, e error, b func(string, time.Time) string, s func(string) string, self string) {
+		cfg, cfgErr, hookBrief, hookSelf, nowSelf = c, e, b, s, self
+	}(cfg, cfgErr, hookBrief, hookSelf, nowSelf)
+	cfg, cfgErr = &config.Config{Home: t.TempDir()}, nil
+	hookSelf = func(cliID string) string { return "local_for_" + cliID }
+	hookBrief = func(string, time.Time) string { return "self=" + nowSelf }
+
+	var out bytes.Buffer
+	sessionStart(strings.NewReader(`{"session_id":"abc","hook_event_name":"SessionStart"}`), &out)
+	if !strings.Contains(out.String(), "self=local_for_abc") {
+		t.Fatalf("brief = %q; want it built for the thread the session id finds", out.String())
+	}
+}

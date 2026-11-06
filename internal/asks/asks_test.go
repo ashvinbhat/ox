@@ -120,7 +120,7 @@ func TestQuestionAskedBeforeItsPRMergedIsFlagged(t *testing.T) {
 
 func TestMergedPRsRoundTripTheCache(t *testing.T) {
 	home := t.TempDir()
-	merged, err := parseMerged(`[{"closedAt":"2026-11-05T10:59:04Z","number":35,"repository":{"name":"ox","nameWithOwner":"ashvinbhat/ox"}}]`)
+	merged, err := parseMerged(`[{"closedAt":"2026-11-05T10:59:04Z","number":35,"title":"feat: loud job failures","repository":{"name":"ox","nameWithOwner":"ashvinbhat/ox"}}]`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,5 +130,8 @@ func TestMergedPRsRoundTripTheCache(t *testing.T) {
 	at := LoadMerged(home)["ox#35"]
 	if want := time.Date(2026, 11, 5, 10, 59, 4, 0, time.UTC); !at.Equal(want) {
 		t.Errorf("ox#35 merged at %v, want %v", at, want)
+	}
+	if got := LoadTitles(home)["ox#35"]; got != "feat: loud job failures" {
+		t.Errorf("ox#35's title = %q", got)
 	}
 }

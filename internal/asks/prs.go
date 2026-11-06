@@ -102,34 +102,44 @@ func FetchPRs(ctx context.Context, now time.Time) ([]PR, error) {
 	return prs, nil
 }
 
-// FetchMerged reads when each of Ashvin's PRs merged in the last two weeks,
-// by short ref. A thread's question asked before its PR merged may be moot.
-func FetchMerged(ctx context.Context, now time.Time) (map[string]time.Time, error) {
+// Merged is Ashvin's PRs merged in the last two weeks, by short ref. A
+// thread's question asked before its PR merged may be moot, and a work
+// task's outcome names its merged PRs.
+type Merged struct {
+	At     map[string]time.Time
+	Titles map[string]string
+}
+
+// FetchMerged reads which of Ashvin's PRs merged in the last two weeks.
+func FetchMerged(ctx context.Context, now time.Time) (Merged, error) {
 	out, err := gh(ctx, "search", "prs", "--author=@me", "--merged",
 		"--merged-at", ">="+now.Add(-Parked).Format("2006-01-02"), "--limit", "100",
-		"--json", "repository,number,closedAt")
+		"--json", "repository,number,closedAt,title")
 	if err != nil {
-		return nil, err
+		return Merged{}, err
 	}
 	return parseMerged(out)
 }
 
-func parseMerged(out string) (map[string]time.Time, error) {
+func parseMerged(out string) (Merged, error) {
 	var found []struct {
 		Repository struct {
 			NameWithOwner string `json:"nameWithOwner"`
 		} `json:"repository"`
 		Number   int       `json:"number"`
 		ClosedAt time.Time `json:"closedAt"`
+		Title    string    `json:"title"`
 	}
 	if err := json.Unmarshal([]byte(out), &found); err != nil {
-		return nil, fmt.Errorf("parse gh search: %w", err)
+		return Merged{}, fmt.Errorf("parse gh search: %w", err)
 	}
-	merged := map[string]time.Time{}
+	m := Merged{At: map[string]time.Time{}, Titles: map[string]string{}}
 	for _, f := range found {
-		merged[PR{Repo: f.Repository.NameWithOwner, Number: f.Number}.Ref()] = f.ClosedAt
+		ref := PR{Repo: f.Repository.NameWithOwner, Number: f.Number}.Ref()
+		m.At[ref] = f.ClosedAt
+		m.Titles[ref] = f.Title
 	}
-	return merged, nil
+	return m, nil
 }
 
 func fetchPR(ctx context.Context, repo string, n int) (PR, error) {
@@ -202,9 +212,10 @@ func gh(ctx context.Context, args ...string) (string, error) {
 func Dir(oxHome string) string { return filepath.Join(oxHome, "asks") }
 
 type prCache struct {
-	At     time.Time            `json:"at"`
-	PRs    []PR                 `json:"prs"`
-	Merged map[string]time.Time `json:"merged,omitempty"` // short ref → when it merged
+	At           time.Time            `json:"at"`
+	PRs          []PR                 `json:"prs"`
+	Merged       map[string]time.Time `json:"merged,omitempty"`       // short ref → when it merged
+	MergedTitles map[string]string    `json:"mergedTitles,omitempty"` // short ref → title
 }
 
 // LoadPRs reads the cached PR state and when it was fetched.
@@ -221,8 +232,22 @@ func LoadMerged(oxHome string) map[string]time.Time {
 	return c.Merged
 }
 
-func SavePRs(oxHome string, prs []PR, merged map[string]time.Time, at time.Time) error {
-	return writeJSON(filepath.Join(Dir(oxHome), "prs.json"), prCache{At: at, PRs: prs, Merged: merged})
+// LoadTitles reads the title of each open or recently merged PR, by short ref.
+func LoadTitles(oxHome string) map[string]string {
+	var c prCache
+	_ = readJSON(filepath.Join(Dir(oxHome), "prs.json"), &c)
+	titles := map[string]string{}
+	for ref, title := range c.MergedTitles {
+		titles[ref] = title
+	}
+	for _, p := range c.PRs {
+		titles[p.Ref()] = p.Title
+	}
+	return titles
+}
+
+func SavePRs(oxHome string, prs []PR, merged Merged, at time.Time) error {
+	return writeJSON(filepath.Join(Dir(oxHome), "prs.json"), prCache{At: at, PRs: prs, Merged: merged.At, MergedTitles: merged.Titles})
 }
 
 // LoadDropped reads the asks Ashvin dropped, by id, with when.

@@ -42,7 +42,18 @@ also read "Building ox".
   `<repo>/.claude/worktrees/<name>`.
 - Tasks: drive yoke directly — `yoke ready`, `yoke show <id>`,
   `yoke add "title" -t tag1 -t tag2 -p 2` (not `--tags`). Take the task number
-  from `yoke add` output.
+  from `yoke add` output. Tickets come in from Notion on their own; read
+  `yoke context CB-<n>` once you know a thread's ticket.
+- Lasting work gets a task. ox keeps the task of a thread with a PR. Lasting
+  work without one (an investigation's answer, a design, a send, a delete)
+  you add: `yoke add "<his ask>" -k <this thread's key> -t work -t <track>`,
+  the key from the brief, and `yoke done <id> --outcome "…"` on its last
+  turn. A lookup that changes nothing isn't lasting; unsure means lasting.
+- Anything you notice and don't do, and any later step you promise ("I'll
+  check X after the merge"), is a finding, added in the same reply:
+  `yoke add "…" -t finding -t <track> --from <work> -b "what, where, why,
+  how to pick it up"`. A small one in code your open PR touches, fix there.
+  His go makes it `active`, his drop `dropped`.
 - Memory: Claude auto-memory for this folder is the one store. When a memory
   rests on specific code or files, add `metadata.cites`
   (`["backend:SegmentService", "ox:internal/cli/now.go", "~/.ox/tracks.yaml"]`)

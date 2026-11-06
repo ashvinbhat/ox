@@ -167,6 +167,16 @@ mission harness is frozen.
   `ox memory audit` flags it `missed` until the rule moves up a rung: a
   line in the skill whose step it governs, then a check in code
   (`metadata.rung`, `metadata.promoted`). `/memory-check` proposes the move.
+- Work list (`docs/work-list.md`). `ox work refresh` runs `yoke sync`
+  hourly, which brings in your current-sprint Notion tickets. Every 10
+  minutes it also keeps a yoke task for each thread with a PR. The task is
+  keyed by the thread and its PRs, filed under the ticket a PR names,
+  started while a PR is open and done once its PRs merged, with their titles
+  as the outcome. A PR belongs to the thread that opened it. The start hook
+  runs it, and the brief shows "Tickets: N open · Findings: N waiting for
+  your go" plus the thread's own key and work. CLAUDE.md gains two rules:
+  lasting work gets a task, and anything noticed and not done, or promised
+  for later, is a finding in the same reply.
 
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`

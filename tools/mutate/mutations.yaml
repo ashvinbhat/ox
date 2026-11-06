@@ -81,3 +81,43 @@
   file: internal/memcheck/ladder.go
   from: "if t.After(m.Promoted) {"
   to: "if true {"
+
+- why: a thread whose PRs merged long ago gets no new work
+  file: internal/work/work.go
+  from: "if !anyRecent(th.PRs) {"
+  to: "if false {"
+
+- why: work is done only once none of its PRs is open
+  file: internal/work/work.go
+  from: "case len(open) == 0 && len(merged) > 0 && !e.complete():"
+  to: "case len(merged) > 0 && !e.complete():"
+
+- why: done work with an open PR is reopened before it's started
+  file: internal/work/work.go
+  from: "case len(open) > 0 && e.complete():"
+  to: "case false:"
+
+- why: keys that find two tasks leave the thread alone
+  file: internal/work/work.go
+  from: "\t\tif found != nil && found != e {\n\t\t\treturn nil, false\n"
+  to: "\t\tif false {\n\t\t\treturn nil, false\n"
+
+- why: a PR belongs to the thread that opened it
+  file: internal/cli/work.go
+  from: "if _, held := owner[ref]; !held || p.Own {"
+  to: "if _, held := owner[ref]; !held {"
+
+- why: a thread pointed at someone else's PR doesn't take its work
+  file: internal/cli/work.go
+  from: "return !p.Dismissed && (p.Own || isOpen[ref] || wasMerged)"
+  to: "return !p.Dismissed && (true || p.Own || isOpen[ref] || wasMerged)"
+
+- why: a PR is open only while GitHub lists it open
+  file: internal/cli/work.go
+  from: "case p.State == \"OPEN\" && isOpen[ref]:"
+  to: "case p.State == \"OPEN\":"
+
+- why: only pending findings count as waiting for his go
+  file: internal/cli/now.go
+  from: "case t.HasTag(work.TagFinding) && t.Status == yokecli.StatusPending:"
+  to: "case t.HasTag(work.TagFinding):"

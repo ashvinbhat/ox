@@ -24,6 +24,11 @@ It sits here so threads that aren't about ox don't load it.
   refreshed by the hook and the board once it's 10 minutes old
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
+- `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a
+  yoke task for every thread with a PR: found by `thread:<id>` and
+  `pr:<repo>-<n>` keys, under the ticket a PR names, started while a PR is
+  open, done once its PRs merged (every 10 minutes; log in
+  `~/.ox/logs/work.log`)
 - `ox park --next "…"` — mark this thread parked; `/park` runs it after the
   resumption note. `ox now` shows it as parked with that step until the thread
   is active again; it's never an ask or archivable
@@ -53,6 +58,9 @@ It sits here so threads that aren't about ox don't load it.
   branch for what's still missing). Keeps and the last report are in
   `~/.ox/memory-check/`.
 - `internal/park` — parked threads, one record each in `~/.ox/parked/`.
+- `internal/work` — plans the yoke commands that keep each thread's work:
+  keys, notes per PR, start, done. `internal/cli/work.go` decides which
+  thread a PR belongs to (the one that opened it) and runs the plan.
 - `internal/asks` — the asks queue: sources in, ranked asks and thread fixes
   out (`Build`), PR state from gh (`FetchPRs`, cached), drops that lapse when
   the ask changes.
