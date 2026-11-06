@@ -60,12 +60,9 @@ work commands and runs nothing.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := requireConfig()
 		if workDryRun {
-			steps, skipped, err := planWork(cfg.Home)
+			steps, err := planWork(cfg.Home)
 			for _, s := range steps {
 				fmt.Println("yoke " + shellQuote(s))
-			}
-			for _, s := range skipped {
-				fmt.Println("skipped: " + s)
 			}
 			return err
 		}
@@ -91,12 +88,9 @@ work commands and runs nothing.`,
 // keepWork runs the plan. A failed command doesn't stop the rest; the first
 // failure is what the job reports.
 func keepWork(oxHome string) error {
-	steps, skipped, err := planWork(oxHome)
+	steps, err := planWork(oxHome)
 	if err != nil {
 		return err
-	}
-	for _, s := range skipped {
-		logWork(oxHome, "skipped: "+s, "", nil)
 	}
 	var errs []error
 	for _, s := range steps {
@@ -110,19 +104,18 @@ func keepWork(oxHome string) error {
 }
 
 // planWork reads threads, tasks and the PR cache and plans the yoke commands.
-func planWork(oxHome string) ([][]string, []string, error) {
+func planWork(oxHome string) ([][]string, error) {
 	tasks, err := yokecli.List(true, "")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sessions, err := desktop.List(desktop.DefaultDir(), true)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read desktop threads: %w", err)
+		return nil, fmt.Errorf("read desktop threads: %w", err)
 	}
 	ts, _ := tracks.Load(oxHome)
 	open, _, _ := asks.LoadPRs(oxHome)
-	steps, skipped := work.Plan(workThreads(sessions, ts, open, asks.LoadMerged(oxHome), asks.LoadTitles(oxHome)), workTasks(tasks))
-	return steps, skipped, nil
+	return work.Plan(workThreads(sessions, ts, open, asks.LoadMerged(oxHome), asks.LoadTitles(oxHome)), workTasks(tasks)), nil
 }
 
 // workThreads turns threads with PRs into what work.Plan reads. A PR is

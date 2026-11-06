@@ -25,8 +25,9 @@ It sits here so threads that aren't about ox don't load it.
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a
-  yoke task for every thread with a PR: found by `thread:<id>` and
-  `pr:<repo>-<n>` keys, under the ticket a PR names, started while a PR is
+  yoke task for every thread with a PR: found by its `thread:<id>` key,
+  holding a `pr:<repo>-<n>` key per PR no other task holds, under the
+  ticket a PR names, started while a PR is
   open, done once its PRs merged (every 10 minutes; log in
   `~/.ox/logs/work.log`)
 - `ox work archivable [--json]`, `ox work archived <id>...` — the threads
