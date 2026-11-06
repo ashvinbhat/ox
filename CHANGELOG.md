@@ -187,6 +187,7 @@ mission harness is frozen.
   hours. The `daily-archive` skill, run each morning by a scheduled task,
   archives those, records them with `ox work archived`, and lists them. The
   next brief says "Archived today: N threads (…)".
+- The board's title is "🐂 ox".
 
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`

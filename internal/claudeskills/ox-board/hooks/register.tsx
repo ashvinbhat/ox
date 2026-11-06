@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Item } from '../types'
 
 const PANE = 'ox-board'
-const TITLE = 'ox'
+const TITLE = '🐂 ox'
 // Every open panel reads ox this often, so a change made in one thread shows
 // in the others within seconds.
 const EVERY_MS = 15_000

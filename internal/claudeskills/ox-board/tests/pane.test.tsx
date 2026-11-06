@@ -6,7 +6,7 @@ const PANE = {
   component: 'Pane',
   requestId: 'ox-board',
   props: {
-    title: 'ox',
+    title: '🐂 ox',
     isFocused: false,
     bodyColumns: 60,
     placement: 'dock',
