@@ -1,4 +1,4 @@
-# Work list (draft)
+# Work list
 
 One list of everything Ashvin's work is made of, so threads can be archived
 and nothing is lost. yoke holds the list, ox keeps most of it from what it
@@ -102,13 +102,20 @@ earlier work and outcomes, findings, notes.
 
 ## Build
 
+All four steps shipped on 2026-11-06.
+
 1. yoke: keys (adding under an existing key reopens), the found-from link,
-   and `yoke sync` for current-sprint tickets.
+   and `yoke sync` for current-sprint tickets (yoke#2).
 2. ox: work for every thread with a PR (found or created by key, closed on
    merge), the brief lines, and two always-loaded rules: lasting work gets a
-   task; a promise or a noticed-not-done step is a finding in the same reply.
+   task; a promise or a noticed-not-done step is a finding in the same reply
+   (ox#41). A PR belongs to the thread that opened it, else the oldest one
+   holding it, so one shared PR doesn't join two threads' work.
 3. Board: the findings line.
-4. The daily archive routine.
+4. The daily archive routine: `ox work archivable` holds the rules, the
+   `daily-archive` skill archives through the app, a scheduled task runs it
+   each morning. Only a thread's own worktree is checked for changes: a
+   shared checkout's changes can't be told apart by thread.
 
 ## Not in scope
 

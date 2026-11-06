@@ -121,3 +121,38 @@
   file: internal/cli/now.go
   from: "case t.HasTag(work.TagFinding) && t.Status == yokecli.StatusPending:"
   to: "case t.HasTag(work.TagFinding):"
+
+- why: a cleared findings line comes back when a newer finding arrives
+  file: internal/cli/findings.go
+  from: "if at, ok := dropped[g.ID]; ok && !g.Since.After(at) {"
+  to: "if _, ok := dropped[g.ID]; ok {"
+
+- why: a finding is filed under the ticket its work is under
+  file: internal/cli/findings.go
+  from: "\t\tif next == nil {\n\t\t\tnext = cur.FoundFromID\n\t\t}\n"
+  to: ""
+
+- why: a thread is archived only after 24 quiet hours
+  file: internal/cli/archive.go
+  from: "if !s.Finished() || now.Sub(s.LastActive()) < quietFor {"
+  to: "if !s.Finished() {"
+
+- why: a thread with a question waiting isn't archived
+  file: internal/desktop/sessions.go
+  from: "return s.Ask() == \"\" && s.status() != \"blocked\""
+  to: "return s.status() != \"blocked\""
+
+- why: a parked thread isn't archived
+  file: internal/cli/archive.go
+  from: "if r, ok := parked[s.ID]; ok && r.Holds(s.LastActive()) {"
+  to: "if false {"
+
+- why: a thread with open work or an open PR isn't archived
+  file: internal/cli/archive.go
+  from: "if openWork[strings.ToLower(work.ThreadKey(s.ID))] || hasOpenPR(s, isOpen) {"
+  to: "if (false && openWork[strings.ToLower(work.ThreadKey(s.ID))]) || hasOpenPR(s, isOpen) {"
+
+- why: a thread whose own worktree has changes isn't archived
+  file: internal/cli/archive.go
+  from: "if ownWorktree(s.Cwd) && dirty(s.Cwd) {"
+  to: "if false {"
