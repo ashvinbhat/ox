@@ -40,13 +40,16 @@ const stuckAfter = 30 * time.Minute
 // Done threads idle this long are worth archiving.
 const archiveAfter = 48 * time.Hour
 
-// PR is a pull request a thread opened.
+// PR is a pull request a thread opened or was pointed at. Own marks the
+// thread that opened it; Dismissed, one taken off the thread's PR bar.
 type PR struct {
-	Repo   string `json:"repo"`
-	Number int    `json:"prNumber"`
-	URL    string `json:"url"`
-	Branch string `json:"branch"`
-	State  string `json:"state"`
+	Repo      string `json:"repo"`
+	Number    int    `json:"prNumber"`
+	URL       string `json:"url"`
+	Branch    string `json:"branch"`
+	State     string `json:"state"`
+	Own       bool   `json:"own"`
+	Dismissed bool   `json:"dismissed"`
 }
 
 // Summary is the app's one-line read of the thread's last turn.
@@ -64,6 +67,8 @@ type WrapUp struct {
 // Session is one desktop Code-tab thread.
 type Session struct {
 	ID           string          `json:"sessionId"`
+	CLISessionID string          `json:"cliSessionId"`
+	LastCLIID    string          `json:"lastAssistantCliSessionId"`
 	Title        string          `json:"title"`
 	Cwd          string          `json:"cwd"`
 	Archived     bool            `json:"isArchived"`
@@ -128,6 +133,20 @@ func Get(dir, id string) (Session, error) {
 		return Session{}, fmt.Errorf("read thread %s: %w", id, err)
 	}
 	return s, nil
+}
+
+// ByCLISession returns the thread running Claude Code session id, the id a
+// hook gets on stdin, or "" when no thread has it.
+func ByCLISession(sessions []Session, id string) string {
+	if id == "" {
+		return ""
+	}
+	for _, s := range sessions {
+		if s.CLISessionID == id || s.LastCLIID == id {
+			return s.ID
+		}
+	}
+	return ""
 }
 
 // LastActive is when the thread last did anything.

@@ -27,6 +27,8 @@ type Task struct {
 	Priority    int        `json:"priority"`
 	Tags        []string   `json:"tags"`
 	ParentID    *string    `json:"parentId"`
+	FoundFromID *string    `json:"foundFromId"`
+	Keys        []string   `json:"keys"`
 	BlockerIDs  []string   `json:"blockerIds"`
 	NotionURL   *string    `json:"notionUrl"`
 	ExternalRef *string    `json:"externalRef"`
@@ -174,6 +176,27 @@ func Done(ref, outcome string) error {
 func AddNote(ref, text string) error {
 	_, err := run("note", ref, text)
 	return err
+}
+
+// Exec runs one yoke command and returns what it printed.
+func Exec(args ...string) (string, error) {
+	out, err := run(args...)
+	return strings.TrimSpace(string(out)), err
+}
+
+// Sync brings the current sprint's Notion tickets into yoke.
+func Sync() (string, error) {
+	return Exec("sync")
+}
+
+// HasTag reports a task carrying tag.
+func (t Task) HasTag(tag string) bool {
+	for _, x := range t.Tags {
+		if strings.EqualFold(x, tag) {
+			return true
+		}
+	}
+	return false
 }
 
 // DocsPath refreshes yoke's usage doc on disk and returns its path.

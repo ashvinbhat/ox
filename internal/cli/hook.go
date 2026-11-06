@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/hooks"
 	"github.com/ashvinbhat/ox/internal/jobs"
 	"github.com/ashvinbhat/ox/internal/livepath"
@@ -43,6 +44,22 @@ var hookBrief = func(oxHome string, now time.Time) string {
 	return renderBrief(buildNow(oxHome, now))
 }
 
+// hookSelf finds the thread a Claude Code session id runs in. A new thread's
+// state file may not name its session yet, so it looks a few times.
+var hookSelf = func(cliID string) string {
+	if cliID == "" {
+		return ""
+	}
+	for try := 0; try < 3; try++ {
+		sessions, _ := desktop.List(desktop.DefaultDir(), false)
+		if id := desktop.ByCLISession(sessions, cliID); id != "" {
+			return id
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	return ""
+}
+
 // jobProblems is one line per job that failed twice in a row or more, saying
 // what's stale and why.
 func jobProblems(oxHome string, now time.Time) []string {
@@ -51,6 +68,8 @@ func jobProblems(oxHome string, now time.Time) []string {
 		{jobPRs, "PR state"},
 		{jobWorktrees, "The worktree prune"},
 		{jobMemory, "The memory audit"},
+		{jobTickets, "The ticket sync"},
+		{jobWork, "Keeping work in yoke"},
 	} {
 		s := jobs.Load(oxHome, j.name)
 		if !s.Failing() {
@@ -78,8 +97,9 @@ var hookSessionStartCmd = &cobra.Command{
 	Use:   "session-start",
 	Short: "The SessionStart hook: start the background jobs, print the brief",
 	Long: `Claude Code runs this at every thread start. It starts the worktree prune,
-the memory audit and the PR refresh in the background, each only when due,
-then prints ` + "`ox now --brief`" + ` as the thread's opening context.
+the memory audit, the PR refresh and the work refresh in the background, each
+only when due, then prints ` + "`ox now --brief`" + ` as the thread's opening
+context, with the thread's own key.
 
 A missing config, a panic or a slow brief prints nothing and exits 0, so ox
 never blocks a session. With OX_HOOK_CHECK=1 (ox setup's check) no job starts
@@ -96,8 +116,16 @@ func sessionStart(stdin io.Reader, stdout io.Writer) (code int) {
 			code = 0
 		}
 	}()
-	// Claude Code writes the session's JSON on stdin; nothing here needs it.
-	go func() { _, _ = io.Copy(io.Discard, io.LimitReader(stdin, 1<<20)) }()
+	// Claude Code writes the session's JSON on stdin: its id finds the thread.
+	ids := make(chan string, 1)
+	go func() {
+		var in struct {
+			SessionID string `json:"session_id"`
+		}
+		_ = json.NewDecoder(io.LimitReader(stdin, 1<<20)).Decode(&in)
+		ids <- in.SessionID
+		_, _ = io.Copy(io.Discard, io.LimitReader(stdin, 1<<20))
+	}()
 	if cfgErr != nil || cfg == nil {
 		return 0
 	}
@@ -117,6 +145,11 @@ func sessionStart(stdin io.Reader, stdout io.Writer) (code int) {
 				brief <- ""
 			}
 		}()
+		select {
+		case id := <-ids:
+			nowSelf = hookSelf(id)
+		case <-time.After(time.Second):
+		}
 		brief <- hookBrief(cfg.Home, time.Now())
 	}()
 	var text string
@@ -159,6 +192,7 @@ func startJobs() {
 		{"worktrees", "prune", "--if-due"},
 		{"memory", "audit", "--if-due"},
 		{"asks", "refresh", "--if-due"},
+		{"work", "refresh", "--if-due"},
 	} {
 		c := exec.Command(self, argv...)
 		c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

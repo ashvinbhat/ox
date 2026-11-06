@@ -21,6 +21,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/memcheck"
 	"github.com/ashvinbhat/ox/internal/park"
 	"github.com/ashvinbhat/ox/internal/tracks"
+	"github.com/ashvinbhat/ox/internal/work"
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
@@ -32,6 +33,8 @@ var (
 	// nowMention adds the once-a-day reminders to the brief; only the
 	// ox-brief hook passes it, so a manual run doesn't use up the day's.
 	nowMention bool
+	// nowSelf is the thread the hook prints the brief for (local_…).
+	nowSelf string
 )
 
 var nowCmd = &cobra.Command{
@@ -87,6 +90,13 @@ type nowView struct {
 	Tracks  []trackName          `json:"tracks,omitempty"`
 	// Problems are ox's own background jobs that keep failing.
 	Problems []string `json:"problems,omitempty"`
+	// Self is the thread the brief is for: its key and its open work.
+	Self *nowSelfView `json:"self,omitempty"`
+}
+
+type nowSelfView struct {
+	Key  string           `json:"key"`
+	Work *yokecli.TaskRef `json:"work,omitempty"`
 }
 
 // trackName names a track for readers of --json: threads and asks carry Short.
@@ -139,6 +149,9 @@ func buildNow(oxHome string, now time.Time) nowView {
 	// yoke missing or failing only costs the tasks section.
 	if tasks, err := yokecli.List(false, ""); err == nil {
 		view.Tasks = tasks
+	}
+	if nowSelf != "" {
+		view.Self = selfView(nowSelf, view.Tasks)
 	}
 	if !nowBrief {
 		view.PRs = prsWithoutThread(sessions)
@@ -404,8 +417,15 @@ func renderBrief(v nowView) string {
 	}
 	b.WriteString(line + "\n")
 
-	if t := taskLine(v.Tasks); t != "" {
+	if t := workLine(v.Tasks); t != "" {
 		b.WriteString(t + "\n")
+	}
+	if s := v.Self; s != nil {
+		line := "This thread's key: " + s.Key
+		if s.Work != nil {
+			line += fmt.Sprintf(" · its work: #%d %s", s.Work.Seq, clip(s.Work.Title, 50))
+		}
+		b.WriteString(line + "\n")
 	}
 	b.WriteString("Full view: `ox now`.\n")
 	return b.String()
@@ -453,11 +473,13 @@ func renderFull(w io.Writer, v nowView) {
 	if len(v.Tasks) > 0 {
 		fmt.Fprintf(w, "\nTASKS\n")
 		for _, t := range v.Tasks {
-			if isStarted(t) {
+			if isStarted(t) && !t.HasTag(work.TagWork) {
 				fmt.Fprintf(w, "  #%-4d %-12s %s\n", t.Seq, strings.ReplaceAll(t.Status, "_", " "), clip(t.Title, 70))
 			}
 		}
-		fmt.Fprintf(w, "  %s\n", taskLine(v.Tasks))
+		if line := workLine(v.Tasks); line != "" {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
 	}
 
 	var recent []nowPR
@@ -525,21 +547,41 @@ func isStarted(t yokecli.Task) bool {
 	return t.Status == yokecli.StatusInProgress || t.Status == yokecli.StatusActive
 }
 
-// taskLine summarises yoke: what is started, and how many tasks are open.
-func taskLine(tasks []yokecli.Task) string {
-	if len(tasks) == 0 {
-		return ""
-	}
-	var started []string
+// workLine counts the open tickets and the findings waiting for Ashvin's go.
+func workLine(tasks []yokecli.Task) string {
+	tickets, findings := 0, 0
 	for _, t := range tasks {
-		if isStarted(t) {
-			started = append(started, fmt.Sprintf("#%d", t.Seq))
+		switch {
+		case t.HasTag(work.TagTicket):
+			tickets++
+		case t.HasTag(work.TagFinding) && t.Status == yokecli.StatusPending:
+			findings++
 		}
 	}
-	if len(started) == 0 {
-		return fmt.Sprintf("yoke: %d open", len(tasks))
+	if tickets == 0 && findings == 0 {
+		return ""
 	}
-	return fmt.Sprintf("yoke: %s in progress · %d open", strings.Join(started, " "), len(tasks))
+	waiting := "none waiting for your go"
+	if findings > 0 {
+		waiting = fmt.Sprintf("%d waiting for your go", findings)
+	}
+	return fmt.Sprintf("Tickets: %d open · Findings: %s", tickets, waiting)
+}
+
+// selfView is the brief's line for its own thread: the key it adds work and
+// findings under, and its open work if it has some.
+func selfView(id string, tasks []yokecli.Task) *nowSelfView {
+	key := work.ThreadKey(id)
+	v := &nowSelfView{Key: key}
+	for _, t := range tasks {
+		for _, k := range t.Keys {
+			if strings.EqualFold(k, key) {
+				v.Work = &yokecli.TaskRef{ID: t.ID, Seq: t.Seq, Title: t.Title, Status: t.Status}
+				return v
+			}
+		}
+	}
+	return v
 }
 
 func shortAge(d time.Duration) string {
