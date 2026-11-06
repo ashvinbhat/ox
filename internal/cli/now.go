@@ -92,6 +92,10 @@ type nowView struct {
 	Problems []string `json:"problems,omitempty"`
 	// Self is the thread the brief is for: its key and its open work.
 	Self *nowSelfView `json:"self,omitempty"`
+	// Findings waiting for Ashvin's go, one group per ticket, for the board.
+	Findings []findingGroup `json:"findings,omitempty"`
+	// Archived is what the daily routine archived today or yesterday.
+	Archived string `json:"archived,omitempty"`
 }
 
 type nowSelfView struct {
@@ -134,9 +138,8 @@ func buildNow(oxHome string, now time.Time) nowView {
 
 	parked, _ := park.Load(oxHome)
 	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(oxHome)}
-	if dropped, err := asks.LoadDropped(oxHome); err == nil {
-		markDropped(view.Threads, dropped)
-	}
+	dropped, _ := asks.LoadDropped(oxHome)
+	markDropped(view.Threads, dropped)
 	for _, t := range ts {
 		view.Tracks = append(view.Tracks, trackName{Short: t.Label(), Name: t.Name})
 	}
@@ -153,6 +156,11 @@ func buildNow(oxHome string, now time.Time) nowView {
 	if nowSelf != "" {
 		view.Self = selfView(nowSelf, view.Tasks)
 	}
+	if waitingFindings(view.Tasks) {
+		if all, err := yokecli.List(true, ""); err == nil {
+			view.Findings = findingGroups(all, ts)
+		}
+	}
 	if !nowBrief {
 		view.PRs = prsWithoutThread(sessions)
 	}
@@ -166,6 +174,8 @@ func buildNow(oxHome string, now time.Time) nowView {
 	}
 	view.Asks = &q
 	view.Problems = jobProblems(oxHome, now)
+	markDroppedFindings(view.Findings, dropped)
+	view.Archived = archivedLine(oxHome, now)
 	if nowBrief && nowMention {
 		view.Mention = mentionOnce(oxHome, view, now)
 	}
@@ -416,6 +426,9 @@ func renderBrief(v nowView) string {
 		line += fmt.Sprintf(" (%d can be archived: /tidy)", n)
 	}
 	b.WriteString(line + "\n")
+	if v.Archived != "" {
+		b.WriteString(v.Archived + "\n")
+	}
 
 	if t := workLine(v.Tasks); t != "" {
 		b.WriteString(t + "\n")
@@ -566,6 +579,15 @@ func workLine(tasks []yokecli.Task) string {
 		waiting = fmt.Sprintf("%d waiting for your go", findings)
 	}
 	return fmt.Sprintf("Tickets: %d open · Findings: %s", tickets, waiting)
+}
+
+func waitingFindings(tasks []yokecli.Task) bool {
+	for _, t := range tasks {
+		if t.HasTag(work.TagFinding) && t.Status == yokecli.StatusPending {
+			return true
+		}
+	}
+	return false
 }
 
 // selfView is the brief's line for its own thread: the key it adds work and

@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Item } from '../types'
 
 const PANE = 'ox-board'
-const TITLE = 'ox'
+const TITLE = '🐂 ox'
 // Every open panel reads ox this often, so a change made in one thread shows
 // in the others within seconds.
 const EVERY_MS = 15_000
@@ -17,6 +17,7 @@ type View = {
   problems?: string[]
   threads?: { sessionId: string; title: string; state: string; lastActive: string; dropped?: boolean }[]
   asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string; settled?: string }[] }
+  findings?: { id: string; title: string; count: number; since: string; dropped?: boolean }[]
 }
 
 function age(since: string, now: number): string {
@@ -29,6 +30,7 @@ function age(since: string, now: number): string {
 // The threads that need Ashvin: a question he hasn't dropped, a PR of theirs
 // ready to merge, or a turn that went silent. Asks that aren't a thread's
 // (reviews, memory, recap) and fixes threads can make stay off the panel.
+// Below them, one line per ticket with findings waiting for his go.
 function attention(view: View, now: number): Item[] {
   const items: Item[] = []
   for (const a of view.asks?.waiting ?? []) {
@@ -46,6 +48,11 @@ function attention(view: View, now: number): Item[] {
     if (t.state === 'stuck' && !t.dropped) {
       items.push({ id: `stuck:${t.sessionId}`, title: t.title, waiting: 'Went quiet mid-turn; it may have stopped', age: age(t.lastActive, now) })
     }
+  }
+  for (const f of view.findings ?? []) {
+    if (f.dropped) continue
+    const waiting = `${f.count} ${f.count === 1 ? 'finding' : 'findings'} waiting for your go`
+    items.push({ id: f.id, title: f.title, waiting, age: age(f.since, now) })
   }
   return items
 }
@@ -74,7 +81,8 @@ async function refresh($: EngineInterface): Promise<void> {
 }
 
 // Clear drops items through ox, so every panel loses them. Each comes back
-// when its thread asks something new or moves again.
+// when its thread asks something new or moves again, or a new finding
+// arrives under its ticket.
 async function clear($: EngineInterface, ids: string[]): Promise<void> {
   const ran = await $.process
     .run(ox('asks', 'drop', ...ids), { timeoutMs: 20_000 })
@@ -84,11 +92,7 @@ async function clear($: EngineInterface, ids: string[]): Promise<void> {
     await update($, board, b => (b ? { ...b, error } : b))
     return
   }
-  $.ui.toast(
-    ids.length === 1
-      ? 'Cleared. It comes back when its thread asks again.'
-      : `Cleared ${ids.length}. Each comes back when its thread asks again.`,
-  )
+  $.ui.toast(ids.length === 1 ? 'Cleared. It comes back when it changes.' : `Cleared ${ids.length}. Each comes back when it changes.`)
   await refresh($)
 }
 

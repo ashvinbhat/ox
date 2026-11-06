@@ -96,3 +96,19 @@ func TestListSkipsArchivedDeletedAndUnparseable(t *testing.T) {
 		t.Fatalf("missing dir: got %v, %v; want empty, nil", none, err)
 	}
 }
+
+func TestFinished(t *testing.T) {
+	done := Session{CreatedMs: 1, LastActiveMs: 2, Summary: &Summary{Status: "done"}}
+	if !done.Finished() {
+		t.Fatal("a thread whose last turn ended isn't finished")
+	}
+	asking := done
+	asking.Summary = &Summary{Status: "done", NeedsAction: "Which fix first?"}
+	midTurn := Session{CreatedMs: 1, LastActiveMs: 2}
+	blocked := Session{CreatedMs: 1, LastActiveMs: 2, Summary: &Summary{Status: "blocked"}}
+	for name, s := range map[string]Session{"asking": asking, "mid-turn": midTurn, "blocked": blocked} {
+		if s.Finished() {
+			t.Errorf("a %s thread counts as finished", name)
+		}
+	}
+}

@@ -84,7 +84,7 @@
 
 - why: a thread whose PRs merged long ago gets no new work
   file: internal/work/work.go
-  from: "if !anyRecent(th.PRs) {"
+  from: "if !anyRecent(free) {"
   to: "if false {"
 
 - why: work is done only once none of its PRs is open
@@ -97,10 +97,10 @@
   from: "case len(open) > 0 && e.complete():"
   to: "case false:"
 
-- why: keys that find two tasks leave the thread alone
+- why: a PR key another task holds stays with that task
   file: internal/work/work.go
-  from: "\t\tif found != nil && found != e {\n\t\t\treturn nil, false\n"
-  to: "\t\tif false {\n\t\t\treturn nil, false\n"
+  from: "if holder := byKey[k]; holder == nil || holder == e {"
+  to: "if holder := byKey[k]; true || holder == nil || holder == e {"
 
 - why: a PR belongs to the thread that opened it
   file: internal/cli/work.go
@@ -121,3 +121,38 @@
   file: internal/cli/now.go
   from: "case t.HasTag(work.TagFinding) && t.Status == yokecli.StatusPending:"
   to: "case t.HasTag(work.TagFinding):"
+
+- why: a cleared findings line comes back when a newer finding arrives
+  file: internal/cli/findings.go
+  from: "if at, ok := dropped[g.ID]; ok && !g.Since.After(at) {"
+  to: "if _, ok := dropped[g.ID]; ok {"
+
+- why: a finding is filed under the ticket its work is under
+  file: internal/cli/findings.go
+  from: "\t\tif next == nil {\n\t\t\tnext = cur.FoundFromID\n\t\t}\n"
+  to: ""
+
+- why: a thread is archived only after 24 quiet hours
+  file: internal/cli/archive.go
+  from: "if !s.Finished() || now.Sub(s.LastActive()) < quietFor {"
+  to: "if !s.Finished() {"
+
+- why: a thread with a question waiting isn't archived
+  file: internal/desktop/sessions.go
+  from: "return s.Ask() == \"\" && s.status() != \"blocked\""
+  to: "return s.status() != \"blocked\""
+
+- why: a parked thread isn't archived
+  file: internal/cli/archive.go
+  from: "if r, ok := parked[s.ID]; ok && r.Holds(s.LastActive()) {"
+  to: "if false {"
+
+- why: a thread with open work or an open PR isn't archived
+  file: internal/cli/archive.go
+  from: "if openWork[strings.ToLower(work.ThreadKey(s.ID))] || hasOpenPR(s, isOpen) {"
+  to: "if (false && openWork[strings.ToLower(work.ThreadKey(s.ID))]) || hasOpenPR(s, isOpen) {"
+
+- why: a thread whose own worktree has changes isn't archived
+  file: internal/cli/archive.go
+  from: "if ownWorktree(s.Cwd) && dirty(s.Cwd) {"
+  to: "if false {"

@@ -6,7 +6,7 @@ const PANE = {
   component: 'Pane',
   requestId: 'ox-board',
   props: {
-    title: 'ox',
+    title: '🐂 ox',
     isFocused: false,
     bodyColumns: 60,
     placement: 'dock',
@@ -155,5 +155,25 @@ test('a failed clear keeps the items and says why', async ($, on) => {
   const texts = (await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)
   expect(texts.length).toBe(4)
   expect(texts[3]).toBe('_ox: Error: locked_')
+  await ui.unmount()
+})
+
+test('findings waiting for a go show one line per ticket, below the threads', async ($, on) => {
+  const view = {
+    ...VIEW,
+    findings: [
+      { id: 'findings:CB-18304', title: 'CB-18304 Video transcription', count: 3, since: '2026-10-28T11:00:00+05:30' },
+      { id: 'findings:track:ox', title: 'ox (no ticket)', count: 1, since: '2026-10-28T11:50:00+05:30' },
+      { id: 'findings:CB-1', title: 'CB-1 Cleared', count: 2, since: '2026-10-27T11:00:00+05:30', dropped: true },
+    ],
+  }
+  world(on, ['desktop'], JSON.stringify(view))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const texts = (await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)
+  expect(texts.slice(3)).toEqual([
+    '**CB-18304 Video transcription**  \n3 findings waiting for your go · 1h',
+    '**ox (no ticket)**  \n1 finding waiting for your go · 10m',
+  ])
   await ui.unmount()
 })

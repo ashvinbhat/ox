@@ -1,9 +1,10 @@
-// Package work keeps a yoke task for every desktop thread with a PR. A task
-// is found by its keys, the thread's (thread:<local id>) and each PR's
-// (pr:<repo>-<n>), so a later pass finds it instead of adding another. It is
-// started while one of its PRs is open and done once they merged. Each PR
-// belongs to one thread; the caller decides which. Plan only decides; the
-// caller runs the commands it returns.
+// Package work keeps a yoke task for every desktop thread with a PR. A
+// thread's task is found by the thread's key (thread:<local id>) and holds
+// a key per PR (pr:<repo>-<n>). A PR key another task holds stays there: the
+// app drops old PRs from a thread's list, so the same PR can later show up
+// on a thread that only looked at it. The task is started while one of its
+// PRs is open and done once they merged. Plan only decides; the caller runs
+// the commands it returns.
 package work
 
 import (
@@ -96,10 +97,9 @@ type entry struct {
 func (e *entry) complete() bool { return e.status == "done" || e.status == "dropped" }
 
 // Plan returns the yoke commands, as argument lists, that bring tasks in
-// line with threads. A thread with no task gets one only while a PR of its
-// is open or merged recently. skipped names threads whose keys find two
-// tasks; Plan leaves those for Ashvin.
-func Plan(threads []Thread, tasks []Task) (steps [][]string, skipped []string) {
+// line with threads. A thread with no task gets one only while a PR of its,
+// held by no other task, is open or merged recently.
+func Plan(threads []Thread, tasks []Task) (steps [][]string) {
 	byKey := map[string]*entry{}
 	for _, t := range tasks {
 		e := &entry{ref: t.ID, title: t.Title, status: t.Status, keys: map[string]bool{}}
@@ -124,22 +124,24 @@ func Plan(threads []Thread, tasks []Task) (steps [][]string, skipped []string) {
 		if len(th.PRs) == 0 {
 			continue
 		}
-		keys := []string{strings.ToLower(ThreadKey(th.ID))}
+		key := strings.ToLower(ThreadKey(th.ID))
+		e := byKey[key]
+		keys := []string{key}
+		var free []PR
 		for _, p := range th.PRs {
-			keys = append(keys, PRKey(p.Repo, p.Number))
-		}
-		e, ok := find(byKey, keys)
-		if !ok {
-			skipped = append(skipped, fmt.Sprintf("%s (%s): its keys find two tasks", th.Title, th.ID))
-			continue
+			k := PRKey(p.Repo, p.Number)
+			if holder := byKey[k]; holder == nil || holder == e {
+				keys = append(keys, k)
+				free = append(free, p)
+			}
 		}
 		var added []string
 		if e == nil {
-			if !anyRecent(th.PRs) {
+			if !anyRecent(free) {
 				continue
 			}
 			e = &entry{ref: keys[0], title: th.Title, status: "pending", keys: map[string]bool{}}
-			steps = append(steps, create(th, keys, byKey))
+			steps = append(steps, create(th, free, keys, byKey))
 			added = keys
 		} else {
 			for _, k := range keys {
@@ -185,7 +187,7 @@ func Plan(threads []Thread, tasks []Task) (steps [][]string, skipped []string) {
 			steps = append(steps, []string{"done", e.ref, "--outcome", outcome(merged)})
 		}
 	}
-	return steps, skipped
+	return steps
 }
 
 // reopenKey is the key `yoke add` reopens e by: a thread's when it has one.
@@ -204,42 +206,25 @@ func reopenKey(e *entry) string {
 	return keys[0]
 }
 
-func create(th Thread, keys []string, byKey map[string]*entry) []string {
+func create(th Thread, prs []PR, keys []string, byKey map[string]*entry) []string {
 	args := []string{"add", th.Title, "-t", TagWork}
 	if th.Track != "" {
 		args = append(args, "-t", th.Track)
 	}
 	repos := map[string]bool{strings.ToLower(th.Track): true}
-	for _, p := range th.PRs {
+	for _, p := range prs {
 		if r := strings.ToLower(repoName(p.Repo)); !repos[r] {
 			repos[r] = true
 			args = append(args, "-t", r)
 		}
 	}
-	if id := Ticket(th.PRs); id != "" && byKey[strings.ToLower(id)] != nil {
+	if id := Ticket(prs); id != "" && byKey[strings.ToLower(id)] != nil {
 		args = append(args, "--parent", id)
 	}
 	for _, k := range keys {
 		args = append(args, "-k", k)
 	}
 	return args
-}
-
-// find returns the task any of keys finds, nil when none does, and false
-// when they find two.
-func find(byKey map[string]*entry, keys []string) (*entry, bool) {
-	var found *entry
-	for _, k := range keys {
-		e := byKey[k]
-		if e == nil {
-			continue
-		}
-		if found != nil && found != e {
-			return nil, false
-		}
-		found = e
-	}
-	return found, true
 }
 
 func anyRecent(prs []PR) bool {

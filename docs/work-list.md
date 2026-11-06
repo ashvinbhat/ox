@@ -1,4 +1,4 @@
-# Work list (draft)
+# Work list
 
 One list of everything Ashvin's work is made of, so threads can be archived
 and nothing is lost. yoke holds the list, ox keeps most of it from what it
@@ -56,12 +56,12 @@ judgment: whether work is lasting, what it found, what it promised.
 | When | What happens | Done by |
 |---|---|---|
 | Every hour | Tickets assigned to Ashvin in the current sprint come into yoke; every linked ticket still open picks up its Notion status, even after its sprint ends | ox's hook runs a new `yoke sync` |
-| A thread opens a PR | Work found by the PR's key, else by the thread's, else created under the ticket its CB id names (from the PR title or branch); the PR's key and note added | ox, at each PR refresh |
+| A thread opens a PR | Work found by the thread's key, else created under the ticket its CB id names (from the PR title or branch); the PR's key and note added, unless another work already holds that PR | ox, at each PR refresh |
 | A thread does lasting work with no PR | Work added under the thread's key (found and reopened if it exists) | the thread |
 | A thread notices something small | Fixed in the PR that touches it; finding recorded as `done` with that PR | the thread |
 | A thread notices something it won't do now | Finding, `pending`, found from its work | the thread, in the same reply |
 | A thread promises a later step ("I'll check X after the merge") | Finding, `pending`, found from its work, with the date if it's timed | the thread, in the same reply |
-| A later thread picks up the same PR or ticket | The work is found by its key and reopened; the new thread's key added | the thread, or ox when it's a PR |
+| A later thread picks up the same ticket | It gets its own work under the ticket; a PR stays with the work that first held it | ox, or the thread |
 | A PR merges | Work `done` once all its PRs merged; outcome from the PR titles | ox, at each PR refresh |
 | Work with no PR ends | Work `done`, with a one-line outcome | the thread, on its last turn |
 | Ashvin says go | Finding `active`; started in that thread or picked up by another | the thread he says it in |
@@ -102,13 +102,22 @@ earlier work and outcomes, findings, notes.
 
 ## Build
 
+All four steps shipped on 2026-11-06.
+
 1. yoke: keys (adding under an existing key reopens), the found-from link,
-   and `yoke sync` for current-sprint tickets.
+   and `yoke sync` for current-sprint tickets (yoke#2).
 2. ox: work for every thread with a PR (found or created by key, closed on
    merge), the brief lines, and two always-loaded rules: lasting work gets a
-   task; a promise or a noticed-not-done step is a finding in the same reply.
+   task; a promise or a noticed-not-done step is a finding in the same reply
+   (ox#41). A PR belongs to the thread that opened it, else the oldest one
+   holding it, and a PR key stays with the work that first held it: the app
+   drops old PRs from a thread's list, so a PR can later show up on a thread
+   that only looked at it. Work is found by the thread's key alone.
 3. Board: the findings line.
-4. The daily archive routine.
+4. The daily archive routine: `ox work archivable` holds the rules, the
+   `daily-archive` skill archives through the app, a scheduled task runs it
+   each morning. Only a thread's own worktree is checked for changes: a
+   shared checkout's changes can't be told apart by thread.
 
 ## Not in scope
 

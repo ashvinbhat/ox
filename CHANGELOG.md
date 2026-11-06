@@ -177,6 +177,21 @@ mission harness is frozen.
   your go" plus the thread's own key and work. CLAUDE.md gains two rules:
   lasting work gets a task, and anything noticed and not done, or promised
   for later, is a finding in the same reply.
+- Board findings line: one line per ticket with findings waiting for your
+  go ("CB-18304 Video transcription · 3 findings"), filed under the ticket
+  their work is under, else their track. × hides a line until a newer
+  finding arrives under it.
+- Daily archive. `ox work archivable` lists the threads to archive: the
+  last turn finished with nothing waiting, not parked, no open PR, all work
+  done or dropped, their own worktree clean and pushed, and quiet for 24
+  hours. The `daily-archive` skill, run each morning by a scheduled task,
+  archives those, records them with `ox work archived`, and lists them. The
+  next brief says "Archived today: N threads (…)".
+- The board's title is "🐂 ox".
+- Work is found by the thread's key alone, and a PR key stays with the work
+  that first held it. The app drops a thread's old PRs from its list, so a
+  PR could show up on a thread that only looked at it and join the two
+  threads' work.
 
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
