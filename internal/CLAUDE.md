@@ -7,7 +7,9 @@ It sits here so threads that aren't about ox don't load it.
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
 - `ox setup` — install the `ox-brief` hook and check it runs (rolling back
-  `settings.json` if not), ox's skills and the board panel; re-run after
+  `settings.json` if not), ox's skills and the board panel, and turn on
+  board reload (`CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in settings.json's env, so
+  threads started since reload the board when it changes); re-run after
   `make install`
 - `ox reviews`, `ox review ask|start|post|record` — the review desk the
   `/review-pr` and `/review-asks` skills drive

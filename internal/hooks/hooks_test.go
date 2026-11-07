@@ -53,6 +53,34 @@ const theirs = `{
 }
 `
 
+func TestInstallTurnsOnBoardReloadAndKeepsTheirValue(t *testing.T) {
+	cases := []struct{ name, settings, want, foo string }{
+		{"no env", theirs, "1", ""},
+		{"env without it", `{"env": {"FOO": "bar"}}`, "1", "bar"},
+		{"their value", `{"env": {"FOO": "bar", "` + WatchEnv + `": "0"}}`, "0", "bar"},
+	}
+	m := NewManager(t.TempDir())
+	for _, c := range cases {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		if err := os.WriteFile(path, []byte(c.settings), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Install(path); err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			Env map[string]string `json:"env"`
+		}
+		data, _ := os.ReadFile(path)
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if w := Watching(path); w != c.want || got.Env["FOO"] != c.foo {
+			t.Errorf("%s: %s = %q, FOO = %q; want %q, %q", c.name, WatchEnv, w, got.Env["FOO"], c.want, c.foo)
+		}
+	}
+}
+
 func TestInstallReplacesOnlyOxsEntry(t *testing.T) {
 	home := t.TempDir()
 	settings := filepath.Join(t.TempDir(), "settings.json")

@@ -12,6 +12,21 @@
   from: "_ = writeAtomic(settingsPath, prev)"
   to: "_ = prev"
 
+- why: setup turns on board reload when settings.json has no env
+  file: internal/hooks/hooks.go
+  from: "settings[\"env\"] = map[string]any{WatchEnv: \"1\"}"
+  to: "settings[\"env\"] = map[string]any{}"
+
+- why: setup turns on board reload beside other env values
+  file: internal/hooks/hooks.go
+  from: "\t\t\tenv[WatchEnv] = \"1\""
+  to: "\t\t\t_ = env"
+
+- why: setup keeps a board reload value Ashvin set
+  file: internal/hooks/hooks.go
+  from: "if _, set := env[WatchEnv]; !set {"
+  to: "if true {"
+
 - why: the old script is retired only after the check passes
   file: internal/hooks/hooks.go
   from: "\treturn m.Init()\n}\n"

@@ -20,6 +20,8 @@ var setupCmd = &cobra.Command{
     way a thread would; if it fails, settings.json goes back as it was
   - ox's skills in ~/.claude/skills: /review-pr, /review-asks, /tidy, …
   - the ox board, a side panel of ox now, in ~/.claude/skills/ox-board
+  - board reload: ` + hooks.WatchEnv + `=1 in settings.json's env, so a
+    desktop thread reloads the board when it changes (a value you set stays)
 
 Safe to re-run after every upgrade. A folder you wrote yourself under one of
 those names is left alone.`,
@@ -35,6 +37,14 @@ those names is left alone.`,
 			return err
 		}
 		fmt.Println("Hook: ox-brief (SessionStart), checked: it prints the brief")
+		switch v := hooks.Watching(settings); v {
+		case "1":
+			fmt.Println("Board reload: on; threads started from now pick up a new board without a restart")
+		case "":
+			fmt.Printf("Board reload: off; settings.json's env isn't an object, so %s couldn't be added\n", hooks.WatchEnv)
+		default:
+			fmt.Printf("Board reload: off; settings.json sets %s to %q, which ox keeps\n", hooks.WatchEnv, v)
+		}
 
 		home, err := livepath.Home()
 		if err != nil {
@@ -48,7 +58,7 @@ those names is left alone.`,
 		for _, s := range skipped {
 			fmt.Printf("Skipped %s: ~/.claude/skills/%s is yours, not ox's\n", s, s)
 		}
-		fmt.Println("New threads pick these up; restart open ones to use them.")
+		fmt.Println("New threads pick these up; restart open ones for new skills.")
 		return nil
 	},
 }
