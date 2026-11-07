@@ -192,6 +192,10 @@ mission harness is frozen.
   that first held it. The app drops a thread's old PRs from its list, so a
   PR could show up on a thread that only looked at it and join the two
   threads' work.
+- Board reload. `ox setup` sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in
+  `~/.claude/settings.json`'s env, so a desktop thread reloads the board when
+  `ox setup` changes it, with no restart. It applies to threads started after
+  the setting; a value you set yourself stays, and setup says it's off.
 
 ### Fixed
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`

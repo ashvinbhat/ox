@@ -32,6 +32,11 @@ const Timeout = 15
 // and the day's reminders stay for the first real thread.
 const CheckEnv = "OX_HOOK_CHECK"
 
+// WatchEnv at 1 in settings.json's env makes a desktop thread reload a plugin
+// in ~/.claude/skills when its files change, so an ox setup reaches the board
+// in threads already open. Desktop threads don't watch without it.
+const WatchEnv = "CLAUDE_CODE_PLUGIN_DIR_WATCH"
+
 // checkPath is the PATH a hook can count on: the desktop app may pass no more.
 const checkPath = "/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -214,6 +219,15 @@ func (m *Manager) Install(settingsPath string) error {
 	}
 	events["SessionStart"] = append(kept, map[string]any{"matcher": "", "hooks": ours})
 	settings["hooks"] = events
+	// A value Ashvin set, 0 included, stays: Watching reports it.
+	switch env := settings["env"].(type) {
+	case nil:
+		settings["env"] = map[string]any{WatchEnv: "1"}
+	case map[string]any:
+		if _, set := env[WatchEnv]; !set {
+			env[WatchEnv] = "1"
+		}
+	}
 
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -223,6 +237,21 @@ func (m *Manager) Install(settingsPath string) error {
 		return err
 	}
 	return writeAtomic(settingsPath, append(data, '\n'))
+}
+
+// Watching is WatchEnv's value in settings.json's env, "" when it isn't set.
+func Watching(settingsPath string) string {
+	var settings struct {
+		Env map[string]any `json:"env"`
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil || json.Unmarshal(data, &settings) != nil {
+		return ""
+	}
+	if v, ok := settings.Env[WatchEnv]; ok {
+		return fmt.Sprint(v)
+	}
+	return ""
 }
 
 // InstallToClaudeCode installs into ~/.claude/settings.json.
