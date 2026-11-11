@@ -192,6 +192,16 @@
   from: " && now.Sub(at) < SnoozeFor {"
   to: " {"
 
+- why: a snoozed ask comes back when its thread asks something new
+  file: internal/asks/asks.go
+  from: "if at, ok := in.Snoozed[a.ID]; ok && !a.Since.After(at) &&"
+  to: "if at, ok := in.Snoozed[a.ID]; ok &&"
+
+- why: a dismissed ask stays gone until it changes, past a day
+  file: internal/asks/asks.go
+  from: "if at, ok := dropped[a.ID]; ok && !a.Since.After(at) {"
+  to: "if at, ok := dropped[a.ID]; ok && !a.Since.After(at) && now.Sub(at) < SnoozeFor {"
+
 - why: a board stop takes its kind only from a stop asked after his latest message
   file: internal/cli/board.go
   from: "if e.Passed && ids[e.Session] && e.At.After(since) {"

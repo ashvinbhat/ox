@@ -52,12 +52,12 @@ has no track, or if it sits in a group he made that isn't a track's group.
 
 **Board items.** What the board lists:
 
-- A thread's question (an ask of kind `question`). Snooze it (`ox asks drop
+- A thread's question (an ask of kind `question`). Dismiss it (`ox asks drop
   <id>`) when it only points at another thread's question, or a later
   message settled it. One marked `settled` ("ox#35 merged since") was asked
   before its PR merged: read the question; if the merge answered it (a
   merge, reinstall or go-ahead ask), archive the thread when it has nothing
-  else open, else snooze it. Any other question is his: list it under
+  else open, else dismiss it. Any other question is his: list it under
   "Still yours".
 - A PR ready to merge (kind `merge`). Merging is his: list it under "Still
   yours".
@@ -75,8 +75,8 @@ Done:
 1. Archived "Durable agents exploration" (done, idle 13d)
 2. Renamed "Durable chat turns: …" (side session -2) → "Durable chat turns · Valkey infra"
 3. Filed 7 threads into "Durable agents" (new group)
-4. Snoozed "MigrationRunWorkflow failures": its question repeats Landing migration's
-Undo: unarchive or rename in the sidebar; a snooze ends in a day.
+4. Dismissed "MigrationRunWorkflow failures": its question repeats Landing migration's
+Undo: unarchive or rename in the sidebar; a dismissed question comes back when its thread asks again.
 
 Still yours:
 - Send · Landing migration (SEG022): commission a redesign of the union-PGC fix?

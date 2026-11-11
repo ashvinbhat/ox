@@ -22,10 +22,11 @@ It sits here so threads that aren't about ox don't load it.
   memories stranded in other projects' stores, always-loaded text over 3,000
   words (the hook runs it weekly; the
   result is in `~/.ox/memory-check/last.json`)
-- `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
-  the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
-  refreshed by the hook and the board once it's 10 minutes old; a drop
-  snoozes an ask for a day, or until it changes
+- `ox asks [--json] [--offline]`, `ox asks snooze|drop <id>`, `ox asks
+  refresh` — the queue of what waits on Ashvin; PR state is cached in
+  `~/.ox/asks/` and refreshed by the hook and the board once it's 10 minutes
+  old; a snooze hides an ask for a day, a drop until it changes (the board's
+  ⏲️ and ×)
 - `ox hook ask` — PreToolUse on AskUserQuestion and the next-step box: a
   question passes only when it starts with a kind from `~/.ox/stops.md`
   ("Send: …"), else it's sent back with the list; each one is logged in
@@ -73,8 +74,8 @@ It sits here so threads that aren't about ox don't load it.
   keys, notes per PR, start, done. `internal/cli/work.go` decides which
   thread a PR belongs to (the one that opened it) and runs the plan.
 - `internal/asks` — the asks queue: sources in, ranked asks and thread fixes
-  out (`Build`), PR state from gh (`FetchPRs`, cached), drops that snooze
-  for a day or until the ask changes.
+  out (`Build`), PR state from gh (`FetchPRs`, cached), snoozes (a day) and
+  drops (until the ask changes).
 - `internal/stops` — the stop list (`~/.ox/stops.md`, embedded default) and
   the log of every question the ask hook saw.
 - `internal/journal` — the decision journal: day files in `~/.ox/journal/`
@@ -100,7 +101,7 @@ It sits here so threads that aren't about ox don't load it.
 ├── repos/           # Cloned repos
 ├── reviews/         # Review rounds per PR
 ├── journal/         # Decision journal, one file a day
-├── asks/            # PR state cache and dropped asks
+├── asks/            # PR state cache, snoozed and dropped asks
 ├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
 ├── stops.md         # What a thread stops and asks Ashvin for

@@ -74,8 +74,11 @@ test('the panel shows the stops, then the work in progress by ticket, then what 
     ])
     expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual([
       `question:${A}:snooze`,
+      `question:${A}:dismiss`,
       'merge:ox#45:snooze',
+      'merge:ox#45:dismiss',
       'question:local_cccc:snooze',
+      'question:local_cccc:dismiss',
       'snooze-all',
     ])
     await ui.unmount()
@@ -96,15 +99,21 @@ test('a click on an item opens its thread in the Claude app', async ($, on) => {
   await ui.unmount()
 })
 
-test('× snoozes only its own item, then rereads ox', async ($, on) => {
+test('⏲️ snoozes and × dismisses only their own item, then reread ox', async ($, on) => {
   const { runs } = world(on, [])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'ox-board' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const asks = () => runs.filter(argv => argv.includes('asks') && !argv.includes('refresh')).map(argv => argv.slice(argv.indexOf('asks')))
   await ui.press({ key: 'merge:ox#45:snooze' })
-  const drop = runs.find(argv => argv.includes('drop'))
-  expect(drop?.slice(drop.indexOf('asks'))).toEqual(['asks', 'drop', 'merge:ox#45'])
+  expect(asks()).toEqual([['asks', 'snooze', 'merge:ox#45']])
   expect(nows(runs)).toBe(2)
+  await ui.press({ key: `question:${A}:dismiss` })
+  expect(asks()).toEqual([
+    ['asks', 'snooze', 'merge:ox#45'],
+    ['asks', 'drop', `question:${A}`],
+  ])
+  expect(nows(runs)).toBe(3)
   await ui.unmount()
 })
 
@@ -114,8 +123,8 @@ test('Snooze all snoozes every stop shown, and nothing in progress', async ($, o
   await $.command.run({ command: 'ox-board' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.press({ key: 'snooze-all' })
-  const drop = runs.find(argv => argv.includes('drop'))
-  expect(drop?.slice(drop.indexOf('asks'))).toEqual(['asks', 'drop', `question:${A}`, 'merge:ox#45', 'question:local_cccc'])
+  const snooze = runs.find(argv => argv.includes('snooze'))
+  expect(snooze?.slice(snooze.indexOf('asks'))).toEqual(['asks', 'snooze', `question:${A}`, 'merge:ox#45', 'question:local_cccc'])
   await ui.unmount()
 })
 
@@ -169,7 +178,7 @@ test('a failed snooze keeps the items and says why', async ($, on) => {
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.surfaces', () => ({ value: [] }))
   on('process.run', (_, e) =>
-    e.argv.includes('drop')
+    e.argv.includes('snooze')
       ? { value: { exitCode: 1, stdout: '', stderr: 'Error: locked\n' } }
       : { value: { exitCode: 0, stdout: JSON.stringify(VIEW), stderr: '' } },
   )

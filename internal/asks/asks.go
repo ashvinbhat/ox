@@ -27,8 +27,8 @@ const (
 // a review, then his own PRs, then housekeeping.
 var rank = map[Kind]int{KindQuestion: 0, KindReview: 1, KindMerge: 2, KindMemory: 3, KindRecap: 4}
 
-// SnoozeFor is how long a dropped ask stays hidden when nothing changes. A
-// drop is a snooze: what still waits comes back.
+// SnoozeFor is how long a snoozed ask stays hidden when nothing changes. A
+// dismissed one stays hidden until it changes.
 const SnoozeFor = 24 * time.Hour
 
 // StaleAfter is when a thread's question gets "still needed?".
@@ -56,8 +56,8 @@ type Queue struct {
 	Waiting []Ask     `json:"waiting"`
 	Fixes   []Ask     `json:"fixes"`
 	Dropped int       `json:"dropped,omitempty"`
-	Snoozed []Ask     `json:"snoozed,omitempty"` // the dropped asks themselves
-	PRsAt   time.Time `json:"prsAt,omitzero"`    // when PR state was fetched
+	Snoozed []Ask     `json:"snoozed,omitempty"`
+	PRsAt   time.Time `json:"prsAt,omitzero"` // when PR state was fetched
 }
 
 // Thread is a desktop thread as the queue sees it.
@@ -85,6 +85,7 @@ type Inputs struct {
 	PRs               []PR
 	PRsAt             time.Time
 	Merged            map[string]time.Time // short ref → when it merged
+	Snoozed           map[string]time.Time // ask id → when Ashvin snoozed it
 	MemorySuggestions int
 	MemoryAt          time.Time
 	RecapDue          bool
@@ -127,8 +128,11 @@ func Build(in Inputs, dropped map[string]time.Time, now time.Time) Queue {
 
 	q := Queue{PRsAt: in.PRsAt}
 	for _, a := range all {
-		if at, ok := dropped[a.ID]; ok && !a.Since.After(at) && now.Sub(at) < SnoozeFor {
+		if at, ok := dropped[a.ID]; ok && !a.Since.After(at) {
 			q.Dropped++
+			continue
+		}
+		if at, ok := in.Snoozed[a.ID]; ok && !a.Since.After(at) && now.Sub(at) < SnoozeFor {
 			q.Snoozed = append(q.Snoozed, a)
 			continue
 		}
