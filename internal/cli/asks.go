@@ -53,7 +53,7 @@ the top three.`,
 
 var asksDropCmd = &cobra.Command{
 	Use:          "drop <id>...",
-	Short:        "Hide asks until they change (ids from --json)",
+	Short:        "Snooze asks for a day, or until they change (ids from --json)",
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -227,7 +227,7 @@ func renderAsks(w io.Writer, q asks.Queue, now time.Time) {
 	} else {
 		fmt.Fprintln(w)
 	}
-	fmt.Fprintln(w, "`ox asks drop <id>` hides one until it changes (ids in --json).")
+	fmt.Fprintln(w, "`ox asks drop <id>` snoozes one for a day, or until it changes (ids in --json).")
 }
 
 // briefAsks is the brief's part: the top three asks, the count of the rest,

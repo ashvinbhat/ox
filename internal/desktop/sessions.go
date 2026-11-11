@@ -69,6 +69,8 @@ type Session struct {
 	ID           string          `json:"sessionId"`
 	CLISessionID string          `json:"cliSessionId"`
 	LastCLIID    string          `json:"lastAssistantCliSessionId"`
+	PriorCLIIDs  []string        `json:"priorCliSessionIds"`
+	LastUserMs   float64         `json:"latestUserFrameAt"` // his latest message
 	Title        string          `json:"title"`
 	Cwd          string          `json:"cwd"`
 	Archived     bool            `json:"isArchived"`

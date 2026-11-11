@@ -1,6 +1,6 @@
 ---
 name: own-it
-description: Run an own-it round on the task in this thread — Ashvin predicts the approach before any code is written, Claude builds it, then compares his prediction with what was built and explains each gap. Use when he says "own it", "let me own this", "/own-it", or accepts an own-it offer on an own track (durable, ox).
+description: Run an own-it round on the task in this thread — Ashvin predicts the approach before any code is written, Claude builds it, then compares his prediction with what was built and explains each gap. Use when he says "own it", "let me own this" or "/own-it". Never offer one.
 metadata:
   owner: ox
 ---
@@ -18,6 +18,9 @@ makes it non-trivial. Then ask one question and stop:
 
 > Your call: where does the change go, what shape does it take, and what's
 > the main risk? A line each is enough. ("skip" runs the task normally.)
+
+His prediction is a Fact stop: in the next-step box, start the question with
+"Fact:".
 
 Don't hint at your own plan. Don't list options; that gives the answer away.
 If he says "skip", do the task normally and log nothing.
@@ -53,10 +56,7 @@ ox journal own-it --grade partial \
   --gap "signals can't return values; replay needs results in history"
 ```
 
-## When to offer it
+## When to run it
 
-On an own track (`own: true` in `~/.ox/tracks.yaml`), offer a round once,
-before writing code, if `ox journal status` shows rounds left today (2 a day).
-One line: "Own-it round on this? You predict, I build, then we compare."
-Don't offer it for one-line fixes, pure investigation, or when he's in a
-hurry. When he asks for it, run it whatever the count.
+Only when he asks. `ox journal status` shows the rounds left today (2 a day);
+when he asks past that, run it anyway.

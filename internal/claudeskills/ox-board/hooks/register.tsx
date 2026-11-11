@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Board, Item } from '../types'
+import type { Board, Flight, Need } from '../types'
 
 const PANE = 'ox-board'
 const TITLE = '🐂 ox'
@@ -15,9 +15,7 @@ const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || ec
 
 type View = {
   problems?: string[]
-  threads?: { sessionId: string; title: string; state: string; lastActive: string; dropped?: boolean }[]
-  asks?: { waiting?: { id: string; kind: string; what: string; where?: string; thread?: string; since: string; settled?: string }[] }
-  findings?: { id: string; title: string; count: number; since: string; dropped?: boolean }[]
+  board?: { needs?: Need[]; snoozed?: number; inFlight?: Flight[]; landed?: string[] }
 }
 
 function age(since: string, now: number): string {
@@ -25,36 +23,6 @@ function age(since: string, now: number): string {
   if (minutes < 60) return `${minutes}m`
   if (minutes < 48 * 60) return `${Math.round(minutes / 60)}h`
   return `${Math.round(minutes / 1440)}d`
-}
-
-// The threads that need Ashvin: a question he hasn't dropped, a PR of theirs
-// ready to merge, or a turn that went silent. Asks that aren't a thread's
-// (reviews, memory, recap) and fixes threads can make stay off the panel.
-// Below them, one line per ticket with findings waiting for his go.
-function attention(view: View, now: number): Item[] {
-  const items: Item[] = []
-  for (const a of view.asks?.waiting ?? []) {
-    if (!a.thread || !a.where) continue
-    if (a.kind === 'question') {
-      const waiting = a.settled ? `${a.what} (${a.settled}; still needed?)` : a.what
-      items.push({ id: a.id, title: a.where, waiting, age: age(a.since, now) })
-    }
-    if (a.kind === 'merge') {
-      const ref = a.what.replace(/^Merge /, '').split(':')[0]
-      items.push({ id: a.id, title: a.where, waiting: `${ref} is ready to merge`, age: age(a.since, now) })
-    }
-  }
-  for (const t of view.threads ?? []) {
-    if (t.state === 'stuck' && !t.dropped) {
-      items.push({ id: `stuck:${t.sessionId}`, title: t.title, waiting: 'Went quiet mid-turn; it may have stopped', age: age(t.lastActive, now) })
-    }
-  }
-  for (const f of view.findings ?? []) {
-    if (f.dropped) continue
-    const waiting = `${f.count} ${f.count === 1 ? 'finding' : 'findings'} waiting for your go`
-    items.push({ id: f.id, title: f.title, waiting, age: age(f.since, now) })
-  }
-  return items
 }
 
 async function refresh($: EngineInterface): Promise<void> {
@@ -65,7 +33,8 @@ async function refresh($: EngineInterface): Promise<void> {
     .run(ox('now', '--brief', '--json'), { timeoutMs: 20_000 })
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
   const now = await $.clock.now()
-  const fail = (error: string) => update($, board, b => (b ? { ...b, error } : { at: now, items: [], error }))
+  const fail = (error: string) =>
+    update($, board, b => (b ? { ...b, error } : { at: now, needs: [], snoozed: 0, flights: [], landed: [], error }))
   if (ran.exitCode !== 0) {
     await fail(ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`)
     return
@@ -77,13 +46,20 @@ async function refresh($: EngineInterface): Promise<void> {
     await fail("ox printed something that isn't JSON")
     return
   }
-  await update($, board, () => ({ at: now, items: attention(view, now), problems: view.problems ?? [] }))
+  const v = view.board ?? {}
+  await update($, board, () => ({
+    at: now,
+    needs: v.needs ?? [],
+    snoozed: v.snoozed ?? 0,
+    flights: v.inFlight ?? [],
+    landed: v.landed ?? [],
+    problems: view.problems ?? [],
+  }))
 }
 
-// Clear drops items through ox, so every panel loses them. Each comes back
-// when its thread asks something new or moves again, or a new finding
-// arrives under its ticket.
-async function clear($: EngineInterface, ids: string[]): Promise<void> {
+// × snoozes through ox, so every panel loses the item. It comes back after a
+// day, or sooner when its thread asks something new.
+async function snooze($: EngineInterface, ids: string[]): Promise<void> {
   const ran = await $.process
     .run(ox('asks', 'drop', ...ids), { timeoutMs: 20_000 })
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
@@ -92,16 +68,42 @@ async function clear($: EngineInterface, ids: string[]): Promise<void> {
     await update($, board, b => (b ? { ...b, error } : b))
     return
   }
-  $.ui.toast(ids.length === 1 ? 'Cleared. It comes back when it changes.' : `Cleared ${ids.length}. Each comes back when it changes.`)
+  $.ui.toast(ids.length === 1 ? 'Snoozed for a day.' : `Snoozed ${ids.length} for a day.`)
   await refresh($)
+}
+
+// A pane draws only http(s) links, so each thread gets a stand-in address the
+// panel answers itself by asking macOS to open the thread in the Claude app.
+const href = (thread: string) => `https://ox.invalid/thread/${thread}`
+
+async function openThread($: EngineInterface, thread: string): Promise<void> {
+  if (!/^local_[0-9a-f-]+$/.test(thread)) return
+  const ran = await $.process
+    .run(['/usr/bin/open', `claude://claude.ai/epitaxy/${thread}`], { timeoutMs: 10_000 })
+    .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
+  if (ran.exitCode !== 0) {
+    const error = `couldn't open the thread: ${ran.stderr.trim().split('\n')[0] || `open exited ${ran.exitCode}`}`
+    await update($, board, b => (b ? { ...b, error } : b))
+  }
 }
 
 const escape = (s: string) => s.replace(/([\\`*_[\]<>#|])/g, '\\$1')
 
-const line = (i: Item) => `**${escape(i.title)}**  \n${escape(i.waiting)} · ${i.age}`
+const link = (text: string, thread: string) => `[${text}](${href(thread)})`
+
+const needText = (n: Need, now: number) =>
+  `${link(`**${escape(n.kind ? `${n.kind} · ${n.title}` : n.title)}**`, n.thread)}  \n${link(`${escape(n.what)} · ${age(n.since, now)}`, n.thread)}`
+
+const STATE: Record<string, string> = { stuck: 'went quiet mid-turn', 'in review': 'in review', working: 'working', parked: 'parked' }
+
+const flightText = (f: Flight, now: number) => {
+  const detail = [...(f.prs ?? []), STATE[f.state] ?? f.state, age(f.since, now)].join(' · ')
+  const title = f.ticket ? escape(f.title) : `**${escape(f.title)}**`
+  return `${link(title, f.thread)}  \n${link(escape(detail), f.thread)}`
+}
 
 // A job that keeps failing (gh logged out, say) leaves the board quietly stale,
-// so it says so under the items until the job succeeds again.
+// so it says so at the bottom until the job succeeds again.
 const note = (b: Board) =>
   [...(b.problems ?? []), ...(b.error ? [b.error] : [])].map(t => `_ox: ${escape(t)}_`).join('\n\n')
 
@@ -120,7 +122,7 @@ async function show($: EngineInterface): Promise<void> {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'ox-board', description: 'Show the threads that need you' })
+    await $.command.register({ name: 'ox-board', description: 'Show what needs you and what is in flight' })
     if ((await $.session.surfaces()).includes('desktop')) void show($)
     return next(e)
   })
@@ -136,29 +138,68 @@ export const register: Register = on => {
   })
 
   // Markdown draws with the chat's own type, so the panel reads like a reply.
+  // Every line of an item is a link into its thread.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const b = await read($, board)
     if (!b) return <Text dimColor>Reading ox…</Text>
-    if (b.items.length === 0) {
-      return <Markdown key="threads" text={['Nothing needs you right now.', note(b)].filter(Boolean).join('\n\n')} />
+    const now = b.at
+    const needs = b.needs ?? []
+    const flights = b.flights ?? []
+    const parts = []
+
+    if (needs.length > 0) {
+      parts.push(<Text key="needs:head" dimColor>{`NEEDS YOU · ${needs.length}`}</Text>)
+      for (const n of needs) {
+        parts.push(
+          <Box key={n.id} flexDirection="row" gap={1}>
+            <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+              <Markdown
+                key={`need:${n.id}`}
+                text={needText(n, now)}
+                pressableLinks={[href(n.thread)]}
+                onLinkPress={() => void openThread($, n.thread)}
+              />
+            </Box>
+            <Button key={`${n.id}:snooze`} label="×" plain dimColor onPress={() => void snooze($, [n.id])} />
+          </Box>,
+        )
+      }
+    } else {
+      parts.push(<Markdown key="needs:none" text="Nothing needs you right now." />)
     }
-    const rows = b.items.map(i => (
-      <Box key={i.id} flexDirection="row" gap={1}>
-        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          <Markdown key={`${i.id}:text`} text={line(i)} />
-        </Box>
-        <Button key={`${i.id}:clear`} label="×" plain dimColor onPress={() => void clear($, [i.id])} />
-      </Box>
-    ))
-    const ids = b.items.map(i => i.id)
+    if (b.snoozed > 0) parts.push(<Text key="snoozed" dimColor>{`${b.snoozed} snoozed`}</Text>)
+
+    if (flights.length > 0) {
+      parts.push(<Text key="flights:head" dimColor>{`IN FLIGHT · ${flights.length}`}</Text>)
+      flights.forEach((f, i) => {
+        if (f.ticket && f.ticket !== flights[i - 1]?.ticket) {
+          parts.push(<Markdown key={`ticket:${f.ticket}`} text={`**${escape(f.ticket)}**`} />)
+        }
+        parts.push(
+          <Markdown
+            key={`flight:${f.thread}`}
+            text={flightText(f, now)}
+            pressableLinks={[href(f.thread)]}
+            onLinkPress={() => void openThread($, f.thread)}
+          />,
+        )
+      })
+    }
+    if ((b.landed ?? []).length > 0) {
+      parts.push(<Text key="landed" dimColor>{`Landed today: ${b.landed.join(', ')}`}</Text>)
+    }
+    if (note(b)) parts.push(<Markdown key="notes" text={note(b)} />)
+    if (needs.length > 0) {
+      parts.push(
+        <Box key="actions" flexDirection="row">
+          <Button key="snooze-all" label="Snooze all" dimColor onPress={() => void snooze($, needs.map(n => n.id))} />
+        </Box>,
+      )
+    }
     return (
       <Box flexDirection="column" gap={1}>
-        {rows}
-        {note(b) ? <Markdown key="notes" text={note(b)} /> : []}
-        <Box flexDirection="row">
-          <Button key="clear" label="Clear all" dimColor onPress={() => void clear($, ids)} />
-        </Box>
+        {parts}
       </Box>
     )
   })

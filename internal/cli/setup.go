@@ -10,14 +10,18 @@ import (
 	"github.com/ashvinbhat/ox/internal/claudeskills"
 	"github.com/ashvinbhat/ox/internal/hooks"
 	"github.com/ashvinbhat/ox/internal/livepath"
+	"github.com/ashvinbhat/ox/internal/stops"
 )
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Install ox into Claude Code: the start hook, ox's skills and the board panel",
 	Long: `Installs what every Claude Code thread picks up from ox:
-  - the ox-brief SessionStart hook, ` + "`ox hook session-start`" + `, then runs it once the
-    way a thread would; if it fails, settings.json goes back as it was
+  - the ox-brief SessionStart hook, ` + "`ox hook session-start`" + `, and the ask hook,
+    ` + "`ox hook ask`" + `, then runs each once the way a thread would; if either
+    fails, settings.json goes back as it was
+  - the stop list, ~/.ox/stops.md: what a thread stops and asks you for
+    (written once; your edits stay)
   - ox's skills in ~/.claude/skills: /review-pr, /review-asks, /tidy, …
   - the ox board, a side panel of ox now, in ~/.claude/skills/ox-board
   - board reload: ` + hooks.WatchEnv + `=1 in settings.json's env, so a
@@ -37,6 +41,16 @@ those names is left alone.`,
 			return err
 		}
 		fmt.Println("Hook: ox-brief (SessionStart), checked: it prints the brief")
+		fmt.Println("Hook: ox ask (before a question to you), checked: it sends a plain question back")
+		wrote, err := stops.Install(cfg.Home)
+		if err != nil {
+			return fmt.Errorf("write the stop list: %w", err)
+		}
+		if wrote {
+			fmt.Printf("Stops: %s written with the default list\n", stops.Path(cfg.Home))
+		} else {
+			fmt.Printf("Stops: %s is yours, kept\n", stops.Path(cfg.Home))
+		}
 		switch v := hooks.Watching(settings); v {
 		case "1":
 			fmt.Println("Board reload: on; threads started from now pick up a new board without a restart")

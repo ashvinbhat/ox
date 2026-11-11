@@ -20,6 +20,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/journal"
 	"github.com/ashvinbhat/ox/internal/memcheck"
 	"github.com/ashvinbhat/ox/internal/park"
+	"github.com/ashvinbhat/ox/internal/stops"
 	"github.com/ashvinbhat/ox/internal/tracks"
 	"github.com/ashvinbhat/ox/internal/work"
 	"github.com/ashvinbhat/ox/internal/yokecli"
@@ -94,6 +95,28 @@ type nowView struct {
 	Self *nowSelfView `json:"self,omitempty"`
 	// Findings waiting for Ashvin's go, one group per ticket, for the board.
 	Findings []findingGroup `json:"findings,omitempty"`
+	// Stops counts today's questions to Ashvin: let through, and sent back.
+	Stops *stopCount `json:"stops,omitempty"`
+	// Board is what the ox board panel draws.
+	Board *boardView `json:"board,omitempty"`
+}
+
+type stopCount struct {
+	Asked    int `json:"asked"`
+	SentBack int `json:"sentBack"`
+}
+
+func stopsToday(oxHome string, now time.Time) *stopCount {
+	y, m, d := now.Date()
+	var c stopCount
+	for _, e := range stops.Since(oxHome, time.Date(y, m, d, 0, 0, 0, 0, now.Location())) {
+		if e.Passed {
+			c.Asked++
+		} else {
+			c.SentBack++
+		}
+	}
+	return &c
 }
 
 type nowSelfView struct {
@@ -172,6 +195,12 @@ func buildNow(oxHome string, now time.Time) nowView {
 	}
 	view.Asks = &q
 	view.Problems = jobProblems(oxHome, now)
+	view.Stops = stopsToday(oxHome, now)
+	if nowJSON {
+		board := buildBoard(q, view.Threads, sessions, view.Tasks, stops.Since(oxHome, now.Add(-14*24*time.Hour)),
+			asks.LoadMerged(oxHome), now)
+		view.Board = &board
+	}
 	markDroppedFindings(view.Findings, dropped)
 	if nowBrief && nowMention {
 		view.Mention = mentionOnce(oxHome, view, now)
@@ -427,6 +456,9 @@ func renderBrief(v nowView) string {
 	if t := workLine(v.Tasks); t != "" {
 		b.WriteString(t + "\n")
 	}
+	if s := v.Stops; s != nil && s.Asked+s.SentBack > 0 {
+		fmt.Fprintf(&b, "Stops today: %d asked, %d sent back\n", s.Asked, s.SentBack)
+	}
 	if s := v.Self; s != nil {
 		line := "This thread's key: " + s.Key
 		if s.Work != nil {
@@ -568,11 +600,7 @@ func workLine(tasks []yokecli.Task) string {
 	if tickets == 0 && findings == 0 {
 		return ""
 	}
-	waiting := "none waiting for your go"
-	if findings > 0 {
-		waiting = fmt.Sprintf("%d waiting for your go", findings)
-	}
-	return fmt.Sprintf("Tickets: %d open · Findings: %s", tickets, waiting)
+	return fmt.Sprintf("Tickets: %d open · Findings: %d open", tickets, findings)
 }
 
 func waitingFindings(tasks []yokecli.Task) bool {

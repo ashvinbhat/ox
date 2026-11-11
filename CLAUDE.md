@@ -10,7 +10,7 @@ also read "Building ox".
 - Ashvin chats in plain words. He doesn't run `ox` or slash commands and
   won't remember them: they're yours. Map what he says to the command or
   skill, run it, and answer in prose. Never end with "run `ox …`" or "type
-  /…"; offer in words and do it on a yes.
+  /…"; do it.
   - "what's waiting on me?" → `ox asks`; "where are things?" → `ox now`
   - "what did we decide today / this week?" → `ox journal [--days 7]`
   - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
@@ -22,20 +22,25 @@ also read "Building ox".
     targeted tests pass locally
 - Starting work is just opening a thread and saying what to do. No `ox go`,
   no task to create first.
+- Stops: ask Ashvin only for a stop in `~/.ox/stops.md` (Send, Delete,
+  Merge, Call, Fact), and start the question with its kind: "Send: post this
+  reply in #backend?". Everything else: do it, then say what you did and how
+  to undo it. The `ox hook ask` hook sends any other question back. A go he
+  gave covers the steps it names.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook,
   `ox hook session-start`):
   the top of what's waiting on Ashvin, PR fixes threads can make, what's in
   review, what's running. It is background: don't bring it up unless he asks
   what needs him or the thread's work touches it. One exception: a "Mention
-  once" line (only the first thread of the day gets it). Say it as a
-  one-sentence offer at the end of your first reply ("Also: the weekly recap
-  is due. Want to do it now?"). An "ox problem:" line is a background job
+  once" line (only the first thread of the day gets it). Say it in one
+  sentence at the end of your first reply ("Also: the weekly recap is
+  due."). An "ox problem:" line is a background job
   that keeps failing; raise it only when it blocks this thread's work. `ox now`
   is the full view, `--json` for parsing, `--track <short>` to filter.
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
-  `ox setup` installs): the threads that need him, each with one line on
-  what it's waiting on. A small × hides one, Clear all hides every item; each
-  comes back when its thread asks something new. It's how he sees what's waiting without asking.
+  `ox setup` installs): Needs you (threads stopped on him, with the stop's
+  kind), In flight (threads with work moving, by ticket) and Landed today.
+  A click on an item opens its thread; × snoozes a stop for a day.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
@@ -53,7 +58,8 @@ also read "Building ox".
   check X after the merge"), is a finding, added in the same reply:
   `yoke add "…" -t finding -t <track> --from <work> -b "what, where, why,
   how to pick it up"`. A small one in code your open PR touches, fix there.
-  His go makes it `active`, his drop `dropped`.
+  Findings are open work any thread may pick up; his drop makes one
+  `dropped`.
 - Memory: Claude auto-memory for this folder is the one store. When a memory
   rests on specific code or files, add `metadata.cites`
   (`["backend:SegmentService", "ox:internal/cli/now.go", "~/.ox/tracks.yaml"]`)
@@ -68,10 +74,10 @@ also read "Building ox".
 - Asks: `ox asks` is one ranked queue of what only Ashvin can do (thread
   questions, review asks, PRs ready to merge, memory, recap), plus PR fixes
   threads can make. On his PRs, resolve conflicts, fix CI your change broke
-  and small review comments yourself; ask before any design, architecture,
-  big or breaking change, and never break main. `/tidy` archives finished
-  threads, renames duplicates, files threads into a sidebar group per track
-  and clears board items, after his OK.
+  and review comments yourself; make design calls, log them and name them,
+  unless one is a Call; never break main. `/tidy` archives finished threads,
+  renames duplicates, files threads into a sidebar group per track and
+  clears board items, then reports what it did.
 - Decisions: when you make a real choice (an approach, a design, a trade-off,
   the root cause you act on), log it right then:
   `ox journal add --decided "…" --over "…" --why "…"`, a line each in his
@@ -79,10 +85,9 @@ also read "Building ox".
   your closing message too. Skip routine choices (names, commands). The
   journal is `~/.ox/journal/YYYY-MM-DD.md`; `ox journal` reads today.
 - Own-it: tracks with `own: true` in `tracks.yaml` (durable, ox) are the ones
-  he wants to understand deeply. On those, before writing code, offer one
-  own-it round if `ox journal status` shows rounds left today (2 a day):
-  he predicts the approach, you build, then compare (`/own-it`). Run it
-  anywhere when he asks.
+  he wants to understand deeply. When he asks, run a round (2 a day, `ox
+  journal status`): he predicts the approach, you build, then compare
+  (`/own-it`). Don't offer one.
 - Recap: `/recap` takes three concepts from the week's journal and asks him
   to explain each back. The brief shows "Recap due" Friday through Monday.
 - PR reviews happen only when Ashvin asks, against the whole codebase at the

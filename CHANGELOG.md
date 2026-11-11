@@ -186,12 +186,30 @@ mission harness is frozen.
   that first held it. The app drops a thread's old PRs from its list, so a
   PR could show up on a thread that only looked at it and join the two
   threads' work.
+- Stops. A thread asks Ashvin only for a stop in `~/.ox/stops.md`: Send,
+  Delete, Merge, Call or Fact, named first ("Send: post this reply?").
+  Everything else it does, then says how to undo it. `ox hook ask`, a
+  PreToolUse hook on AskUserQuestion and the next-step box, sends any other
+  question back with the list, and logs each one. The brief says "Stops
+  today: N asked, M sent back". `ox setup` installs the hook, checks it, and
+  writes the default list once. CLAUDE.md and the skills lose their own
+  stops: no own-it offers, findings don't wait for his go, design calls are
+  made and logged, tidy acts and reports.
+- The board, rebuilt: Needs you (threads stopped on him, with the stop's
+  kind and its words), In flight (threads with work moving, grouped under
+  their ticket, with PRs, state and age) and Landed today (PRs merged).
+  Clicking an item opens its thread in the Claude app. `ox now --json`
+  carries the `board` it draws.
 - Board reload. `ox setup` sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in
   `~/.claude/settings.json`'s env, so a desktop thread reloads the board when
   `ox setup` changes it, with no restart. It applies to threads started after
   the setting; a value you set yourself stays, and setup says it's off.
 
 ### Fixed
+- A dropped ask hid for good while it didn't change, so the board said
+  nothing was waiting while 3 threads were. A drop is now a snooze: back
+  after a day, or sooner when the ask changes. The board's × and Snooze all
+  say so.
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
   with ox's. It now replaces only ox's entry and keeps the rest.
 - `ox now` called a thread stuck when it was opened and never used, such as

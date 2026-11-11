@@ -25,6 +25,17 @@ import (
 // PATH may not reach ~/go/bin, where make install puts ox.
 const Command = `/bin/sh -c 'exec "$(command -v ox || echo "$HOME/go/bin/ox")" hook session-start'`
 
+// AskCommand runs before a thread asks Ashvin something (AskMatcher): it
+// sends the question back unless it's a stop in ~/.ox/stops.md.
+const AskCommand = `/bin/sh -c 'exec "$(command -v ox || echo "$HOME/go/bin/ox")" hook ask'`
+
+// AskMatcher names the calls that ask Ashvin: the question dialog and the
+// next-step box.
+const AskMatcher = "AskUserQuestion|mcp__ccd_turn__wrap_up"
+
+// askTimeout is short: the ask hook only reads a small file.
+const askTimeout = 5
+
 // Timeout is the seconds Claude Code gives the hook before killing it.
 const Timeout = 15
 
@@ -186,29 +197,7 @@ func (m *Manager) Install(settingsPath string) error {
 	if events == nil {
 		events = map[string]any{}
 	}
-	groups, _ := events["SessionStart"].([]any)
-	kept := []any{}
-	for _, g := range groups {
-		group, ok := g.(map[string]any)
-		handlers, _ := group["hooks"].([]any)
-		if !ok || len(handlers) == 0 {
-			kept = append(kept, g)
-			continue
-		}
-		var rest []any
-		for _, h := range handlers {
-			if handler, ok := h.(map[string]any); ok {
-				if c, _ := handler["command"].(string); m.owns(c) {
-					continue
-				}
-			}
-			rest = append(rest, h)
-		}
-		if len(rest) > 0 {
-			group["hooks"] = rest
-			kept = append(kept, group)
-		}
-	}
+	kept := m.withoutOurs(events["SessionStart"])
 	var ours []any
 	for _, h := range m.List() {
 		handler := map[string]any{"type": "command", "command": h.Script}
@@ -218,6 +207,8 @@ func (m *Manager) Install(settingsPath string) error {
 		ours = append(ours, handler)
 	}
 	events["SessionStart"] = append(kept, map[string]any{"matcher": "", "hooks": ours})
+	events["PreToolUse"] = append(m.withoutOurs(events["PreToolUse"]), map[string]any{"matcher": AskMatcher,
+		"hooks": []any{map[string]any{"type": "command", "command": AskCommand, "timeout": askTimeout}}})
 	settings["hooks"] = events
 	// A value Ashvin set, 0 included, stays: Watching reports it.
 	switch env := settings["env"].(type) {
@@ -254,6 +245,35 @@ func Watching(settingsPath string) string {
 	return ""
 }
 
+// withoutOurs is an event's hook groups with ox's handlers taken out, every
+// other handler kept in its group.
+func (m *Manager) withoutOurs(event any) []any {
+	groups, _ := event.([]any)
+	kept := []any{}
+	for _, g := range groups {
+		group, ok := g.(map[string]any)
+		handlers, _ := group["hooks"].([]any)
+		if !ok || len(handlers) == 0 {
+			kept = append(kept, g)
+			continue
+		}
+		var rest []any
+		for _, h := range handlers {
+			if handler, ok := h.(map[string]any); ok {
+				if c, _ := handler["command"].(string); m.owns(c) {
+					continue
+				}
+			}
+			rest = append(rest, h)
+		}
+		if len(rest) > 0 {
+			group["hooks"] = rest
+			kept = append(kept, group)
+		}
+	}
+	return kept
+}
+
 // InstallToClaudeCode installs into ~/.claude/settings.json.
 func (m *Manager) InstallToClaudeCode() error {
 	path, err := SettingsPath()
@@ -266,7 +286,7 @@ func (m *Manager) InstallToClaudeCode() error {
 // owns reports a hook command ox registered: the built-in, a script in the
 // hooks dir, or a pre-1.0 script under another OX_HOME.
 func (m *Manager) owns(command string) bool {
-	return command == Command ||
+	return command == Command || command == AskCommand ||
 		strings.HasPrefix(command, m.hooksDir+string(filepath.Separator)) ||
 		strings.Contains(command, "/.ox/hooks/")
 }
@@ -305,6 +325,27 @@ func Check() error {
 	}
 	if got.Out.Event != "SessionStart" || !strings.Contains(got.Out.Context, "ox now") {
 		return fmt.Errorf("it printed no brief: %s", firstLine(string(out)))
+	}
+	return checkAsk(home)
+}
+
+// checkAsk runs the ask hook on a question that isn't a stop and wants it
+// sent back with the list.
+func checkAsk(home string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*askTimeout*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", AskCommand)
+	cmd.Env = []string{"PATH=" + checkPath, "HOME=" + home, CheckEnv + "=1"}
+	if v := os.Getenv("OX_HOME"); v != "" {
+		cmd.Env = append(cmd.Env, "OX_HOME="+v)
+	}
+	cmd.Stdin = strings.NewReader(`{"session_id":"ox-setup-check","tool_name":"mcp__ccd_turn__wrap_up","tool_input":{"ask":"Commit this?"}}`)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 || !strings.Contains(stderr.String(), "Sent back") {
+		return fmt.Errorf("the ask hook didn't send a plain question back (%v): %s", err, firstLine(stderr.String()))
 	}
 	return nil
 }
