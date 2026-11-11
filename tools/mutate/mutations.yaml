@@ -147,27 +147,12 @@
   from: "\t\tif next == nil {\n\t\t\tnext = cur.FoundFromID\n\t\t}\n"
   to: ""
 
-- why: a thread is archived only after 24 quiet hours
-  file: internal/cli/archive.go
-  from: "if !s.Finished() || now.Sub(s.LastActive()) < quietFor {"
-  to: "if !s.Finished() {"
+- why: setup removes ox's copy of a retired skill
+  file: internal/claudeskills/install.go
+  from: "os.RemoveAll(filepath.Join(dir, name))"
+  to: "error(nil)"
 
-- why: a thread with a question waiting isn't archived
-  file: internal/desktop/sessions.go
-  from: "return s.Ask() == \"\" && s.status() != \"blocked\""
-  to: "return s.status() != \"blocked\""
-
-- why: a parked thread isn't archived
-  file: internal/cli/archive.go
-  from: "if r, ok := parked[s.ID]; ok && r.Holds(s.LastActive()) {"
-  to: "if false {"
-
-- why: a thread with open work or an open PR isn't archived
-  file: internal/cli/archive.go
-  from: "if openWork[strings.ToLower(work.ThreadKey(s.ID))] || hasOpenPR(s, isOpen) {"
-  to: "if (false && openWork[strings.ToLower(work.ThreadKey(s.ID))]) || hasOpenPR(s, isOpen) {"
-
-- why: a thread whose own worktree has changes isn't archived
-  file: internal/cli/archive.go
-  from: "if ownWorktree(s.Cwd) && dirty(s.Cwd) {"
-  to: "if false {"
+- why: setup leaves a user's skill under a retired name
+  file: internal/claudeskills/install.go
+  from: "err == nil && bytes.Contains(existing, skillMarker)"
+  to: "err == nil && (true || bytes.Contains(existing, skillMarker))"

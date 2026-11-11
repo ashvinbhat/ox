@@ -32,11 +32,6 @@ It sits here so threads that aren't about ox don't load it.
   ticket a PR names, started while a PR is
   open, done once its PRs merged (every 10 minutes; log in
   `~/.ox/logs/work.log`)
-- `ox work archivable [--json]`, `ox work archived <id>...` — the threads
-  the daily routine archives (finished, not parked, no open PR, work done,
-  own worktree clean and pushed, quiet 24h) and its record of what it
-  archived, which the brief shows. The `ox daily archive` scheduled task runs
-  the `daily-archive` skill
 - `ox park --next "…"` — mark this thread parked; `/park` runs it after the
   resumption note. `ox now` shows it as parked with that step until the thread
   is active again; it's never an ask or archivable
@@ -98,7 +93,6 @@ It sits here so threads that aren't about ox don't load it.
 ├── asks/            # PR state cache and dropped asks
 ├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
-├── archived/        # What the daily routine archived, one file a day
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

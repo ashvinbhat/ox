@@ -81,15 +81,9 @@ already owns, a rule being described.
 
 ## Archiving
 
-A daily routine archives a thread when all of these hold, then posts what it
-archived:
-
-- its last turn finished, and no question is waiting on him,
-- it isn't parked,
-- it has no open PR,
-- all its work is `done` or `dropped`,
-- its worktree has no uncommitted or unpushed changes,
-- it has been quiet for 24 hours.
+Tidy archives finished threads, after his OK. A daily routine that
+archived on its own shipped on 2026-11-06 and was removed on 2026-11-11: it
+archived threads he was still using, and its own run threads.
 
 Pending findings don't keep a thread open: they live in yoke.
 
@@ -114,10 +108,7 @@ All four steps shipped on 2026-11-06.
    drops old PRs from a thread's list, so a PR can later show up on a thread
    that only looked at it. Work is found by the thread's key alone.
 3. Board: the findings line.
-4. The daily archive routine: `ox work archivable` holds the rules, the
-   `daily-archive` skill archives through the app, a scheduled task runs it
-   each morning. Only a thread's own worktree is checked for changes: a
-   shared checkout's changes can't be told apart by thread.
+4. The daily archive routine (removed 2026-11-11; see Archiving).
 
 ## Not in scope
 
@@ -137,6 +128,7 @@ All four steps shipped on 2026-11-06.
 1. Tickets: the current sprint only.
 2. Small findings: a thread fixes them without waiting for his go.
 3. Archiving: the routine archives on its own, then lists what it archived.
+   Reversed 2026-11-11: tidy archives, after his OK.
 4. Board: one line per ticket with findings waiting.
 5. Findings without a ticket: top-level tasks with the track (default).
 6. Notion: never written to; starting work doesn't move a ticket (default).

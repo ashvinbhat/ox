@@ -50,13 +50,16 @@ those names is left alone.`,
 		if err != nil {
 			return err
 		}
-		installed, skipped, err := claudeskills.Install(filepath.Join(home, ".claude", "skills"))
+		installed, skipped, removed, err := claudeskills.Install(filepath.Join(home, ".claude", "skills"))
 		if err != nil {
 			return fmt.Errorf("install skills: %w", err)
 		}
 		fmt.Printf("Skills and panel: %s\n", strings.Join(installed, ", "))
 		for _, s := range skipped {
 			fmt.Printf("Skipped %s: ~/.claude/skills/%s is yours, not ox's\n", s, s)
+		}
+		for _, s := range removed {
+			fmt.Printf("Removed %s: ox no longer ships it\n", s)
 		}
 		fmt.Println("New threads pick these up; restart open ones for new skills.")
 		return nil

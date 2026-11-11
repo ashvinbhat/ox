@@ -203,15 +203,6 @@ func (s Session) State(now time.Time) State {
 	}
 }
 
-// Finished reports a thread whose last turn ended with nothing waiting on
-// the user: no question, not blocked, not interrupted, not mid-turn.
-func (s Session) Finished() bool {
-	if s.neverRan() {
-		return true
-	}
-	return s.Ask() == "" && s.status() != "blocked" && !isSet(s.Interrupted) && s.status() != ""
-}
-
 // Archivable reports a finished thread nobody has touched in two days.
 func (s Session) Archivable(now time.Time) bool {
 	return s.State(now) == StateDone && now.Sub(s.LastActive()) > archiveAfter
