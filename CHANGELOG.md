@@ -207,9 +207,10 @@ mission harness is frozen.
 
 ### Fixed
 - A dropped ask hid for good while it didn't change, so the board said
-  nothing was waiting while 3 threads were. A drop is now a snooze: back
-  after a day, or sooner when the ask changes. The board's × and Snooze all
-  say so.
+  nothing was waiting while 3 threads were. Each stop on the board now has
+  two buttons: ⏲️ snoozes it for a day (`ox asks snooze <id>`), × dismisses
+  it until its thread asks something new (`ox asks drop <id>`). Snooze all
+  snoozes. Snoozed stops stay counted under Needs you.
 - `ox setup` replaced every SessionStart hook in `~/.claude/settings.json`
   with ox's. It now replaces only ox's entry and keeps the rest.
 - `ox now` called a thread stuck when it was opened and never used, such as

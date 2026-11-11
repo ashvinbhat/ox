@@ -264,6 +264,20 @@ func SaveDropped(oxHome string, dropped map[string]time.Time) error {
 	return writeJSON(filepath.Join(Dir(oxHome), "dropped.json"), dropped)
 }
 
+// LoadSnoozed reads when each snoozed ask was snoozed.
+func LoadSnoozed(oxHome string) (map[string]time.Time, error) {
+	snoozed := map[string]time.Time{}
+	err := readJSON(filepath.Join(Dir(oxHome), "snoozed.json"), &snoozed)
+	if os.IsNotExist(err) {
+		return snoozed, nil
+	}
+	return snoozed, err
+}
+
+func SaveSnoozed(oxHome string, snoozed map[string]time.Time) error {
+	return writeJSON(filepath.Join(Dir(oxHome), "snoozed.json"), snoozed)
+}
+
 func readJSON(path string, v any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

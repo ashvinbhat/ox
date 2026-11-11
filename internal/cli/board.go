@@ -23,7 +23,7 @@ type boardView struct {
 
 // boardNeed is one thread stopped on Ashvin.
 type boardNeed struct {
-	ID     string    `json:"id"`             // the ask's, for a snooze
+	ID     string    `json:"id"`             // the ask's, to snooze or dismiss it
 	Kind   string    `json:"kind,omitempty"` // the stop, when the thread named one
 	Title  string    `json:"title"`
 	What   string    `json:"what"`

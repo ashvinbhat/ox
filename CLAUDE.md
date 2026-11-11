@@ -40,7 +40,8 @@ also read "Building ox".
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
   `ox setup` installs): Needs you (threads stopped on him, with the stop's
   kind), In progress (threads with work moving, by ticket) and Landed today.
-  A click on an item opens its thread; × snoozes a stop for a day.
+  A click on an item opens its thread; ⏲️ snoozes a stop for a day, ×
+  dismisses it until its thread asks something new.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at

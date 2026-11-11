@@ -67,15 +67,31 @@ func TestDroppedComesBackWhenItChanges(t *testing.T) {
 	}
 }
 
-func TestADropIsASnoozeForADay(t *testing.T) {
+func TestASnoozeLastsADayADismissUntilItChanges(t *testing.T) {
 	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 	in := Inputs{Threads: []Thread{{ID: "local_a", Title: "A", Ask: "?", Since: now.Add(-48 * time.Hour)}}}
-	q := Build(in, map[string]time.Time{"question:local_a": now.Add(-time.Hour)}, now)
-	if len(q.Waiting) != 0 || len(q.Snoozed) != 1 || q.Snoozed[0].ID != "question:local_a" {
+	at := func(d time.Duration) map[string]time.Time {
+		return map[string]time.Time{"question:local_a": now.Add(-d)}
+	}
+
+	in.Snoozed = at(time.Hour)
+	if q := Build(in, nil, now); len(q.Waiting) != 0 || len(q.Snoozed) != 1 || q.Snoozed[0].ID != "question:local_a" {
 		t.Errorf("snoozed an hour ago: %+v", q)
 	}
-	if q := Build(in, map[string]time.Time{"question:local_a": now.Add(-25 * time.Hour)}, now); len(q.Waiting) != 1 || len(q.Snoozed) != 0 {
+	in.Snoozed = at(25 * time.Hour)
+	if q := Build(in, nil, now); len(q.Waiting) != 1 || len(q.Snoozed) != 0 {
 		t.Errorf("snoozed 25h ago and still waiting, so it's back: %+v", q)
+	}
+	in.Snoozed = at(2 * time.Hour)
+	in.Threads[0].Since = now.Add(-time.Hour)
+	if q := Build(in, nil, now); len(q.Waiting) != 1 {
+		t.Errorf("asked again after the snooze, so it's back: %+v", q)
+	}
+
+	in.Snoozed = nil
+	in.Threads[0].Since = now.Add(-48 * time.Hour)
+	if q := Build(in, at(25*time.Hour), now); len(q.Waiting) != 0 || len(q.Snoozed) != 0 || q.Dropped != 1 {
+		t.Errorf("dismissed 25h ago and nothing new, so it stays gone: %+v", q)
 	}
 }
 

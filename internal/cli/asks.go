@@ -53,7 +53,7 @@ the top three.`,
 
 var asksDropCmd = &cobra.Command{
 	Use:          "drop <id>...",
-	Short:        "Snooze asks for a day, or until they change (ids from --json)",
+	Short:        "Dismiss asks until they change (ids from --json)",
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -68,7 +68,29 @@ var asksDropCmd = &cobra.Command{
 		if err := asks.SaveDropped(cfg.Home, dropped); err != nil {
 			return err
 		}
-		fmt.Printf("Dropped %d. Each comes back if it changes.\n", len(args))
+		fmt.Printf("Dismissed %d. Each comes back if it changes.\n", len(args))
+		return nil
+	},
+}
+
+var asksSnoozeCmd = &cobra.Command{
+	Use:          "snooze <id>...",
+	Short:        "Snooze asks for a day, or until they change (ids from --json)",
+	Args:         cobra.MinimumNArgs(1),
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := requireConfig()
+		snoozed, err := asks.LoadSnoozed(cfg.Home)
+		if err != nil {
+			return err
+		}
+		for _, id := range args {
+			snoozed[id] = time.Now().UTC()
+		}
+		if err := asks.SaveSnoozed(cfg.Home, snoozed); err != nil {
+			return err
+		}
+		fmt.Printf("Snoozed %d for a day.\n", len(args))
 		return nil
 	},
 }
@@ -150,6 +172,7 @@ func collectAsks(oxHome string, threads []nowThread, reviews []ghreview.QueueIte
 		in.RecapDue, in.DecisionsWeek = st.RecapDue, st.DecisionsWeek
 	}
 	dropped, _ := asks.LoadDropped(oxHome)
+	in.Snoozed, _ = asks.LoadSnoozed(oxHome)
 	return asks.Build(in, dropped, now)
 }
 
@@ -227,7 +250,7 @@ func renderAsks(w io.Writer, q asks.Queue, now time.Time) {
 	} else {
 		fmt.Fprintln(w)
 	}
-	fmt.Fprintln(w, "`ox asks drop <id>` snoozes one for a day, or until it changes (ids in --json).")
+	fmt.Fprintln(w, "`ox asks snooze <id>` hides one for a day, `ox asks drop <id>` until it changes (ids in --json).")
 }
 
 // briefAsks is the brief's part: the top three asks, the count of the rest,
@@ -290,6 +313,6 @@ func init() {
 	asksCmd.Flags().BoolVar(&asksJSON, "json", false, "Machine-readable output, with ask ids")
 	asksCmd.Flags().BoolVar(&asksOffline, "offline", false, "Use cached PR state; don't call GitHub")
 	asksRefreshCmd.Flags().BoolVar(&asksIfDue, "if-due", false, "Skip unless PR state is 10 minutes old (the board and hook use this)")
-	asksCmd.AddCommand(asksDropCmd, asksRefreshCmd)
+	asksCmd.AddCommand(asksDropCmd, asksSnoozeCmd, asksRefreshCmd)
 	rootCmd.AddCommand(asksCmd)
 }

@@ -141,7 +141,8 @@ Workers and jobs default to claude; the orchestrator can put one on opencode
 ### Asks
 ```bash
 ox asks [--offline]      # What waits on you, ranked; PR fixes for threads
-ox asks drop <id>        # Hide one until it changes (ids in --json)
+ox asks snooze <id>      # Hide one for a day, or until it changes (ids in --json)
+ox asks drop <id>        # Hide one until it changes
 ```
 The brief shows the top three. PR state is cached and refreshed in the
 background once it's 10 minutes old. `/tidy` in a thread proposes archiving finished threads,

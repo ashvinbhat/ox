@@ -57,18 +57,26 @@ async function refresh($: EngineInterface): Promise<void> {
   }))
 }
 
-// × snoozes through ox, so every panel loses the item. It comes back after a
-// day, or sooner when its thread asks something new.
-async function snooze($: EngineInterface, ids: string[]): Promise<void> {
+// Both go through ox, so every panel loses the item. Either comes back when its
+// thread asks something new; a snoozed one also after a day.
+const hiding = {
+  snooze: { cmd: 'snooze', done: (n: number) => (n === 1 ? 'Snoozed for a day.' : `Snoozed ${n} for a day.`) },
+  dismiss: {
+    cmd: 'drop',
+    done: (n: number) => (n === 1 ? 'Dismissed until its thread asks again.' : `Dismissed ${n} until their threads ask again.`),
+  },
+}
+
+async function hide($: EngineInterface, how: keyof typeof hiding, ids: string[]): Promise<void> {
   const ran = await $.process
-    .run(ox('asks', 'drop', ...ids), { timeoutMs: 20_000 })
+    .run(ox('asks', hiding[how].cmd, ...ids), { timeoutMs: 20_000 })
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
   if (ran.exitCode !== 0) {
     const error = ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`
     await update($, board, b => (b ? { ...b, error } : b))
     return
   }
-  $.ui.toast(ids.length === 1 ? 'Snoozed for a day.' : `Snoozed ${ids.length} for a day.`)
+  $.ui.toast(hiding[how].done(ids.length))
   await refresh($)
 }
 
@@ -161,7 +169,8 @@ export const register: Register = on => {
                 onLinkPress={() => void openThread($, n.thread)}
               />
             </Box>
-            <Button key={`${n.id}:snooze`} label="×" plain dimColor onPress={() => void snooze($, [n.id])} />
+            <Button key={`${n.id}:snooze`} label="⏲️" plain dimColor onPress={() => void hide($, 'snooze', [n.id])} />
+            <Button key={`${n.id}:dismiss`} label="×" plain dimColor onPress={() => void hide($, 'dismiss', [n.id])} />
           </Box>,
         )
       }
@@ -193,7 +202,7 @@ export const register: Register = on => {
     if (needs.length > 0) {
       parts.push(
         <Box key="actions" flexDirection="row">
-          <Button key="snooze-all" label="Snooze all" dimColor onPress={() => void snooze($, needs.map(n => n.id))} />
+          <Button key="snooze-all" label="Snooze all" dimColor onPress={() => void hide($, 'snooze', needs.map(n => n.id))} />
         </Box>,
       )
     }
