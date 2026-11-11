@@ -92,7 +92,9 @@ The titles and PRs are today's; the two asks under Needs you are made up.
 - ⏲️ snoozes an item for a day; snoozed items stay counted. × dismisses it
   until its thread asks something new (asked 2026-11-11, after × first
   became a snooze).
-- **In progress**: one line per ticket, or per thread with no ticket: its PR,
+- **In progress**, a section per state (Working, Went quiet, In review,
+  Parked; split 2026-11-11 so each is easy to find): one line per ticket, or
+  per thread with no ticket: its PR,
   state and last move. Built from the work list ox already keeps.
 - **Landed today**: what merged and what closed.
 

@@ -39,7 +39,8 @@ also read "Building ox".
   is the full view, `--json` for parsing, `--track <short>` to filter.
 - The ox board is a side panel in every desktop thread (the `ox-board` plugin
   `ox setup` installs): Needs you (threads stopped on him, with the stop's
-  kind), In progress (threads with work moving, by ticket) and Landed today.
+  kind), then a section each for Working, Went quiet, In review and Parked
+  (by ticket), then Landed today. Archive a thread to take it off.
   A click on an item opens its thread; ⏲️ snoozes a stop for a day, ×
   dismisses it until its thread asks something new.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
