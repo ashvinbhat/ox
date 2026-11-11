@@ -22,12 +22,17 @@ var (
 	pluginMarker = []byte(`"author": { "name": "ox" }`)
 )
 
-// Install writes each embedded skill and plugin to dir/<name>. It returns the
-// names written and the ones skipped because the user owns that name.
-func Install(dir string) (installed, skipped []string, err error) {
+// retired are skills earlier ox versions installed. A copy left in place
+// would keep running in threads.
+var retired = []string{"daily-archive"}
+
+// Install writes each embedded skill and plugin to dir/<name> and removes
+// ox's copy of each retired skill. It returns the names written, the ones
+// skipped because the user owns that name, and the ones removed.
+func Install(dir string) (installed, skipped, removed []string, err error) {
 	entries, err := files.ReadDir(".")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, e := range entries {
 		name := e.Name()
@@ -40,11 +45,20 @@ func Install(dir string) (installed, skipped []string, err error) {
 			continue
 		}
 		if err := copyTree(name, dir); err != nil {
-			return installed, skipped, err
+			return installed, skipped, removed, err
 		}
 		installed = append(installed, name)
 	}
-	return installed, skipped, nil
+	for _, name := range retired {
+		existing, err := os.ReadFile(filepath.Join(dir, name, "SKILL.md"))
+		if err == nil && bytes.Contains(existing, skillMarker) {
+			if err := os.RemoveAll(filepath.Join(dir, name)); err != nil {
+				return installed, skipped, removed, err
+			}
+			removed = append(removed, name)
+		}
+	}
+	return installed, skipped, removed, nil
 }
 
 func copyTree(name, dir string) error {

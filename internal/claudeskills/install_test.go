@@ -17,11 +17,11 @@ func TestInstallWritesOxSkillsAndLeavesUserSkillsAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	installed, skipped, err := Install(dir)
+	installed, skipped, _, err := Install(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(installed, ",") != "daily-archive,memory-check,open-pr,own-it,ox-board,park,recap,review-pr,tidy" || strings.Join(skipped, ",") != "review-asks" {
+	if strings.Join(installed, ",") != "memory-check,open-pr,own-it,ox-board,park,recap,review-pr,tidy" || strings.Join(skipped, ",") != "review-asks" {
 		t.Fatalf("installed %v, skipped %v", installed, skipped)
 	}
 	if b, _ := os.ReadFile(user); string(b) != "---\nname: review-asks\n---\nmine" {
@@ -33,8 +33,8 @@ func TestInstallWritesOxSkillsAndLeavesUserSkillsAlone(t *testing.T) {
 		}
 	}
 
-	installed, _, err = Install(dir)
-	if err != nil || strings.Join(installed, ",") != "daily-archive,memory-check,open-pr,own-it,ox-board,park,recap,review-pr,tidy" {
+	installed, _, _, err = Install(dir)
+	if err != nil || strings.Join(installed, ",") != "memory-check,open-pr,own-it,ox-board,park,recap,review-pr,tidy" {
 		t.Fatalf("re-install of an ox skill: %v, %v", installed, err)
 	}
 }
@@ -48,11 +48,40 @@ func TestInstallLeavesAPluginOfTheUsersAlone(t *testing.T) {
 	if err := os.WriteFile(manifest, []byte(`{"name": "ox-board"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, skipped, err := Install(dir)
+	_, skipped, _, err := Install(dir)
 	if err != nil || strings.Join(skipped, ",") != "ox-board" {
 		t.Fatalf("skipped %v, %v", skipped, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ox-board", "hooks")); !os.IsNotExist(err) {
 		t.Fatal("wrote into the user's plugin")
+	}
+}
+
+func TestInstallRemovesOxsCopyOfARetiredSkillOnly(t *testing.T) {
+	write := func(dir, body string) {
+		skill := filepath.Join(dir, "daily-archive", "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(skill), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(skill, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ours, theirs := t.TempDir(), t.TempDir()
+	write(ours, "---\nname: daily-archive\nowner: ox\n---\n")
+	write(theirs, "---\nname: daily-archive\n---\nmine")
+
+	_, _, removed, err := Install(ours)
+	if err != nil || strings.Join(removed, ",") != "daily-archive" {
+		t.Fatalf("removed %v, %v", removed, err)
+	}
+	if _, err := os.Stat(filepath.Join(ours, "daily-archive")); !os.IsNotExist(err) {
+		t.Fatal("ox's copy of a retired skill is still installed")
+	}
+	if _, _, removed, _ := Install(theirs); len(removed) != 0 {
+		t.Fatalf("removed the user's skill: %v", removed)
+	}
+	if _, err := os.Stat(filepath.Join(theirs, "daily-archive", "SKILL.md")); err != nil {
+		t.Fatal("the user's skill under a retired name is gone")
 	}
 }

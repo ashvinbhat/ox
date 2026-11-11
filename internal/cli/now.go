@@ -94,8 +94,6 @@ type nowView struct {
 	Self *nowSelfView `json:"self,omitempty"`
 	// Findings waiting for Ashvin's go, one group per ticket, for the board.
 	Findings []findingGroup `json:"findings,omitempty"`
-	// Archived is what the daily routine archived today or yesterday.
-	Archived string `json:"archived,omitempty"`
 }
 
 type nowSelfView struct {
@@ -175,7 +173,6 @@ func buildNow(oxHome string, now time.Time) nowView {
 	view.Asks = &q
 	view.Problems = jobProblems(oxHome, now)
 	markDroppedFindings(view.Findings, dropped)
-	view.Archived = archivedLine(oxHome, now)
 	if nowBrief && nowMention {
 		view.Mention = mentionOnce(oxHome, view, now)
 	}
@@ -426,9 +423,6 @@ func renderBrief(v nowView) string {
 		line += fmt.Sprintf(" (%d can be archived: /tidy)", n)
 	}
 	b.WriteString(line + "\n")
-	if v.Archived != "" {
-		b.WriteString(v.Archived + "\n")
-	}
 
 	if t := workLine(v.Tasks); t != "" {
 		b.WriteString(t + "\n")
