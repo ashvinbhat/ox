@@ -196,8 +196,9 @@ mission harness is frozen.
   stops: no own-it offers, findings don't wait for his go, design calls are
   made and logged, tidy acts and reports.
 - The board, rebuilt: Needs you (threads stopped on him, with the stop's
-  kind and its words), In progress (threads with work moving, grouped under
-  their ticket, with PRs, state and age) and Landed today (PRs merged).
+  kind and its words), a section each for Working, Went quiet, In review and
+  Parked (threads grouped under their ticket, with PRs and age) and Landed
+  today (PRs merged).
   Clicking an item opens its thread in the Claude app. `ox now --json`
   carries the `board` it draws.
 - Board reload. `ox setup` sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in

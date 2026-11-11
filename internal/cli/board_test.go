@@ -66,6 +66,7 @@ func TestBoardInProgressGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
 		{SessionID: "local_r", Title: "CB-20605 FE", State: desktop.StateInReview, PRs: []string{"frontend#10019"}, LastActive: now.Add(-2 * time.Hour)},
 		{SessionID: "local_w", Title: "Background tasks", State: desktop.StateWorking, LastActive: now.Add(-time.Hour)},
 		{SessionID: "local_s", Title: "CB-20605 BE", State: desktop.StateWorking, LastActive: now.Add(-3 * time.Hour)},
+		{SessionID: "local_o", Title: "Other work", State: desktop.StateWorking, LastActive: now.Add(-4 * time.Hour)},
 		{SessionID: "local_n", Title: "Asks something", State: desktop.StateNeedsYou, LastActive: now},
 		{SessionID: "local_m", Title: "PR to merge", State: desktop.StateInReview, LastActive: now},
 		{SessionID: "local_d", Title: "Finished", State: desktop.StateDone, LastActive: now},
@@ -81,6 +82,7 @@ func TestBoardInProgressGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
 	want := []string{
 		"|Background tasks|working",
 		"CB-20605 Land user in onboarding|CB-20605 BE|working",
+		"|Other work|working",
 		"CB-20605 Land user in onboarding|CB-20605 FE|in review",
 		"|Bundle split|parked",
 	}

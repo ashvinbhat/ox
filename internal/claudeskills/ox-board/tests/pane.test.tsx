@@ -31,6 +31,7 @@ const VIEW = {
       { title: 'Background tasks', state: 'working', since: '2026-11-11T14:00:00+05:30', thread: 'local_e1' },
       { ticket: 'CB-20605 Land user in onboarding', title: 'CB-20605 BE', state: 'stuck', since: '2026-11-11T12:00:00+05:30', thread: 'local_f2' },
       { ticket: 'CB-20605 Land user in onboarding', title: 'CB-20605 FE', state: 'in review', prs: ['frontend#10019'], since: '2026-11-11T13:00:00+05:30', thread: 'local_d3' },
+      { title: 'Bundle split', state: 'parked', since: '2026-11-01T15:00:00+05:30', thread: 'local_a4' },
     ],
     landed: ['ox#43', 'ox#44'],
   },
@@ -51,7 +52,7 @@ function world(on: On, surfaces: string[], stdout = JSON.stringify(VIEW)) {
 
 const nows = (runs: string[][]) => runs.filter(argv => argv.includes('now')).length
 
-test('the panel shows the stops, then the work in progress by ticket, then what landed', async ($, on) => {
+test('the panel shows the stops, then a section per state, then what landed', async ($, on) => {
   world(on, ['desktop'])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
@@ -61,15 +62,20 @@ test('the panel shows the stops, then the work in progress by ticket, then what 
       `[**Send · Landing migration**](${href(A)})  \n[post the reply to Neeraj? · 2h](${href(A)})`,
       `[**Merge · ox stops**](${href('local_bbbb')})  \n[ox\\#45 is ready to merge · 30m](${href('local_bbbb')})`,
       `[**Old thread**](${href('local_cccc')})  \n[say whether to go on · 3d](${href('local_cccc')})`,
-      `[**Background tasks**](${href('local_e1')})  \n[working · 1h](${href('local_e1')})`,
+      `[**Background tasks**](${href('local_e1')})  \n[1h](${href('local_e1')})`,
       '**CB-20605 Land user in onboarding**',
-      `[CB-20605 BE](${href('local_f2')})  \n[went quiet mid-turn · 3h](${href('local_f2')})`,
-      `[CB-20605 FE](${href('local_d3')})  \n[frontend\\#10019 · in review · 2h](${href('local_d3')})`,
+      `[CB-20605 BE](${href('local_f2')})  \n[3h](${href('local_f2')})`,
+      '**CB-20605 Land user in onboarding**',
+      `[CB-20605 FE](${href('local_d3')})  \n[frontend\\#10019 · 2h](${href('local_d3')})`,
+      `[**Bundle split**](${href('local_a4')})  \n[10d](${href('local_a4')})`,
     ])
     expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toEqual([
       'NEEDS YOU · 3',
       '2 snoozed',
-      'IN PROGRESS · 3',
+      'WORKING · 1',
+      'WENT QUIET · 1',
+      'IN REVIEW · 1',
+      'PARKED · 1',
       'Landed today: ox#43, ox#44',
     ])
     expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual([
@@ -189,7 +195,7 @@ test('a failed snooze keeps the items and says why', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.press({ key: 'snooze-all' })
   const texts = (await ui.findAll({ type: 'Markdown' })).map(m => m.props.text)
-  expect(texts.length).toBe(8)
-  expect(texts[7]).toBe('_ox: Error: locked_')
+  expect(texts.length).toBe(10)
+  expect(texts[9]).toBe('_ox: Error: locked_')
   await ui.unmount()
 })

@@ -102,10 +102,11 @@ const link = (text: string, thread: string) => `[${text}](${href(thread)})`
 const needText = (n: Need, now: number) =>
   `${link(`**${escape(n.kind ? `${n.kind} · ${n.title}` : n.title)}**`, n.thread)}  \n${link(`${escape(n.what)} · ${age(n.since, now)}`, n.thread)}`
 
-const STATE: Record<string, string> = { stuck: 'went quiet mid-turn', 'in review': 'in review', working: 'working', parked: 'parked' }
+// ox sends the work sorted by state, so the sections come in this order.
+const SECTION: Record<string, string> = { working: 'WORKING', stuck: 'WENT QUIET', 'in review': 'IN REVIEW', parked: 'PARKED' }
 
 const workText = (f: Work, now: number) => {
-  const detail = [...(f.prs ?? []), STATE[f.state] ?? f.state, age(f.since, now)].join(' · ')
+  const detail = [...(f.prs ?? []), age(f.since, now)].join(' · ')
   const title = f.ticket ? escape(f.title) : `**${escape(f.title)}**`
   return `${link(title, f.thread)}  \n${link(escape(detail), f.thread)}`
 }
@@ -179,11 +180,12 @@ export const register: Register = on => {
     }
     if (b.snoozed > 0) parts.push(<Text key="snoozed" dimColor>{`${b.snoozed} snoozed`}</Text>)
 
-    if (working.length > 0) {
-      parts.push(<Text key="progress:head" dimColor>{`IN PROGRESS · ${working.length}`}</Text>)
-      working.forEach((f, i) => {
-        if (f.ticket && f.ticket !== working[i - 1]?.ticket) {
-          parts.push(<Markdown key={`ticket:${f.ticket}`} text={`**${escape(f.ticket)}**`} />)
+    for (const state of new Set(working.map(f => f.state))) {
+      const section = working.filter(f => f.state === state)
+      parts.push(<Text key={`state:${state}`} dimColor>{`${SECTION[state] ?? state.toUpperCase()} · ${section.length}`}</Text>)
+      section.forEach((f, i) => {
+        if (f.ticket && f.ticket !== section[i - 1]?.ticket) {
+          parts.push(<Markdown key={`ticket:${state}:${f.ticket}`} text={`**${escape(f.ticket)}**`} />)
         }
         parts.push(
           <Markdown

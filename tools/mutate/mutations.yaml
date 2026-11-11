@@ -221,3 +221,8 @@
   file: internal/cli/board.go
   from: "if !at.Before(today) {"
   to: "if true || !at.Before(today) {"
+
+- why: a ticket's threads group only within one state, so each board section is one state
+  file: internal/cli/board.go
+  from: "return string(f.State) + \"|\" + key"
+  to: "return key"

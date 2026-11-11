@@ -160,11 +160,14 @@ func threadTickets(tasks []yokecli.Task) map[string]string {
 // sortProgress keeps a ticket's threads together. Tickets go by their most
 // moving thread, then the latest move; a thread with no ticket is its own group.
 func sortProgress(fs []boardWork) {
+	// The panel draws a section per state, so a ticket's threads group only
+	// within one state.
 	group := func(f boardWork) string {
+		key := "s:" + f.Thread
 		if f.Ticket != "" {
-			return "t:" + f.Ticket
+			key = "t:" + f.Ticket
 		}
-		return "s:" + f.Thread
+		return string(f.State) + "|" + key
 	}
 	best := map[string]boardWork{}
 	for _, f := range fs {
