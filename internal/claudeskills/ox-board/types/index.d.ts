@@ -1,9 +1,21 @@
-// One thread that needs Ashvin: its title, what it's waiting on, and for how long.
-export type Item = { id: string; title: string; waiting: string; age: string }
+// A thread stopped on Ashvin: the stop's kind when the thread named one, its
+// title, what it waits on, since when.
+export type Need = { id: string; kind?: string; title: string; what: string; since: string; thread: string }
+
+// A thread with work moving, under its ticket when it has one.
+export type Flight = { ticket?: string; title: string; state: string; prs?: string[]; since: string; thread: string }
 
 // problems are ox's own background jobs that keep failing; error is this
 // panel's last failed call to ox.
-export type Board = { at: number; items: Item[]; problems?: string[]; error?: string }
+export type Board = {
+  at: number
+  needs: Need[]
+  snoozed: number
+  flights: Flight[]
+  landed: string[]
+  problems?: string[]
+  error?: string
+}
 
 declare module 'claude-code' {
   interface PluginState {

@@ -61,6 +61,6 @@ Read the log (`Tests run:`, `BUILD SUCCESS`), not the exit code alone.
 
 - Never mark ready on a partial run, a skipped run or an assumption.
 - Never label a draft.
-- The wider suite (whole module, full reactor) is his call: offer it, run it
-  on a yes.
+- The wider suite (whole module, full reactor) is his to start: name it in
+  the report, don't run it or ask about it.
 - One logical change per PR. Merging is his.

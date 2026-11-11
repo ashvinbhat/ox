@@ -6,8 +6,9 @@ It sits here so threads that aren't about ox don't load it.
 ## Commands
 
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
-- `ox setup` — install the `ox-brief` hook and check it runs (rolling back
-  `settings.json` if not), ox's skills and the board panel, and turn on
+- `ox setup` — install the `ox-brief` and `ox hook ask` hooks and check
+  each runs (rolling back `settings.json` if not), write `~/.ox/stops.md`
+  once, install ox's skills and the board panel, and turn on
   board reload (`CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in settings.json's env, so
   threads started since reload the board when it changes); re-run after
   `make install`
@@ -23,7 +24,14 @@ It sits here so threads that aren't about ox don't load it.
   result is in `~/.ox/memory-check/last.json`)
 - `ox asks [--json] [--offline]`, `ox asks drop <id>`, `ox asks refresh` —
   the queue of what waits on Ashvin; PR state is cached in `~/.ox/asks/` and
-  refreshed by the hook and the board once it's 10 minutes old
+  refreshed by the hook and the board once it's 10 minutes old; a drop
+  snoozes an ask for a day, or until it changes
+- `ox hook ask` — PreToolUse on AskUserQuestion and the next-step box: a
+  question passes only when it starts with a kind from `~/.ox/stops.md`
+  ("Send: …"), else it's sent back with the list; each one is logged in
+  `~/.ox/logs/stops.jsonl` and the brief counts today's
+- `ox now --json` carries `board`: what the panel draws (needs you, in
+  flight, landed today), built in `internal/cli/board.go`
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a
@@ -65,8 +73,10 @@ It sits here so threads that aren't about ox don't load it.
   keys, notes per PR, start, done. `internal/cli/work.go` decides which
   thread a PR belongs to (the one that opened it) and runs the plan.
 - `internal/asks` — the asks queue: sources in, ranked asks and thread fixes
-  out (`Build`), PR state from gh (`FetchPRs`, cached), drops that lapse when
-  the ask changes.
+  out (`Build`), PR state from gh (`FetchPRs`, cached), drops that snooze
+  for a day or until the ask changes.
+- `internal/stops` — the stop list (`~/.ox/stops.md`, embedded default) and
+  the log of every question the ask hook saw.
 - `internal/journal` — the decision journal: day files in `~/.ox/journal/`
   (`### HH:MM · track · thread` then `- Key: value` lines; the first key
   names the kind), parsing, and the status the brief shows (recap due,
@@ -93,6 +103,7 @@ It sits here so threads that aren't about ox don't load it.
 ├── asks/            # PR state cache and dropped asks
 ├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
+├── stops.md         # What a thread stops and asks Ashvin for
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

@@ -65,7 +65,7 @@ func TestWorkLine(t *testing.T) {
 		{Tags: []string{"finding"}, Status: "active"},
 		{Tags: []string{"work"}, Status: "in_progress"},
 	}
-	if got := workLine(tasks); got != "Tickets: 2 open · Findings: 1 waiting for your go" {
+	if got := workLine(tasks); got != "Tickets: 2 open · Findings: 1 open" {
 		t.Fatalf("workLine = %q", got)
 	}
 	if got := workLine(tasks[4:]); got != "" {

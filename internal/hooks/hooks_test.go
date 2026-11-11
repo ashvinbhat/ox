@@ -112,8 +112,12 @@ func TestInstallReplacesOnlyOxsEntry(t *testing.T) {
 	if err := json.Unmarshal(first, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Model != "opus" || len(got.Hooks["PreToolUse"]) != 1 {
-		t.Errorf("other settings lost: model=%q PreToolUse=%v", got.Model, got.Hooks["PreToolUse"])
+	pre := got.Hooks["PreToolUse"]
+	if got.Model != "opus" || len(pre) != 2 || pre[0].Hooks[0].Command != "guard.sh" {
+		t.Errorf("other settings lost: model=%q PreToolUse=%v", got.Model, pre)
+	}
+	if len(pre) == 2 && (pre[1].Matcher != AskMatcher || len(pre[1].Hooks) != 1 || pre[1].Hooks[0].Command != AskCommand) {
+		t.Errorf("ox's ask hook = %+v, want %s on %s", pre[1], AskCommand, AskMatcher)
 	}
 	start := got.Hooks["SessionStart"]
 	if len(start) != 2 {

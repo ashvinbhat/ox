@@ -67,6 +67,18 @@ func TestDroppedComesBackWhenItChanges(t *testing.T) {
 	}
 }
 
+func TestADropIsASnoozeForADay(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	in := Inputs{Threads: []Thread{{ID: "local_a", Title: "A", Ask: "?", Since: now.Add(-48 * time.Hour)}}}
+	q := Build(in, map[string]time.Time{"question:local_a": now.Add(-time.Hour)}, now)
+	if len(q.Waiting) != 0 || len(q.Snoozed) != 1 || q.Snoozed[0].ID != "question:local_a" {
+		t.Errorf("snoozed an hour ago: %+v", q)
+	}
+	if q := Build(in, map[string]time.Time{"question:local_a": now.Add(-25 * time.Hour)}, now); len(q.Waiting) != 1 || len(q.Snoozed) != 0 {
+		t.Errorf("snoozed 25h ago and still waiting, so it's back: %+v", q)
+	}
+}
+
 func TestPRWaitsOnNobodyWhileInReview(t *testing.T) {
 	for _, p := range []PR{
 		{Repo: "CBX1/frontend", Number: 1, Mergeable: "MERGEABLE", Review: "APPROVED", Checks: ChecksPending},

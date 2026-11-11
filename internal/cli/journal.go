@@ -226,7 +226,7 @@ func runJournalStatus(cmd *cobra.Command, args []string) error {
 		if own {
 			label += " (own track"
 			if v.OwnItLeft > 0 {
-				label += fmt.Sprintf(": offer own-it, %d left today)", v.OwnItLeft)
+				label += fmt.Sprintf(": %d own-it rounds left today)", v.OwnItLeft)
 			} else {
 				label += ": no own-it rounds left today)"
 			}

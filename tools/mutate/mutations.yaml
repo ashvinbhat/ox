@@ -156,3 +156,58 @@
   file: internal/claudeskills/install.go
   from: "err == nil && bytes.Contains(existing, skillMarker)"
   to: "err == nil && (true || bytes.Contains(existing, skillMarker))"
+
+- why: a question that isn't a stop is sent back
+  file: internal/cli/hookask.go
+  from: "\t\tif k == \"\" {\n\t\t\treturn \"\", false\n\t\t}\n"
+  to: ""
+
+- why: the ask hook passes when ox has no config
+  file: internal/cli/hookask.go
+  from: "if len(qs) == 0 || cfgErr != nil || cfg == nil {"
+  to: "if len(qs) == 0 || cfg == nil {"
+
+- why: a stop list that names no stop falls back to the default
+  file: internal/stops/stops.go
+  from: "if list := Parse(string(data)); len(list) > 0 {"
+  to: "if list := Parse(string(data)); true {"
+
+- why: setup keeps his stop list
+  file: internal/stops/stops.go
+  from: "if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {"
+  to: "if _, err := os.Stat(path); false && !errors.Is(err, os.ErrNotExist) {"
+
+- why: setup registers the ask hook on the calls that ask him
+  file: internal/hooks/hooks.go
+  from: "map[string]any{\"matcher\": AskMatcher,"
+  to: "map[string]any{\"matcher\": \"\","
+
+- why: a second setup replaces ox's ask hook instead of adding another
+  file: internal/hooks/hooks.go
+  from: "command == Command || command == AskCommand ||"
+  to: "command == Command ||"
+
+- why: a snoozed ask comes back after a day
+  file: internal/asks/asks.go
+  from: " && now.Sub(at) < SnoozeFor {"
+  to: " {"
+
+- why: a board stop takes its kind only from a stop asked after his latest message
+  file: internal/cli/board.go
+  from: "if e.Passed && ids[e.Session] && e.At.After(since) {"
+  to: "if e.Passed && ids[e.Session] && (true || e.At.After(since)) {"
+
+- why: a board stop is found under the thread's earlier session ids too
+  file: internal/cli/board.go
+  from: "append([]string{s.CLISessionID, s.LastCLIID}, s.PriorCLIIDs...)"
+  to: "[]string{s.CLISessionID, s.LastCLIID}"
+
+- why: a thread under Needs you isn't repeated under In flight
+  file: internal/cli/board.go
+  from: "if _, moving := flightRank[t.State]; !moving || waiting[t.SessionID] {"
+  to: "if _, moving := flightRank[t.State]; !moving {"
+
+- why: Landed today lists only today's merges
+  file: internal/cli/board.go
+  from: "if !at.Before(today) {"
+  to: "if true || !at.Before(today) {"
