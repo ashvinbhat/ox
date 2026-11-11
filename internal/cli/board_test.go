@@ -53,7 +53,7 @@ func TestBoardNeedsAreStopsWithTheThreadsOwnWords(t *testing.T) {
 	}
 }
 
-func TestBoardInFlightGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
+func TestBoardInProgressGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
 	now := time.Date(2026, 11, 11, 15, 0, 0, 0, time.Local)
 	ticket := "t1"
 	tasks := []yokecli.Task{
@@ -75,7 +75,7 @@ func TestBoardInFlightGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
 	b := buildBoard(q, threads, nil, tasks, nil, merged, now)
 
 	var got []string
-	for _, f := range b.InFlight {
+	for _, f := range b.InProgress {
 		got = append(got, f.Ticket+"|"+f.Title+"|"+string(f.State))
 	}
 	want := []string{
@@ -85,7 +85,7 @@ func TestBoardInFlightGroupsByTicketAndSkipsWhatsWaiting(t *testing.T) {
 		"|Bundle split|parked",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Fatalf("in flight:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+		t.Fatalf("in progress:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	if strings.Join(b.Landed, ",") != "ox#43,ox#44" {
 		t.Errorf("landed = %v, want today's merges, oldest first", b.Landed)

@@ -13,12 +13,12 @@ import (
 )
 
 // boardView is what the ox board draws: the stops waiting on Ashvin, the
-// work in flight, and what landed today.
+// work in progress, and what landed today.
 type boardView struct {
-	Needs    []boardNeed   `json:"needs"`
-	Snoozed  int           `json:"snoozed,omitempty"`
-	InFlight []boardFlight `json:"inFlight"`
-	Landed   []string      `json:"landed,omitempty"` // PRs merged today, oldest first
+	Needs      []boardNeed `json:"needs"`
+	Snoozed    int         `json:"snoozed,omitempty"`
+	InProgress []boardWork `json:"inProgress"`
+	Landed     []string    `json:"landed,omitempty"` // PRs merged today, oldest first
 }
 
 // boardNeed is one thread stopped on Ashvin.
@@ -31,8 +31,8 @@ type boardNeed struct {
 	Thread string    `json:"thread"`
 }
 
-// boardFlight is one thread with work moving, under its ticket if it has one.
-type boardFlight struct {
+// boardWork is one thread with work moving, under its ticket if it has one.
+type boardWork struct {
 	Ticket string        `json:"ticket,omitempty"`
 	Title  string        `json:"title"`
 	State  desktop.State `json:"state"`
@@ -41,12 +41,12 @@ type boardFlight struct {
 	Thread string        `json:"thread"`
 }
 
-// flightRank orders work in flight: moving first, parked last.
-var flightRank = map[desktop.State]int{desktop.StateWorking: 0, desktop.StateStuck: 1, desktop.StateInReview: 2, desktop.StateParked: 3}
+// progressRank orders work in progress: moving first, parked last.
+var progressRank = map[desktop.State]int{desktop.StateWorking: 0, desktop.StateStuck: 1, desktop.StateInReview: 2, desktop.StateParked: 3}
 
 func buildBoard(q asks.Queue, threads []nowThread, sessions []desktop.Session, tasks []yokecli.Task,
 	log []stops.Entry, merged map[string]time.Time, now time.Time) boardView {
-	b := boardView{Needs: []boardNeed{}, InFlight: []boardFlight{}}
+	b := boardView{Needs: []boardNeed{}, InProgress: []boardWork{}}
 	byID := map[string]desktop.Session{}
 	for _, s := range sessions {
 		byID[s.ID] = s
@@ -66,13 +66,13 @@ func buildBoard(q asks.Queue, threads []nowThread, sessions []desktop.Session, t
 
 	tickets := threadTickets(tasks)
 	for _, t := range threads {
-		if _, moving := flightRank[t.State]; !moving || waiting[t.SessionID] {
+		if _, moving := progressRank[t.State]; !moving || waiting[t.SessionID] {
 			continue
 		}
-		b.InFlight = append(b.InFlight, boardFlight{Ticket: tickets[t.SessionID], Title: t.Title, State: t.State,
+		b.InProgress = append(b.InProgress, boardWork{Ticket: tickets[t.SessionID], Title: t.Title, State: t.State,
 			PRs: t.PRs, Since: t.LastActive, Thread: t.SessionID})
 	}
-	sortFlights(b.InFlight)
+	sortProgress(b.InProgress)
 
 	y, m, d := now.Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
@@ -157,16 +157,16 @@ func threadTickets(tasks []yokecli.Task) map[string]string {
 	return out
 }
 
-// sortFlights keeps a ticket's threads together. Tickets go by their most
+// sortProgress keeps a ticket's threads together. Tickets go by their most
 // moving thread, then the latest move; a thread with no ticket is its own group.
-func sortFlights(fs []boardFlight) {
-	group := func(f boardFlight) string {
+func sortProgress(fs []boardWork) {
+	group := func(f boardWork) string {
 		if f.Ticket != "" {
 			return "t:" + f.Ticket
 		}
 		return "s:" + f.Thread
 	}
-	best := map[string]boardFlight{}
+	best := map[string]boardWork{}
 	for _, f := range fs {
 		g := group(f)
 		if b, ok := best[g]; !ok || before(f, b) {
@@ -182,9 +182,9 @@ func sortFlights(fs []boardFlight) {
 	})
 }
 
-func before(a, b boardFlight) bool {
-	if flightRank[a.State] != flightRank[b.State] {
-		return flightRank[a.State] < flightRank[b.State]
+func before(a, b boardWork) bool {
+	if progressRank[a.State] != progressRank[b.State] {
+		return progressRank[a.State] < progressRank[b.State]
 	}
 	return a.Since.After(b.Since)
 }

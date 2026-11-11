@@ -202,10 +202,10 @@
   from: "append([]string{s.CLISessionID, s.LastCLIID}, s.PriorCLIIDs...)"
   to: "[]string{s.CLISessionID, s.LastCLIID}"
 
-- why: a thread under Needs you isn't repeated under In flight
+- why: a thread under Needs you isn't repeated under In progress
   file: internal/cli/board.go
-  from: "if _, moving := flightRank[t.State]; !moving || waiting[t.SessionID] {"
-  to: "if _, moving := flightRank[t.State]; !moving {"
+  from: "if _, moving := progressRank[t.State]; !moving || waiting[t.SessionID] {"
+  to: "if _, moving := progressRank[t.State]; !moving {"
 
 - why: Landed today lists only today's merges
   file: internal/cli/board.go
