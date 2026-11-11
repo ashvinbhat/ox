@@ -31,7 +31,7 @@ It sits here so threads that aren't about ox don't load it.
   ("Send: …"), else it's sent back with the list; each one is logged in
   `~/.ox/logs/stops.jsonl` and the brief counts today's
 - `ox now --json` carries `board`: what the panel draws (needs you, in
-  flight, landed today), built in `internal/cli/board.go`
+  progress, landed today), built in `internal/cli/board.go`
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a

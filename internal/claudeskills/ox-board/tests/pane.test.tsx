@@ -27,7 +27,7 @@ const VIEW = {
       { id: 'question:local_cccc', title: 'Old thread', what: 'say whether to go on', since: '2026-11-08T15:00:00+05:30', thread: 'local_cccc' },
     ],
     snoozed: 2,
-    inFlight: [
+    inProgress: [
       { title: 'Background tasks', state: 'working', since: '2026-11-11T14:00:00+05:30', thread: 'local_e1' },
       { ticket: 'CB-20605 Land user in onboarding', title: 'CB-20605 BE', state: 'stuck', since: '2026-11-11T12:00:00+05:30', thread: 'local_f2' },
       { ticket: 'CB-20605 Land user in onboarding', title: 'CB-20605 FE', state: 'in review', prs: ['frontend#10019'], since: '2026-11-11T13:00:00+05:30', thread: 'local_d3' },
@@ -51,7 +51,7 @@ function world(on: On, surfaces: string[], stdout = JSON.stringify(VIEW)) {
 
 const nows = (runs: string[][]) => runs.filter(argv => argv.includes('now')).length
 
-test('the panel shows the stops, then the work in flight by ticket, then what landed', async ($, on) => {
+test('the panel shows the stops, then the work in progress by ticket, then what landed', async ($, on) => {
   world(on, ['desktop'])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
@@ -69,7 +69,7 @@ test('the panel shows the stops, then the work in flight by ticket, then what la
     expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toEqual([
       'NEEDS YOU · 3',
       '2 snoozed',
-      'IN FLIGHT · 3',
+      'IN PROGRESS · 3',
       'Landed today: ox#43, ox#44',
     ])
     expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual([
@@ -88,7 +88,7 @@ test('a click on an item opens its thread in the Claude app', async ($, on) => {
   await $.command.run({ command: 'ox-board' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.press({ key: `need:question:${A}`, link: { href: href(A) } })
-  await ui.press({ key: 'flight:local_d3', link: { href: href('local_d3') } })
+  await ui.press({ key: 'work:local_d3', link: { href: href('local_d3') } })
   expect(runs.filter(argv => argv[0] === '/usr/bin/open')).toEqual([
     ['/usr/bin/open', `claude://claude.ai/epitaxy/${A}`],
     ['/usr/bin/open', 'claude://claude.ai/epitaxy/local_d3'],
@@ -108,7 +108,7 @@ test('× snoozes only its own item, then rereads ox', async ($, on) => {
   await ui.unmount()
 })
 
-test('Snooze all snoozes every stop shown, and nothing in flight', async ($, on) => {
+test('Snooze all snoozes every stop shown, and nothing in progress', async ($, on) => {
   const { runs } = world(on, [])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'ox-board' })

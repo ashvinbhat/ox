@@ -196,7 +196,7 @@ mission harness is frozen.
   stops: no own-it offers, findings don't wait for his go, design calls are
   made and logged, tidy acts and reports.
 - The board, rebuilt: Needs you (threads stopped on him, with the stop's
-  kind and its words), In flight (threads with work moving, grouped under
+  kind and its words), In progress (threads with work moving, grouped under
   their ticket, with PRs, state and age) and Landed today (PRs merged).
   Clicking an item opens its thread in the Claude app. `ox now --json`
   carries the `board` it draws.

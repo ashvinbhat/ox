@@ -1,7 +1,7 @@
 # Fewer stops, a board that shows the work (2026-11-11)
 
 All three steps built on 2026-11-11. Defaults taken: the stop list below, and
-in-flight work grouped by ticket. An item's whole text opens its thread
+in-progress work grouped by ticket. An item's whole text opens its thread
 (Ashvin, 2026-11-11), so there's no Open button.
 
 ## Why
@@ -15,7 +15,7 @@ in-flight work grouped by ticket. An item's whole text opens its thread
 - Nothing checks a question before it reaches him.
 - The board says "Nothing needs you" while 3 threads wait on him: × hid them
   and they never came back.
-- The board shows no work in flight. Tickets, PRs in review and each
+- The board shows no work in progress. Tickets, PRs in review and each
   thread's work sit in yoke and the brief, where he doesn't look.
 
 ## What Jarvis does
@@ -60,7 +60,7 @@ Everything else: do it, then say what was done and how to undo it.
   - offers become "done; here's how to undo it";
   - tidy archives and reports.
 
-## 2. The board: needs you, then in flight
+## 2. The board: needs you, then in progress
 
 ```
 🐂 ox
@@ -72,7 +72,7 @@ Delete · Durable chat workflow failures                 7d  ×
   Remove 59 leaked QA segments
 2 snoozed
 
-IN FLIGHT · 5
+IN PROGRESS · 5
 CB-20605 Land user in pre-seeded onboarding
   frontend#10019 · in review · 2h
 CB-20383 Don't drop an approval answer
@@ -91,7 +91,7 @@ The titles and PRs are today's; the two asks under Needs you are made up.
   panel as his approval, so there's no Go button.
 - × snoozes an item for a day. Snoozed items stay counted, so nothing
   waiting is hidden for good.
-- **In flight**: one line per ticket, or per thread with no ticket: its PR,
+- **In progress**: one line per ticket, or per thread with no ticket: its PR,
   state and last move. Built from the work list ox already keeps.
 - **Landed today**: what merged and what closed.
 
@@ -105,7 +105,7 @@ The titles and PRs are today's; the two asks under Needs you are made up.
 
 1. The stop list, `ox hook ask`, and ox's rules trimmed.
 2. Board: needs you is stops only; a click opens the thread; × snoozes.
-3. Board: in flight and landed today.
+3. Board: in progress and landed today.
 
 After a week: stops per day, and how many were sent back.
 

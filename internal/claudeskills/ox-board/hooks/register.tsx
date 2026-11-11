@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Board, Flight, Need } from '../types'
+import type { Board, Need, Work } from '../types'
 
 const PANE = 'ox-board'
 const TITLE = '🐂 ox'
@@ -15,7 +15,7 @@ const ox = (...args: string[]) => ['/bin/sh', '-c', 'exec "$(command -v ox || ec
 
 type View = {
   problems?: string[]
-  board?: { needs?: Need[]; snoozed?: number; inFlight?: Flight[]; landed?: string[] }
+  board?: { needs?: Need[]; snoozed?: number; inProgress?: Work[]; landed?: string[] }
 }
 
 function age(since: string, now: number): string {
@@ -34,7 +34,7 @@ async function refresh($: EngineInterface): Promise<void> {
     .catch(err => ({ exitCode: -1, stdout: '', stderr: String(err) }))
   const now = await $.clock.now()
   const fail = (error: string) =>
-    update($, board, b => (b ? { ...b, error } : { at: now, needs: [], snoozed: 0, flights: [], landed: [], error }))
+    update($, board, b => (b ? { ...b, error } : { at: now, needs: [], snoozed: 0, inProgress: [], landed: [], error }))
   if (ran.exitCode !== 0) {
     await fail(ran.stderr.trim().split('\n')[0] || `ox exited ${ran.exitCode}`)
     return
@@ -51,7 +51,7 @@ async function refresh($: EngineInterface): Promise<void> {
     at: now,
     needs: v.needs ?? [],
     snoozed: v.snoozed ?? 0,
-    flights: v.inFlight ?? [],
+    inProgress: v.inProgress ?? [],
     landed: v.landed ?? [],
     problems: view.problems ?? [],
   }))
@@ -96,7 +96,7 @@ const needText = (n: Need, now: number) =>
 
 const STATE: Record<string, string> = { stuck: 'went quiet mid-turn', 'in review': 'in review', working: 'working', parked: 'parked' }
 
-const flightText = (f: Flight, now: number) => {
+const workText = (f: Work, now: number) => {
   const detail = [...(f.prs ?? []), STATE[f.state] ?? f.state, age(f.since, now)].join(' · ')
   const title = f.ticket ? escape(f.title) : `**${escape(f.title)}**`
   return `${link(title, f.thread)}  \n${link(escape(detail), f.thread)}`
@@ -122,7 +122,7 @@ async function show($: EngineInterface): Promise<void> {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'ox-board', description: 'Show what needs you and what is in flight' })
+    await $.command.register({ name: 'ox-board', description: 'Show what needs you and what is in progress' })
     if ((await $.session.surfaces()).includes('desktop')) void show($)
     return next(e)
   })
@@ -145,7 +145,7 @@ export const register: Register = on => {
     if (!b) return <Text dimColor>Reading ox…</Text>
     const now = b.at
     const needs = b.needs ?? []
-    const flights = b.flights ?? []
+    const working = b.inProgress ?? []
     const parts = []
 
     if (needs.length > 0) {
@@ -170,16 +170,16 @@ export const register: Register = on => {
     }
     if (b.snoozed > 0) parts.push(<Text key="snoozed" dimColor>{`${b.snoozed} snoozed`}</Text>)
 
-    if (flights.length > 0) {
-      parts.push(<Text key="flights:head" dimColor>{`IN FLIGHT · ${flights.length}`}</Text>)
-      flights.forEach((f, i) => {
-        if (f.ticket && f.ticket !== flights[i - 1]?.ticket) {
+    if (working.length > 0) {
+      parts.push(<Text key="progress:head" dimColor>{`IN PROGRESS · ${working.length}`}</Text>)
+      working.forEach((f, i) => {
+        if (f.ticket && f.ticket !== working[i - 1]?.ticket) {
           parts.push(<Markdown key={`ticket:${f.ticket}`} text={`**${escape(f.ticket)}**`} />)
         }
         parts.push(
           <Markdown
-            key={`flight:${f.thread}`}
-            text={flightText(f, now)}
+            key={`work:${f.thread}`}
+            text={workText(f, now)}
             pressableLinks={[href(f.thread)]}
             onLinkPress={() => void openThread($, f.thread)}
           />,
