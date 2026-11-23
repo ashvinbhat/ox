@@ -236,6 +236,25 @@ mission harness is frozen.
   (`internal/version.Version`); the release workflow and Makefile both set it.
 
 ### Changed
+- Rules that lived only in memory now sit at the step they govern.
+  - `/open-pr`: a real CB ticket on team repos, `CB-0000` only on ox and
+    yoke; a self-check per stack (backend FQCNs, unbounded loops, comments
+    and CB ids; frontend i18n in four locales; api-automation test shape);
+    typecheck, lint and the pre-push hook in the background, push at ~80%
+    sure; Temporal PRs name the house workflows they mirror; nothing
+    internal on GitHub. A red run the change didn't cause is named in the
+    body and the PR goes ready, instead of staying a draft. After it's up:
+    refresh the title and body on every push, reproduce red CI locally and
+    never re-run it, and hold live runs until DARS approves clean.
+  - `/review-pr`: proves pure refactors line by line; always flags WHAT
+    comments, CB ids outside the diff (as a file-level comment), unbounded
+    loops, and asks first whether a list endpoint can extend
+    `TenantAwareBaseController`. It resolves his addressed threads instead
+    of offering to, and keeps private PR content out of ox.
+  - CLAUDE.md: a discussion thread asks a sub-thread for its report instead
+    of re-checking its work; answer the question asked; a CI failure that
+    isn't ours gets one line; grant `~/.ox` worktrees with
+    `request_directory`.
 - CLAUDE.md's commands, code map, `~/.ox` layout and common issues moved to
   `internal/CLAUDE.md`, which Claude Code loads only when a thread opens a
   file under `internal/`. Every thread loads about 750 fewer words: 2,614,

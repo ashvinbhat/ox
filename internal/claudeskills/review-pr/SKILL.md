@@ -57,9 +57,12 @@ split when one is ready and another isn't.
 
 ## 3. Read the diff, then the codebase around it
 
-Read the whole diff yourself. Then, in the checkout, look for what the diff
-does not show. For each changed function, type, field, enum value, config key,
-endpoint or event:
+Read the whole diff yourself. A PR that calls itself a pure refactor (a move,
+a rename, an extract) gets proved: match every removed line to the added
+code. After a rebase, confirm main's changes to the moved code came along.
+
+Then, in the checkout, look for what the diff does not show. For each changed
+function, type, field, enum value, config key, endpoint or event:
 
 1. **Callers and readers.** Find every reference (grep or LSP). Do they still
    hold the contract: nullability, ordering, units, errors, defaults?
@@ -86,7 +89,16 @@ endpoint or event:
 6. **Conventions.** Apply the repo's CLAUDE.md or AGENTS.md, the repo's own
    skills for the area (`.agents/skills/` in backend and frontend), and
    Ashvin's memory rules for that stack. A repo skill that the change makes
-   stale (a filter order, a recipe, a list of steps) is a finding.
+   stale (a filter order, a recipe, a list of steps) is a finding. Always
+   flag:
+   - a comment that says WHAT the code does: suggest deleting it or cutting
+     it to its WHY;
+   - a CB id in any file the PR touches, outside the diff too, as a
+     file-level comment;
+   - a loop with no bound: `while (true)`, `for (;;)`, deadline-only;
+   - on a list, search or paging endpoint, whether the controller can extend
+     `TenantAwareBaseController`. Ask that first, before clamps or page
+     metadata.
 7. **Security.** Who can send this input: any logged-in user, a service key,
    anonymous? What reaches storage, logs and metric tags verbatim? Is it scoped
    per tenant? Is metric cardinality bounded?
@@ -172,14 +184,17 @@ ox review post <pr-url> --file <work-dir>/round.json --confirm
 
 - Inline anchors must be lines in the diff. Put points outside the diff, and
   the CI note, in `body`. A finding that spans files goes on one line and names
-  the others.
+  the others. An out-of-diff CB id goes on its file instead, after the post:
+  `gh api repos/<owner>/<repo>/pulls/<n>/comments -f subject_type=file
+  -f path=… -f commit_id=<head> -f body=…`.
 - A `suggestion` block replaces only the anchored line. A fix that touches
   other lines or files goes in a plain code block.
 - If he posts the review himself or gives it in person, save the round with
   `ox review record <pr-url> --file <work-dir>/round.json`.
 - Every round gets posted or recorded, so the next re-review knows what is
   still open.
-- When a re-review shows everything addressed, offer to resolve his threads.
+- Once a re-review shows his threads addressed, resolve them (GraphQL
+  `resolveReviewThread`) and say so. Don't offer.
 
 ## 8. Improve this skill
 
@@ -192,4 +207,5 @@ This skill learns from each review. After the round, look for:
 Propose each as a one-line change to this file, in ox at
 `internal/claudeskills/review-pr/SKILL.md`. On his yes, make it and ship it as
 an ox PR with a CHANGELOG entry. Keep it general: a rule for every review, not
-a note about this PR.
+a note about this PR. ox is a public repo: no private PR content (code,
+names, findings) in its commits or PR bodies.

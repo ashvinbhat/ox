@@ -50,7 +50,9 @@ also read "Building ox".
     memory edit, an answer from what's known.
   - Sub-threads report back to the thread that started them. That thread
     puts any stop to Ashvin there, kind first, and sends his answer back
-    word for word. It never redoes a sub-thread's work.
+    word for word. It never redoes a sub-thread's work: it asks for the
+    report (head SHA, tests, DARS/Sonar) instead of re-reading diffs or
+    spawning verifiers.
   - The discussion thread signs off. When a sub-thread's work is done (PR
     merged or closed, or its answer delivered) and it's idle ("Sign off:" in
     its brief), it archives it and says so in one line with the undo. Never
@@ -63,7 +65,9 @@ also read "Building ox".
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
-  `<repo>/.claude/worktrees/<name>`.
+  `<repo>/.claude/worktrees/<name>`. A thread here that edits a `~/.ox`
+  worktree grants it with `request_directory` (its exact path) once it
+  exists.
 - Tasks: drive yoke directly — `yoke ready`, `yoke show <id>`,
   `yoke add "title" -t tag1 -t tag2 -p 2` (not `--tags`). Take the task number
   from `yoke add` output. Tickets come in from Notion on their own; read
@@ -73,10 +77,11 @@ also read "Building ox".
   you add: `yoke add "<his ask>" -k <this thread's key> -t work -t <track>`,
   the key from the brief, and `yoke done <id> --outcome "…"` on its last
   turn. A lookup that changes nothing isn't lasting; unsure means lasting.
-- Anything you notice and don't do, and any later step you promise ("I'll
-  check X after the merge"), is a finding, added in the same reply:
-  `yoke add "…" -t finding -t <track> --from <work> -b "what, where, why,
-  how to pick it up"`. A small one in code your open PR touches, fix there.
+- Answer the question he asked: no unasked logins or investigations. A side
+  issue gets one line and a finding. Anything you notice and don't do, and
+  any later step you promise ("I'll check X after the merge"), is a
+  finding, added in the same reply: `yoke add "…" -t finding -t <track>
+  --from <work> -b "what, where, why, how to pick it up"`. A small one in code your open PR touches, fix there.
   Findings are open work any thread may pick up; his drop makes one
   `dropped`.
 - Memory: Claude auto-memory for this folder is the one store. When a memory
@@ -93,7 +98,8 @@ also read "Building ox".
 - Asks: `ox asks` is one ranked queue of what only Ashvin can do (thread
   questions, review asks, PRs ready to merge, memory, recap), plus PR fixes
   threads can make. On his PRs, resolve conflicts, fix CI your change broke
-  and review comments yourself; make design calls, log them and name them,
+  and review comments yourself. A CI failure that isn't ours gets one line,
+  no digging through artifacts. Make design calls, log them and name them,
   unless one is a Call; never break main. `/tidy` archives finished threads,
   renames duplicates, files threads into a sidebar group per track and
   clears stale asks, then reports what it did.
