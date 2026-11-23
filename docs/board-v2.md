@@ -1,5 +1,9 @@
 # Fewer stops, a board that shows the work (2026-11-11)
 
+> **Retired 2026-11-23.** The board is gone: Ashvin chats in one thread, Main,
+> which starts a sub-thread per piece of work and gives the overview. `ox setup`
+> removes the `ox-board` plugin. The stops below still hold.
+
 All three steps built on 2026-11-11. Defaults taken: the stop list below, and
 in-progress work grouped by ticket. An item's whole text opens its thread
 (Ashvin, 2026-11-11), so there's no Open button.

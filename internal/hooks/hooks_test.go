@@ -53,11 +53,12 @@ const theirs = `{
 }
 `
 
-func TestInstallTurnsOnBoardReloadAndKeepsTheirValue(t *testing.T) {
+func TestInstallTakesOutOxsBoardReloadOnly(t *testing.T) {
 	cases := []struct{ name, settings, want, foo string }{
-		{"no env", theirs, "1", ""},
-		{"env without it", `{"env": {"FOO": "bar"}}`, "1", "bar"},
+		{"ox's value alone", `{"env": {"` + WatchEnv + `": "1"}}`, "", ""},
+		{"ox's value beside theirs", `{"env": {"FOO": "bar", "` + WatchEnv + `": "1"}}`, "", "bar"},
 		{"their value", `{"env": {"FOO": "bar", "` + WatchEnv + `": "0"}}`, "0", "bar"},
+		{"no env", theirs, "", ""},
 	}
 	m := NewManager(t.TempDir())
 	for _, c := range cases {
@@ -77,6 +78,9 @@ func TestInstallTurnsOnBoardReloadAndKeepsTheirValue(t *testing.T) {
 		}
 		if w := Watching(path); w != c.want || got.Env["FOO"] != c.foo {
 			t.Errorf("%s: %s = %q, FOO = %q; want %q, %q", c.name, WatchEnv, w, got.Env["FOO"], c.want, c.foo)
+		}
+		if c.foo == "" && c.want == "" && got.Env != nil {
+			t.Errorf("%s: env = %v, want none left", c.name, got.Env)
 		}
 	}
 }

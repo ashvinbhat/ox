@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -64,6 +65,15 @@ type WrapUp struct {
 	Description string `json:"description"`
 }
 
+// Spawn names the thread that started this one with start_session.
+type Spawn struct {
+	SessionID string `json:"sessionId"`
+}
+
+// HostEnv is set by the desktop app, in every process a thread runs, to that
+// thread's id (local_…).
+const HostEnv = "CLAUDE_CODE_HOST_SESSION_ID"
+
 // Session is one desktop Code-tab thread.
 type Session struct {
 	ID           string          `json:"sessionId"`
@@ -80,6 +90,7 @@ type Session struct {
 	Summary      *Summary        `json:"postTurnSummary"`
 	WrapUp       *WrapUp         `json:"turnWrapUp"`
 	Interrupted  json.RawMessage `json:"interruptedAwaitingPerson"`
+	SpawnedFrom  *Spawn          `json:"spawnedFrom"`
 }
 
 // DefaultDir is where the desktop app keeps thread state on macOS.
@@ -138,17 +149,26 @@ func Get(dir, id string) (Session, error) {
 }
 
 // ByCLISession returns the thread running Claude Code session id, the id a
-// hook gets on stdin, or "" when no thread has it.
+// hook gets on stdin, or "" when no thread has it. A thread runs under
+// several session ids over its life.
 func ByCLISession(sessions []Session, id string) string {
 	if id == "" {
 		return ""
 	}
 	for _, s := range sessions {
-		if s.CLISessionID == id || s.LastCLIID == id {
+		if s.CLISessionID == id || s.LastCLIID == id || slices.Contains(s.PriorCLIIDs, id) {
 			return s.ID
 		}
 	}
 	return ""
+}
+
+// Parent is the thread that started this one, "" when he opened it himself.
+func (s Session) Parent() string {
+	if s.SpawnedFrom == nil {
+		return ""
+	}
+	return s.SpawnedFrom.SessionID
 }
 
 // LastActive is when the thread last did anything.

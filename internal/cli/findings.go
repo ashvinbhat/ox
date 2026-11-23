@@ -11,7 +11,7 @@ import (
 	"github.com/ashvinbhat/ox/internal/yokecli"
 )
 
-// findingGroup is one board line: the findings waiting for Ashvin's go under
+// findingGroup is the findings waiting for Ashvin's go under
 // one ticket, or under one track when they have no ticket.
 type findingGroup struct {
 	ID      string    `json:"id"` // findings:CB-18304, findings:track:ox
@@ -94,7 +94,7 @@ func ticketKey(t yokecli.Task) string {
 	return fmt.Sprintf("#%d", t.Seq)
 }
 
-// markDroppedFindings hides a group cleared from the board until a finding
+// markDroppedFindings hides a group cleared with `ox asks drop` until a finding
 // newer than the clear arrives under it.
 func markDroppedFindings(groups []findingGroup, dropped map[string]time.Time) {
 	for i, g := range groups {

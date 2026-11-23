@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/ashvinbhat/ox/internal/config"
+	"github.com/ashvinbhat/ox/internal/desktop"
 	"github.com/ashvinbhat/ox/internal/hooks"
 	"github.com/ashvinbhat/ox/internal/jobs"
 )
 
 func TestSessionStartPrintsTheBriefOrNothing(t *testing.T) {
 	t.Setenv(hooks.CheckEnv, "1")
+	t.Setenv(desktop.HostEnv, "")
 	t.Setenv("HOME", t.TempDir())
 	defer func(c *config.Config, e error, b func(string, time.Time) string, d time.Duration) {
 		cfg, cfgErr, hookBrief, briefBudget = c, e, b, d

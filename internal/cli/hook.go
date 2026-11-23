@@ -21,7 +21,7 @@ import (
 )
 
 // The background jobs every thread start kicks off. Each is a status file in
-// ~/.ox/jobs, so one that keeps failing shows in the brief and on the board.
+// ~/.ox/jobs, so one that keeps failing shows in the brief.
 const (
 	jobPRs       = "prs"
 	jobWorktrees = "worktrees"
@@ -45,19 +45,17 @@ var hookBrief = func(oxHome string, now time.Time) string {
 }
 
 // hookSelf finds the thread a Claude Code session id runs in. A new thread's
-// state file may not name its session yet, so it looks a few times.
+// state file may not name its session yet, so it looks a few times, then
+// takes the thread id the app sets in the hook's env.
 var hookSelf = func(cliID string) string {
-	if cliID == "" {
-		return ""
-	}
-	for try := 0; try < 3; try++ {
+	for try := 0; cliID != "" && try < 3; try++ {
 		sessions, _ := desktop.List(desktop.DefaultDir(), false)
 		if id := desktop.ByCLISession(sessions, cliID); id != "" {
 			return id
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return ""
+	return os.Getenv(desktop.HostEnv)
 }
 
 // jobProblems is one line per job that failed twice in a row or more, saying

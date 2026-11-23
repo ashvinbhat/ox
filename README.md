@@ -17,7 +17,7 @@ You never need to type an `ox` command. Ask a thread in your own words:
 | "recap" | the weekly recap |
 | "check my memory" | the memory check |
 | "clean up my threads" | tidy |
-| "clean up the board" | tidy, for what the board lists only |
+| "clean up my asks" | tidy, for stale asks only |
 | "any review asks?" / "review <PR>" | the review desk |
 | "park this" / "I'll come back to this" | park: a resumption note, and the thread shows as parked |
 
@@ -30,10 +30,11 @@ weekly recap or memory suggestions. The commands below are what threads use.
   stuck, done — tagged with its track, plus yoke tasks and open PRs no thread owns
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
   and starts the background jobs; a job that keeps failing says so in the
-  brief and on the board until it succeeds
-- **Board**: a side panel in every desktop thread listing the threads that
-  need you and what each is waiting on, in sync across threads; × hides
-  one and Clear all hides every item until each asks something new
+  brief until it succeeds
+- **Main and sub-threads**: you chat in one thread, Main (`ox main`). It
+  starts a sub-thread for each piece of work, relays its stops to you and
+  archives it once done. Each thread's brief opens with its role; Main's
+  lists its open sub-threads and the ones to sign off
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
 - **Asks**: one ranked queue of what only you can do (thread questions, review
   asks, PRs ready to merge, memory, recap); PR fixes go to threads. `/tidy`
@@ -74,7 +75,8 @@ the [Claude Code](https://claude.com/claude-code) desktop app (macOS) for
 
 ```bash
 ox init                          # Initialize ~/.ox
-ox setup                         # Start hook, skills and board panel for every thread
+ox setup                         # Start and ask hooks and skills for every thread
+ox main <local_…>                # Record which desktop thread is Main
 $EDITOR ~/.ox/tracks.yaml        # Name your workstreams
 ox                               # Same as ox now
 ```
@@ -87,6 +89,8 @@ ox now                           # Threads by state and track, tasks, PRs withou
 ox now --brief                   # The short version new threads get
 ox now --track durable           # One track
 ox now --json                    # For agents and scripts
+ox now --brief --thread <local_…> # The brief another thread gets, role line included
+ox main                          # Main's thread id
 ox worktrees prune --dry-run     # Worktrees whose PR merged (the hook prunes hourly)
 ```
 
@@ -146,7 +150,7 @@ ox asks drop <id>        # Hide one until it changes
 ```
 The brief shows the top three. PR state is cached and refreshed in the
 background once it's 10 minutes old. `/tidy` in a thread proposes archiving finished threads,
-renaming duplicates, grouping by track and clearing board items, and applies
+renaming duplicates, grouping by track and clearing stale asks, and applies
 what you approve.
 
 ### Parking
@@ -237,7 +241,7 @@ deletes the old `ox-brief.sh` and the pre-1.0 `ox-instructions` and
 `yoke-ready-tasks` scripts.
 
 Each job keeps a status in `~/.ox/jobs/`. A failure retries after 5 minutes;
-two in a row show in the brief and on the board until the job succeeds.
+two in a row show in the brief until the job succeeds.
 
 ## Directory Structure
 
