@@ -205,6 +205,19 @@ mission harness is frozen.
   `~/.claude/settings.json`'s env, so a desktop thread reloads the board when
   `ox setup` changes it, with no restart. It applies to threads started after
   the setting; a value you set yourself stays, and setup says it's off.
+- Main and sub-threads. One thread is Main: `ox main <local_…>` records it
+  in `~/.ox/main`, `ox main` prints it. Ashvin chats only there; Main starts
+  a sub-thread for each piece of work and archives it once done. The brief
+  gives each thread a role line, found from its Claude Code session id
+  (current or earlier) or the thread id the app sets:
+  - Main: "Role: Main. Orchestrate only…", its open sub-threads with state
+    and PRs, and "Sign off:" for the ones whose work is done (thread done, or
+    every PR merged or closed) and that aren't running, waiting or parked.
+  - A thread Main started: "Role: sub-thread of Main. Do the work here, own
+    its PR, report back by ending your turn."
+  - Any other thread: "Role: work thread."
+  `ox now --thread <local_…>` prints the brief for that thread; it defaults
+  to the thread ox runs in. `ox now --json` carries the `role`.
 
 ### Fixed
 - A dropped ask hid for good while it didn't change, so the board said
@@ -249,6 +262,8 @@ mission harness is frozen.
   whether moved work goes away or only lands somewhere else.
 - A thread's track comes from its title first, then its PRs' repos and
   branches, so an ox thread that opened a review-desk PR stays on ox.
+- `ox now` never counts Main as archivable, in review or listed with PRs:
+  its sub-threads own the PRs.
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
   `ox go` to resume one.
 - CLAUDE.md and README lead with working in desktop threads; missions are
@@ -264,6 +279,11 @@ mission harness is frozen.
   threads still in use, its own run threads included. `ox setup` removes ox's
   installed copy of the skill. Tidy still archives finished threads, after
   your OK.
+- The ox board: the `ox-board` panel plugin and the `board` field of
+  `ox now --json`. Main gives the overview now. `ox setup` removes ox's copy
+  at `~/.claude/skills/ox-board` (a plugin.json naming ox as its author) and
+  takes `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` out of `~/.claude/settings.json`'s
+  env; a plugin or value of yours stays. `ox asks snooze|drop` stay.
 
 ## [0.1.0] - 2026-08-19
 

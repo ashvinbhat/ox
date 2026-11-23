@@ -1,6 +1,6 @@
 ---
 name: park
-description: Park this thread — Ashvin is leaving it on purpose and coming back later. Writes a resumption note as the thread's last message and records the next step with `ox park`, so the brief and board show the thread as parked, not done, and /tidy leaves it alone. Use when he says "park this", "I'll come back to this", "stopping here for now", "pick this up later", or "/park".
+description: Park this thread — Ashvin is leaving it on purpose and coming back later. Writes a resumption note as the thread's last message and records the next step with `ox park`, so the brief and `ox now` show the thread as parked, not done, and /tidy leaves it alone. Use when he says "park this", "I'll come back to this", "stopping here for now", "pick this up later", or "/park".
 metadata:
   owner: ox
 ---
@@ -8,7 +8,7 @@ metadata:
 # Park
 
 He may come back days from now with none of today in his head. Leave the cue
-where he'll look: the end of this thread, and the board.
+where he'll look: the end of this thread, and `ox now`.
 
 ## 1. Gather the state yourself
 

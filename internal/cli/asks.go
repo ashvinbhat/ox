@@ -126,7 +126,7 @@ func runAsks(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: read desktop threads: %v\n", err)
 	}
 	parked, _ := park.Load(cfg.Home)
-	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, parked, now), reviewsToDo(cfg.Home), ts, now, !asksOffline)
+	q := collectAsks(cfg.Home, threadsFrom(sessions, ts, parked, mainThread(cfg.Home), now), reviewsToDo(cfg.Home), ts, now, !asksOffline)
 	if asksJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")

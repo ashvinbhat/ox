@@ -1,19 +1,18 @@
 ---
 name: tidy
-description: Tidy Ashvin's Claude Code desktop threads — archive finished ones, rename threads that share a title, file threads into one sidebar group per track, and clear what the ox board shows (questions that repeat another thread's, stuck threads that actually finished, answers he gives here passed on) — applied, then reported in one block with how to undo each. Use when he says "tidy", "clean up my threads", "clean up the board", "/tidy", or asks about the "can be archived" note in the thread brief.
+description: Tidy Ashvin's Claude Code desktop threads — archive finished ones, rename threads that share a title, file threads into one sidebar group per track, and clear stale asks (questions that repeat another thread's, stuck threads that actually finished, answers he gives here passed on) — applied, then reported in one block with how to undo each. Use when he says "tidy", "clean up my threads", "clean up my asks", "/tidy", or asks about the "can be archived" note in the thread brief.
 metadata:
   owner: ox
 ---
 
 # Tidy
 
-Keep the sidebar and the board small enough to scan. Do what the rules below
+Keep the sidebar and the asks queue small enough to scan. Do what the rules below
 call for, then report it in one block with how to undo each. Never touch a
 thread that still has work in it. A question a thread is waiting on him for
 is his: list it, don't answer it.
 
-"Clean up the board" is a smaller run: only the board items (step 2, last
-part). "Clean up my threads" and "tidy" do all of it.
+"Clean up my asks" is a smaller run: only the asks (step 2, last part). "Clean up my threads" and "tidy" do all of it.
 
 ## 1. Read the state
 
@@ -33,7 +32,7 @@ ToolSearch if they're deferred): `list_sessions` (limit 50) for each thread's
 or when all its PRs are merged or closed and it has been idle 24h+. Never
 archive:
 
-- this thread,
+- this thread, or Main (`ox main`),
 - a running thread,
 - a parked thread (`parked` in `ox now`): he left it on purpose,
 - a thread with an open PR,
@@ -50,7 +49,7 @@ the track's `name`; create only the missing ones. File each thread into its
 track's group (the `track` in `ox now --json`). Leave a thread alone if it
 has no track, or if it sits in a group he made that isn't a track's group.
 
-**Board items.** What the board lists:
+**Asks.** What `ox asks` lists for threads:
 
 - A thread's question (an ask of kind `question`). Dismiss it (`ox asks drop
   <id>`) when it only points at another thread's question, or a later

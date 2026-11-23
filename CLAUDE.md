@@ -14,35 +14,51 @@ also read "Building ox".
   - "what's waiting on me?" → `ox asks`; "where are things?" → `ox now`
   - "what did we decide today / this week?" → `ox journal [--days 7]`
   - "let me own this" → own-it; "recap" → recap; "clean up my threads" → tidy
-  - "clean up the board" → tidy, board items only: drop questions that repeat
+  - "clean up my asks" → tidy, asks only: drop questions that repeat
     another thread's, archive threads that finished, pass on his answers
   - "check my memory" → memory-check; "any review asks?" → review-asks;
     "review <PR>" → review-pr; "park this" / "I'll come back to this" → park
   - "open the PR" / "put it up" → open-pr: draft first, ready once the
     targeted tests pass locally
-- Starting work is just opening a thread and saying what to do. No `ox go`,
-  no task to create first.
+- Starting work is a sub-thread from Main with a brief. No `ox go`, no task
+  to create first.
 - Stops: ask Ashvin only for a stop in `~/.ox/stops.md` (Send, Delete,
-  Merge, Call, Fact), and start the question with its kind: "Send: post this
-  reply in #backend?". Everything else: do it, then say what you did and how
-  to undo it. The `ox hook ask` hook sends any other question back. A go he
-  gave covers the steps it names.
+  Merge, Call, Fact), in Main, and start the question with its kind: "Send:
+  post this reply in #backend?". A sub-thread puts its stop first in its
+  report; Main asks him. Everything else: do it, then say what you did and
+  how to undo it. The `ox hook ask` hook sends any other question back. A go
+  he gave covers the steps it names.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook,
   `ox hook session-start`):
-  the top of what's waiting on Ashvin, PR fixes threads can make, what's in
-  review, what's running. It is background: don't bring it up unless he asks
-  what needs him or the thread's work touches it. One exception: a "Mention
+  the thread's role, the top of what's waiting on Ashvin, PR fixes threads
+  can make, what's in review, what's running. Follow the role line; the rest
+  is background: don't bring it up unless he asks what needs him or the
+  thread's work touches it. One exception: a "Mention
   once" line (only the first thread of the day gets it). Say it in one
   sentence at the end of your first reply ("Also: the weekly recap is
   due."). An "ox problem:" line is a background job
   that keeps failing; raise it only when it blocks this thread's work. `ox now`
   is the full view, `--json` for parsing, `--track <short>` to filter.
-- The ox board is a side panel in every desktop thread (the `ox-board` plugin
-  `ox setup` installs): Needs you (threads stopped on him, with the stop's
-  kind), then a section each for Working, Went quiet, In review and Parked
-  (by ticket), then Landed today. Archive a thread to take it off.
-  A click on an item opens its thread; ⏲️ snoozes a stop for a day, ×
-  dismisses it until its thread asks something new.
+- Main and sub-threads. One thread is Main (`ox main`; its brief says "Role:
+  Main"). Ashvin chats only there.
+  - Main orchestrates. It never edits a repo, runs a build or opens a PR.
+    Every new piece of work, however small, goes to a new sub-thread:
+    `start_session`, "user_asked", a full brief, its own worktree for code.
+    One sub-thread per piece of work, one PR per sub-thread.
+  - Main owns memory, skills, settings and thread cleanup. Changes to ox's
+    own files go through a sub-thread PR.
+  - Main relays. When a sub-thread stops on a stop, Main reads its last
+    message and asks Ashvin, kind first, then sends his answer to that
+    sub-thread word for word. Main never redoes a sub-thread's work.
+  - Main signs off. When a sub-thread's work is done (PR merged or closed,
+    or its answer delivered) and it's idle ("Sign off:" in Main's brief),
+    Main archives it and says so in one line with the undo. Never archive
+    one with an open PR, an open question or uncommitted work.
+  - A sub-thread does the work and owns its PR end to end: opens it, fixes
+    CI, merges on Ashvin's go. It never starts other threads. Ashvin doesn't
+    read it, so every turn ends with a report for Main, a stop question
+    first when there is one. Memory or skill changes it wants go in the
+    report as "For Main: …", and Main writes them.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at
@@ -79,7 +95,7 @@ also read "Building ox".
   and review comments yourself; make design calls, log them and name them,
   unless one is a Call; never break main. `/tidy` archives finished threads,
   renames duplicates, files threads into a sidebar group per track and
-  clears board items, then reports what it did.
+  clears stale asks, then reports what it did.
 - Decisions: when you make a real choice (an approach, a design, a trade-off,
   the root cause you act on), log it right then:
   `ox journal add --decided "…" --over "…" --why "…"`, a line each in his

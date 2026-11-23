@@ -8,9 +8,9 @@ It sits here so threads that aren't about ox don't load it.
 - `ox` / `ox now` — threads by state and track, yoke tasks, PRs without a thread
 - `ox setup` — install the `ox-brief` and `ox hook ask` hooks and check
   each runs (rolling back `settings.json` if not), write `~/.ox/stops.md`
-  once, install ox's skills and the board panel, and turn on
-  board reload (`CLAUDE_CODE_PLUGIN_DIR_WATCH=1` in settings.json's env, so
-  threads started since reload the board when it changes); re-run after
+  once, install ox's skills, and retire what earlier versions installed
+  (the `daily-archive` skill, the `ox-board` plugin and its
+  `CLAUDE_CODE_PLUGIN_DIR_WATCH=1`), printing each removal; re-run after
   `make install`
 - `ox reviews`, `ox review ask|start|post|record` — the review desk the
   `/review-pr` and `/review-asks` skills drive
@@ -24,15 +24,19 @@ It sits here so threads that aren't about ox don't load it.
   result is in `~/.ox/memory-check/last.json`)
 - `ox asks [--json] [--offline]`, `ox asks snooze|drop <id>`, `ox asks
   refresh` — the queue of what waits on Ashvin; PR state is cached in
-  `~/.ox/asks/` and refreshed by the hook and the board once it's 10 minutes
-  old; a snooze hides an ask for a day, a drop until it changes (the board's
-  ⏲️ and ×)
+  `~/.ox/asks/` and refreshed by the hook once it's 10 minutes old; a
+  snooze hides an ask for a day, a drop until it changes
 - `ox hook ask` — PreToolUse on AskUserQuestion and the next-step box: a
   question passes only when it starts with a kind from `~/.ox/stops.md`
   ("Send: …"), else it's sent back with the list; each one is logged in
   `~/.ox/logs/stops.jsonl` and the brief counts today's
-- `ox now --json` carries `board`: what the panel draws (needs you, in
-  progress, landed today), built in `internal/cli/board.go`
+- `ox main [<local_…>]` — record Main's thread id in `~/.ox/main`, or print
+  it. The brief finds its own thread (the hook's session id against
+  `cliSessionId`, `lastAssistantCliSessionId`, `priorCliSessionIds`, else
+  `CLAUDE_CODE_HOST_SESSION_ID`) and prints its role: Main with its open
+  sub-threads (`spawnedFrom` = Main) and "Sign off:", a sub-thread, or a
+  work thread (`internal/cli/mainthread.go`). `ox now --thread <id>` prints
+  it for another thread; `--json` carries `role`
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a
@@ -61,10 +65,10 @@ It sits here so threads that aren't about ox don't load it.
 - `internal/ghreview` — the review ledger `~/.ox/reviews/<owner>-<repo>-<pr>.json`
   (asks, rounds with head/base SHA, findings, verdicts), prepare/submit/queue
   in `desk.go`, diff files in `~/.ox/reviews/work/` (outside the checkout).
-- `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded) and the
-  `ox-board` panel plugin (`hooks/register.tsx`; `claude plugin test` runs its
-  tests), installed by `ox setup` into `~/.claude/skills`. `owner: ox` in a
-  SKILL.md and `"author": { "name": "ox" }` in a plugin.json mark them as ox's.
+- `internal/claudeskills` — ox's skills (`*/SKILL.md`, embedded), installed
+  by `ox setup` into `~/.claude/skills`. `owner: ox` in a SKILL.md marks a
+  skill as ox's; a retired plugin is ox's when its plugin.json's author name
+  is "ox".
 - `internal/memcheck` — the memory audit: frontmatter parsing, the checks,
   and the code search (ripgrep over checkouts, then `git grep` at the default
   branch for what's still missing). Keeps and the last report are in
@@ -105,6 +109,7 @@ It sits here so threads that aren't about ox don't load it.
 ├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
 ├── stops.md         # What a thread stops and asks Ashvin for
+├── main             # Main's desktop thread id
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

@@ -43,9 +43,8 @@ const Timeout = 15
 // and the day's reminders stay for the first real thread.
 const CheckEnv = "OX_HOOK_CHECK"
 
-// WatchEnv at 1 in settings.json's env makes a desktop thread reload a plugin
-// in ~/.claude/skills when its files change, so an ox setup reaches the board
-// in threads already open. Desktop threads don't watch without it.
+// WatchEnv at 1 in settings.json's env made desktop threads reload the ox
+// board when it changed. The board is gone, so setup takes ox's value out.
 const WatchEnv = "CLAUDE_CODE_PLUGIN_DIR_WATCH"
 
 // checkPath is the PATH a hook can count on: the desktop app may pass no more.
@@ -210,13 +209,11 @@ func (m *Manager) Install(settingsPath string) error {
 	events["PreToolUse"] = append(m.withoutOurs(events["PreToolUse"]), map[string]any{"matcher": AskMatcher,
 		"hooks": []any{map[string]any{"type": "command", "command": AskCommand, "timeout": askTimeout}}})
 	settings["hooks"] = events
-	// A value Ashvin set, 0 included, stays: Watching reports it.
-	switch env := settings["env"].(type) {
-	case nil:
-		settings["env"] = map[string]any{WatchEnv: "1"}
-	case map[string]any:
-		if _, set := env[WatchEnv]; !set {
-			env[WatchEnv] = "1"
+	// ox set WatchEnv to "1" for the board. Any other value is Ashvin's.
+	if env, ok := settings["env"].(map[string]any); ok && env[WatchEnv] == "1" {
+		delete(env, WatchEnv)
+		if len(env) == 0 {
+			delete(settings, "env")
 		}
 	}
 

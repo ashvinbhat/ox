@@ -96,3 +96,28 @@ func TestListSkipsArchivedDeletedAndUnparseable(t *testing.T) {
 		t.Fatalf("missing dir: got %v, %v; want empty, nil", none, err)
 	}
 }
+
+func TestByCLISessionFindsEarlierSessionIDs(t *testing.T) {
+	sessions := []Session{
+		{ID: "local_a", CLISessionID: "now-a"},
+		{ID: "local_b", CLISessionID: "now-b", PriorCLIIDs: []string{"first-b", "second-b"}},
+	}
+	for id, want := range map[string]string{"now-a": "local_a", "second-b": "local_b", "gone": "", "": ""} {
+		if got := ByCLISession(sessions, id); got != want {
+			t.Errorf("ByCLISession(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
+func TestParentIsTheThreadThatStartedIt(t *testing.T) {
+	var sub, own Session
+	if err := json.Unmarshal([]byte(`{"sessionId":"local_s","spawnedFrom":{"sessionId":"local_main","taskId":"task_1","sideSession":true}}`), &sub); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"sessionId":"local_o"}`), &own); err != nil {
+		t.Fatal(err)
+	}
+	if sub.Parent() != "local_main" || own.Parent() != "" {
+		t.Errorf("parents = %q, %q; want local_main, none", sub.Parent(), own.Parent())
+	}
+}

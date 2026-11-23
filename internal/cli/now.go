@@ -34,7 +34,8 @@ var (
 	// nowMention adds the once-a-day reminders to the brief; only the
 	// ox-brief hook passes it, so a manual run doesn't use up the day's.
 	nowMention bool
-	// nowSelf is the thread the hook prints the brief for (local_…).
+	// nowSelf is the thread the brief is for (local_…): the hook's, or
+	// --thread, or the thread ox runs in.
 	nowSelf string
 )
 
@@ -62,7 +63,7 @@ type nowThread struct {
 	LastActive time.Time     `json:"lastActive"`
 	Archivable bool          `json:"archivable,omitempty"`
 	Next       string        `json:"next,omitempty"`    // a parked thread's first step back
-	Dropped    bool          `json:"dropped,omitempty"` // a stuck thread cleared from the board
+	Dropped    bool          `json:"dropped,omitempty"` // a stuck thread cleared with ox asks drop
 }
 
 type nowPR struct {
@@ -93,12 +94,13 @@ type nowView struct {
 	Problems []string `json:"problems,omitempty"`
 	// Self is the thread the brief is for: its key and its open work.
 	Self *nowSelfView `json:"self,omitempty"`
-	// Findings waiting for Ashvin's go, one group per ticket, for the board.
+	// Role is the brief's thread's place: Main, a sub-thread of Main, or a
+	// work thread.
+	Role *nowRole `json:"role,omitempty"`
+	// Findings waiting for Ashvin's go, one group per ticket.
 	Findings []findingGroup `json:"findings,omitempty"`
 	// Stops counts today's questions to Ashvin: let through, and sent back.
 	Stops *stopCount `json:"stops,omitempty"`
-	// Board is what the ox board panel draws.
-	Board *boardView `json:"board,omitempty"`
 }
 
 type stopCount struct {
@@ -132,6 +134,9 @@ type trackName struct {
 
 func runNow(cmd *cobra.Command, args []string) error {
 	cfg := requireConfig()
+	if nowSelf == "" {
+		nowSelf = os.Getenv(desktop.HostEnv)
+	}
 	view := buildNow(cfg.Home, time.Now())
 	switch {
 	case nowJSON:
@@ -158,7 +163,9 @@ func buildNow(oxHome string, now time.Time) nowView {
 	}
 
 	parked, _ := park.Load(oxHome)
-	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(oxHome)}
+	mainID := mainThread(oxHome)
+	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, mainID, now), Reviews: reviewsToDo(oxHome)}
+	view.Role = roleOf(nowSelf, mainID, view.Threads, sessions)
 	dropped, _ := asks.LoadDropped(oxHome)
 	markDropped(view.Threads, dropped)
 	for _, t := range ts {
@@ -196,11 +203,6 @@ func buildNow(oxHome string, now time.Time) nowView {
 	view.Asks = &q
 	view.Problems = jobProblems(oxHome, now)
 	view.Stops = stopsToday(oxHome, now)
-	if nowJSON {
-		board := buildBoard(q, view.Threads, sessions, view.Tasks, stops.Since(oxHome, now.Add(-14*24*time.Hour)),
-			asks.LoadMerged(oxHome), now)
-		view.Board = &board
-	}
 	markDroppedFindings(view.Findings, dropped)
 	if nowBrief && nowMention {
 		view.Mention = mentionOnce(oxHome, view, now)
@@ -208,9 +210,16 @@ func buildNow(oxHome string, now time.Time) nowView {
 	return view
 }
 
-func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, now time.Time) []nowThread {
+// threadsFrom reads each thread as ox shows it. Main is never archivable,
+// never in review and never listed with PRs: it orchestrates, its
+// sub-threads own the PRs.
+func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, mainID string, now time.Time) []nowThread {
 	out := make([]nowThread, 0, len(sessions))
 	for _, s := range sessions {
+		isMain := s.ID == mainID
+		if isMain {
+			s.PRs = nil
+		}
 		var prs []string
 		for _, p := range s.OpenPRs() {
 			prs = append(prs, prRef(p.Repo, p.Number))
@@ -223,7 +232,10 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[strin
 			Recap:      s.Recap(),
 			PRs:        prs,
 			LastActive: s.LastActive(),
-			Archivable: s.Archivable(now),
+			Archivable: s.Archivable(now) && !isMain,
+		}
+		if isMain && t.State == desktop.StateInReview {
+			t.State = desktop.StateDone
 		}
 		if r, ok := parked[s.ID]; ok && t.State != desktop.StateWorking && r.Holds(t.LastActive) {
 			t.State, t.Next, t.Archivable = desktop.StateParked, r.Next, false
@@ -236,7 +248,7 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[strin
 	return out
 }
 
-// markDropped flags stuck threads cleared from the board. A drop of
+// markDropped flags stuck threads cleared with `ox asks drop`. A drop of
 // "stuck:<id>" holds until the thread does something again.
 func markDropped(threads []nowThread, dropped map[string]time.Time) {
 	for i, t := range threads {
@@ -416,6 +428,7 @@ func renderBrief(v nowView) string {
 	var b strings.Builder
 	groups := byState(v.Threads)
 	fmt.Fprintf(&b, "## ox now · %s\n", v.At.Format("Mon 2 Jan 15:04"))
+	b.WriteString(briefRole(v.Role))
 
 	if v.Asks != nil {
 		b.WriteString(briefAsks(*v.Asks, v.At))
@@ -656,5 +669,6 @@ func init() {
 	nowCmd.Flags().BoolVar(&nowJSON, "json", false, "Machine-readable output")
 	nowCmd.Flags().StringVar(&nowTrack, "track", "", "Only this track (its short label)")
 	nowCmd.Flags().BoolVar(&nowAll, "all", false, "Include archived threads")
+	nowCmd.Flags().StringVar(&nowSelf, "thread", "", "The thread the brief is for (local_…; default: the thread ox runs in)")
 	rootCmd.AddCommand(nowCmd)
 }

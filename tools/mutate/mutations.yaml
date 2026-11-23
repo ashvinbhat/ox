@@ -12,20 +12,30 @@
   from: "_ = writeAtomic(settingsPath, prev)"
   to: "_ = prev"
 
-- why: setup turns on board reload when settings.json has no env
+- why: setup takes out the board reload ox set
   file: internal/hooks/hooks.go
-  from: "settings[\"env\"] = map[string]any{WatchEnv: \"1\"}"
-  to: "settings[\"env\"] = map[string]any{}"
-
-- why: setup turns on board reload beside other env values
-  file: internal/hooks/hooks.go
-  from: "\t\t\tenv[WatchEnv] = \"1\""
-  to: "\t\t\t_ = env"
+  from: "delete(env, WatchEnv)"
+  to: "_ = env"
 
 - why: setup keeps a board reload value Ashvin set
   file: internal/hooks/hooks.go
-  from: "if _, set := env[WatchEnv]; !set {"
-  to: "if true {"
+  from: "env[WatchEnv] == \"1\" {"
+  to: "env[WatchEnv] != nil {"
+
+- why: setup leaves no empty env behind once ox's value is out
+  file: internal/hooks/hooks.go
+  from: "delete(settings, \"env\")"
+  to: "_ = settings"
+
+- why: setup retires ox's board plugin
+  file: internal/claudeskills/install.go
+  from: "var retired = []string{\"daily-archive\", \"ox-board\"}"
+  to: "var retired = []string{\"daily-archive\"}"
+
+- why: setup leaves a plugin of the user's under a retired name
+  file: internal/claudeskills/install.go
+  from: "json.Unmarshal(b, &manifest) == nil && manifest.Author.Name == \"ox\""
+  to: "json.Unmarshal(b, &manifest) == nil"
 
 - why: the old script is retired only after the check passes
   file: internal/hooks/hooks.go
@@ -62,7 +72,7 @@
   from: "\tcase s.neverRan():\n\t\treturn StateDone\n"
   to: ""
 
-- why: a stuck thread cleared from the board stays cleared until it moves
+- why: a stuck thread cleared with ox asks drop stays cleared until it moves
   file: internal/cli/now.go
   from: "t.State == desktop.StateStuck && !t.LastActive.After(at)"
   to: "t.State == desktop.StateStuck && (true || !t.LastActive.After(at))"
@@ -154,8 +164,8 @@
 
 - why: setup leaves a user's skill under a retired name
   file: internal/claudeskills/install.go
-  from: "err == nil && bytes.Contains(existing, skillMarker)"
-  to: "err == nil && (true || bytes.Contains(existing, skillMarker))"
+  from: "return bytes.Contains(b, skillMarker)"
+  to: "return len(b) > 0"
 
 - why: a question that isn't a stop is sent back
   file: internal/cli/hookask.go
@@ -202,27 +212,62 @@
   from: "if at, ok := dropped[a.ID]; ok && !a.Since.After(at) {"
   to: "if at, ok := dropped[a.ID]; ok && !a.Since.After(at) && now.Sub(at) < SnoozeFor {"
 
-- why: a board stop takes its kind only from a stop asked after his latest message
-  file: internal/cli/board.go
-  from: "if e.Passed && ids[e.Session] && e.At.After(since) {"
-  to: "if e.Passed && ids[e.Session] && (true || e.At.After(since)) {"
+- why: the brief finds a thread under its earlier session ids too
+  file: internal/desktop/sessions.go
+  from: "slices.Contains(s.PriorCLIIDs, id)"
+  to: "slices.Contains(s.PriorCLIIDs[:0], id)"
 
-- why: a board stop is found under the thread's earlier session ids too
-  file: internal/cli/board.go
-  from: "append([]string{s.CLISessionID, s.LastCLIID}, s.PriorCLIIDs...)"
-  to: "[]string{s.CLISessionID, s.LastCLIID}"
+- why: the hook falls back to the thread id the app sets
+  file: internal/cli/hook.go
+  from: "return os.Getenv(desktop.HostEnv)"
+  to: "return \"\""
 
-- why: a thread under Needs you isn't repeated under In progress
-  file: internal/cli/board.go
-  from: "if _, moving := progressRank[t.State]; !moving || waiting[t.SessionID] {"
-  to: "if _, moving := progressRank[t.State]; !moving {"
+- why: a sub-thread is one Main started
+  file: internal/cli/mainthread.go
+  from: "if mainID != \"\" && byID[self].Parent() == mainID {"
+  to: "if mainID != \"\" {"
 
-- why: Landed today lists only today's merges
-  file: internal/cli/board.go
-  from: "if !at.Before(today) {"
-  to: "if true || !at.Before(today) {"
+- why: Main lists only its own sub-threads
+  file: internal/cli/mainthread.go
+  from: "if s.Archived || s.Parent() != mainID {"
+  to: "if s.Archived {"
 
-- why: a ticket's threads group only within one state, so each board section is one state
-  file: internal/cli/board.go
-  from: "return string(f.State) + \"|\" + key"
-  to: "return key"
+- why: Main doesn't list archived sub-threads
+  file: internal/cli/mainthread.go
+  from: "if s.Archived || s.Parent() != mainID {"
+  to: "if s.Parent() != mainID {"
+
+- why: a done sub-thread signs off
+  file: internal/cli/mainthread.go
+  from: "\tcase desktop.StateDone:\n\t\treturn true\n"
+  to: ""
+
+- why: a running, waiting or parked sub-thread never signs off
+  file: internal/cli/mainthread.go
+  from: "case desktop.StateWorking, desktop.StateNeedsYou, desktop.StateParked:"
+  to: "case \"\":"
+
+- why: a sub-thread with no PR signs off only when done
+  file: internal/cli/mainthread.go
+  from: "\tif len(prs) == 0 {\n\t\treturn false\n\t}\n"
+  to: ""
+
+- why: a sub-thread with an open PR doesn't sign off
+  file: internal/cli/mainthread.go
+  from: "if p.State != \"MERGED\" && p.State != \"CLOSED\" {"
+  to: "if p.State == \"\" {"
+
+- why: Main is never archivable
+  file: internal/cli/now.go
+  from: "Archivable: s.Archivable(now) && !isMain,"
+  to: "Archivable: s.Archivable(now),"
+
+- why: Main is never listed with PRs
+  file: internal/cli/now.go
+  from: "\t\tif isMain {\n\t\t\ts.PRs = nil\n\t\t}\n"
+  to: ""
+
+- why: Main is never in review
+  file: internal/cli/now.go
+  from: "if isMain && t.State == desktop.StateInReview {"
+  to: "if false {"
