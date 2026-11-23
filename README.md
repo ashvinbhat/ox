@@ -31,10 +31,11 @@ weekly recap or memory suggestions. The commands below are what threads use.
 - **Start brief**: a SessionStart hook gives each new thread `ox now --brief`
   and starts the background jobs; a job that keeps failing says so in the
   brief until it succeeds
-- **Main and sub-threads**: you chat in one thread, Main (`ox main`). It
-  starts a sub-thread for each piece of work, relays its stops to you and
-  archives it once done. Each thread's brief opens with its role; Main's
-  lists its open sub-threads and the ones to sign off
+- **Discussion threads and sub-threads**: you start a thread per task and
+  talk there. It starts a sub-thread for each piece of work, relays its
+  stops to you and archives it once done. Each thread's brief opens with its
+  role; a discussion thread's lists its open sub-threads and the ones to
+  sign off
 - **Tracks**: your workstreams in `~/.ox/tracks.yaml`
 - **Asks**: one ranked queue of what only you can do (thread questions, review
   asks, PRs ready to merge, memory, recap); PR fixes go to threads. `/tidy`
@@ -76,7 +77,6 @@ the [Claude Code](https://claude.com/claude-code) desktop app (macOS) for
 ```bash
 ox init                          # Initialize ~/.ox
 ox setup                         # Start and ask hooks and skills for every thread
-ox main <local_…>                # Record which desktop thread is Main
 $EDITOR ~/.ox/tracks.yaml        # Name your workstreams
 ox                               # Same as ox now
 ```
@@ -90,7 +90,6 @@ ox now --brief                   # The short version new threads get
 ox now --track durable           # One track
 ox now --json                    # For agents and scripts
 ox now --brief --thread <local_…> # The brief another thread gets, role line included
-ox main                          # Main's thread id
 ox worktrees prune --dry-run     # Worktrees whose PR merged (the hook prunes hourly)
 ```
 

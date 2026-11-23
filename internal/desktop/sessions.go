@@ -65,9 +65,12 @@ type WrapUp struct {
 	Description string `json:"description"`
 }
 
-// Spawn names the thread that started this one with start_session.
+// Spawn names the thread that started this one with start_session. UserFork
+// and Btw mark a side chat Ashvin forked off it, not work it handed out.
 type Spawn struct {
 	SessionID string `json:"sessionId"`
+	UserFork  bool   `json:"userFork"`
+	Btw       bool   `json:"btw"`
 }
 
 // HostEnv is set by the desktop app, in every process a thread runs, to that
@@ -163,9 +166,10 @@ func ByCLISession(sessions []Session, id string) string {
 	return ""
 }
 
-// Parent is the thread that started this one, "" when he opened it himself.
+// Parent is the thread that started this one as a sub-thread, "" when he
+// opened it himself or forked it as a side chat.
 func (s Session) Parent() string {
-	if s.SpawnedFrom == nil {
+	if s.SpawnedFrom == nil || s.SpawnedFrom.UserFork || s.SpawnedFrom.Btw {
 		return ""
 	}
 	return s.SpawnedFrom.SessionID
@@ -206,7 +210,19 @@ func (s Session) OpenPRs() []PR {
 	return open
 }
 
-// State classifies the thread as of now.
+// ownOpenPR reports a PR this thread opened that is still open.
+func (s Session) ownOpenPR() bool {
+	for _, p := range s.OpenPRs() {
+		if p.Own {
+			return true
+		}
+	}
+	return false
+}
+
+// State classifies the thread as of now. In review means a PR of its own is
+// open: a thread that only points at others' PRs, or whose PRs all landed,
+// is done even when the app marks it review-ready.
 func (s Session) State(now time.Time) State {
 	switch {
 	case s.Ask() != "" || s.status() == "blocked" || isSet(s.Interrupted):
@@ -218,16 +234,17 @@ func (s Session) State(now time.Time) State {
 			return StateWorking
 		}
 		return StateStuck
-	case s.status() == "review_ready" || len(s.OpenPRs()) > 0:
+	case s.ownOpenPR():
 		return StateInReview
 	default:
 		return StateDone
 	}
 }
 
-// Archivable reports a finished thread nobody has touched in two days.
+// Archivable reports a finished thread with no open PR that nobody has
+// touched in two days.
 func (s Session) Archivable(now time.Time) bool {
-	return s.State(now) == StateDone && now.Sub(s.LastActive()) > archiveAfter
+	return s.State(now) == StateDone && len(s.OpenPRs()) == 0 && now.Sub(s.LastActive()) > archiveAfter
 }
 
 // neverRan reports a thread with no activity since it was opened, such as a

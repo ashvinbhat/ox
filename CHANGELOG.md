@@ -205,17 +205,18 @@ mission harness is frozen.
   `~/.claude/settings.json`'s env, so a desktop thread reloads the board when
   `ox setup` changes it, with no restart. It applies to threads started after
   the setting; a value you set yourself stays, and setup says it's off.
-- Main and sub-threads. One thread is Main: `ox main <local_…>` records it
-  in `~/.ox/main`, `ox main` prints it. Ashvin chats only there; Main starts
-  a sub-thread for each piece of work and archives it once done. The brief
-  gives each thread a role line, found from its Claude Code session id
-  (current or earlier) or the thread id the app sets:
-  - Main: "Role: Main. Orchestrate only…", its open sub-threads with state
-    and PRs, and "Sign off:" for the ones whose work is done (thread done, or
-    every PR merged or closed) and that aren't running, waiting or parked.
-  - A thread Main started: "Role: sub-thread of Main. Do the work here, own
-    its PR, report back by ending your turn."
-  - Any other thread: "Role: work thread."
+- Discussion threads and sub-threads. Ashvin starts a thread per task and
+  talks there; each piece of work goes to a sub-thread it starts, which
+  reports back to it. The brief gives each thread a role line, found from
+  its Claude Code session id (current or earlier) or the thread id the app
+  sets, and the app's `spawnedFrom`:
+  - A thread another thread started: "Role: sub-thread of "<its title>". Do
+    the work here and own its PR; report back to that thread by ending your
+    turn." A side chat he forked off a thread is not a sub-thread.
+  - Any other thread: "Role: discussion thread. Talk and decide here; …",
+    its open sub-threads with state and PRs, and "Sign off:" for the ones
+    whose work is done (thread done, or every PR merged or closed) and that
+    aren't running, waiting or parked.
   `ox now --thread <local_…>` prints the brief for that thread; it defaults
   to the thread ox runs in. `ox now --json` carries the `role`.
 
@@ -262,8 +263,10 @@ mission harness is frozen.
   whether moved work goes away or only lands somewhere else.
 - A thread's track comes from its title first, then its PRs' repos and
   branches, so an ox thread that opened a review-desk PR stays on ox.
-- `ox now` never counts Main as archivable, in review or listed with PRs:
-  its sub-threads own the PRs.
+- `ox now` puts a thread in review only while a PR it opened is open. A
+  thread the app marks review-ready with no PR, one whose PRs all landed,
+  and one that only points at others' PRs are done. A done thread with an
+  open PR, or with sub-threads not yet archived, is never archivable.
 - **Breaking:** bare `ox` runs `ox now` instead of resuming a mission. Use
   `ox go` to resume one.
 - CLAUDE.md and README lead with working in desktop threads; missions are
@@ -280,10 +283,11 @@ mission harness is frozen.
   installed copy of the skill. Tidy still archives finished threads, after
   your OK.
 - The ox board: the `ox-board` panel plugin and the `board` field of
-  `ox now --json`. Main gives the overview now. `ox setup` removes ox's copy
-  at `~/.claude/skills/ox-board` (a plugin.json naming ox as its author) and
-  takes `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` out of `~/.claude/settings.json`'s
-  env; a plugin or value of yours stays. `ox asks snooze|drop` stay.
+  `ox now --json`. Each thread's brief lists its sub-threads now. `ox setup`
+  removes ox's copy at `~/.claude/skills/ox-board` (a plugin.json naming ox
+  as its author) and takes `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` out of
+  `~/.claude/settings.json`'s env; a plugin or value of yours stays.
+  `ox asks snooze|drop` stay.
 
 ## [0.1.0] - 2026-08-19
 

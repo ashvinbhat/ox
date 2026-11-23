@@ -68,7 +68,7 @@ func TestParkedThreads(t *testing.T) {
 		"b": {SessionID: "b", Next: "Old step", At: parkedAt},
 	}
 	got := map[string]nowThread{}
-	for _, th := range threadsFrom(sessions, nil, parked, "", now) {
+	for _, th := range threadsFrom(sessions, nil, parked, now) {
 		got[th.SessionID] = th
 	}
 	if a := got["a"]; a.State != desktop.StateParked || a.Next != "Rebase on main" || a.Archivable {
@@ -80,7 +80,7 @@ func TestParkedThreads(t *testing.T) {
 	if c := got["c"]; c.State != desktop.StateDone || !c.Archivable {
 		t.Errorf("unparked thread = %+v", c)
 	}
-	if brief := renderBrief(nowView{At: now, Threads: threadsFrom(sessions, nil, parked, "", now)}); !strings.Contains(brief, "· parked 1 · done 2") {
+	if brief := renderBrief(nowView{At: now, Threads: threadsFrom(sessions, nil, parked, now)}); !strings.Contains(brief, "· parked 1 · done 2") {
 		t.Errorf("brief counts:\n%s", brief)
 	}
 }
