@@ -20,13 +20,13 @@ also read "Building ox".
     "review <PR>" → review-pr; "park this" / "I'll come back to this" → park
   - "open the PR" / "put it up" → open-pr: draft first, ready once the
     targeted tests pass locally
-- Starting work is a sub-thread from Main with a brief. No `ox go`, no task
-  to create first.
+- Starting work is a sub-thread with a brief. No `ox go`, no task to
+  create first.
 - Stops: ask Ashvin only for a stop in `~/.ox/stops.md` (Send, Delete,
-  Merge, Call, Fact), in Main, and start the question with its kind: "Send:
-  post this reply in #backend?". A sub-thread puts its stop first in its
-  report; Main asks him. Everything else: do it, then say what you did and
-  how to undo it. The `ox hook ask` hook sends any other question back. A go
+  Merge, Call, Fact), in the discussion thread, and start the question with
+  its kind: "Send: post this reply in #backend?". A sub-thread puts its stop
+  first in its report; the thread that started it asks him. Everything else:
+  do it, then say what you did and how to undo it. The `ox hook ask` hook sends any other question back. A go
   he gave covers the steps it names.
 - Each thread starts with `ox now --brief` (the `ox-brief` SessionStart hook,
   `ox hook session-start`):
@@ -39,26 +39,27 @@ also read "Building ox".
   due."). An "ox problem:" line is a background job
   that keeps failing; raise it only when it blocks this thread's work. `ox now`
   is the full view, `--json` for parsing, `--track <short>` to filter.
-- Main and sub-threads. One thread is Main (`ox main`; its brief says "Role:
-  Main"). Ashvin chats only there.
-  - Main orchestrates. It never edits a repo, runs a build or opens a PR.
-    Every new piece of work, however small, goes to a new sub-thread:
-    `start_session`, "user_asked", a full brief, its own worktree for code.
-    One sub-thread per piece of work, one PR per sub-thread.
-  - Main owns memory, skills, settings and thread cleanup. Changes to ox's
-    own files go through a sub-thread PR.
-  - Main relays. When a sub-thread stops on a stop, Main reads its last
-    message and asks Ashvin, kind first, then sends his answer to that
-    sub-thread word for word. Main never redoes a sub-thread's work.
-  - Main signs off. When a sub-thread's work is done (PR merged or closed,
-    or its answer delivered) and it's idle ("Sign off:" in Main's brief),
-    Main archives it and says so in one line with the undo. Never archive
-    one with an open PR, an open question or uncommitted work.
+- Discussion threads and sub-threads. Ashvin starts a thread per task and
+  talks there: a discussion thread. The pinned "ox" thread is the discussion
+  thread for building ox. The brief's role line says which a thread is.
+  - A discussion thread talks, plans and decides. It never edits a repo,
+    runs a build or opens a PR. Each piece of work goes to a sub-thread it
+    starts: `start_session`, "user_asked", a full brief, its own worktree
+    for code. One sub-thread per piece of work, one PR per sub-thread.
+  - Quick things stay in the discussion thread: a lookup, an ox command, a
+    memory edit, an answer from what's known.
+  - Sub-threads report back to the thread that started them. That thread
+    puts any stop to Ashvin there, kind first, and sends his answer back
+    word for word. It never redoes a sub-thread's work.
+  - The discussion thread signs off. When a sub-thread's work is done (PR
+    merged or closed, or its answer delivered) and it's idle ("Sign off:" in
+    its brief), it archives it and says so in one line with the undo. Never
+    archive one with an open PR, an open question or uncommitted work.
   - A sub-thread does the work and owns its PR end to end: opens it, fixes
-    CI, merges on Ashvin's go. It never starts other threads. Ashvin doesn't
-    read it, so every turn ends with a report for Main, a stop question
-    first when there is one. Memory or skill changes it wants go in the
-    report as "For Main: …", and Main writes them.
+    CI, merges on Ashvin's go. It never starts threads of its own. Every
+    turn ends with a report for its discussion thread, a stop question
+    first when there is one, and "For <thread>: …" for memory or skill
+    changes it wants. Discussion threads write memory and skills.
 - Tracks are his workstreams, in `~/.ox/tracks.yaml`.
 - Repos are cloned at `~/.ox/repos/<name>` (backend, frontend, python-backend,
   api-automation, infra-configurations, …). Desktop worktree threads live at

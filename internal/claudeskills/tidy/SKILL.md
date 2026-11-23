@@ -32,7 +32,9 @@ ToolSearch if they're deferred): `list_sessions` (limit 50) for each thread's
 or when all its PRs are merged or closed and it has been idle 24h+. Never
 archive:
 
-- this thread, or Main (`ox main`),
+- this thread,
+- a thread with open sub-threads (`role` in `ox now --json --thread <id>`
+  lists them; `ox now` never marks one archivable): sign those off first,
 - a running thread,
 - a parked thread (`parked` in `ox now`): he left it on purpose,
 - a thread with an open PR,

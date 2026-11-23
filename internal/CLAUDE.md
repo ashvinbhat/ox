@@ -30,13 +30,14 @@ It sits here so threads that aren't about ox don't load it.
   question passes only when it starts with a kind from `~/.ox/stops.md`
   ("Send: …"), else it's sent back with the list; each one is logged in
   `~/.ox/logs/stops.jsonl` and the brief counts today's
-- `ox main [<local_…>]` — record Main's thread id in `~/.ox/main`, or print
-  it. The brief finds its own thread (the hook's session id against
+- Roles: the brief finds its own thread (the hook's session id against
   `cliSessionId`, `lastAssistantCliSessionId`, `priorCliSessionIds`, else
-  `CLAUDE_CODE_HOST_SESSION_ID`) and prints its role: Main with its open
-  sub-threads (`spawnedFrom` = Main) and "Sign off:", a sub-thread, or a
-  work thread (`internal/cli/mainthread.go`). `ox now --thread <id>` prints
-  it for another thread; `--json` carries `role`
+  `CLAUDE_CODE_HOST_SESSION_ID`) and prints its role from `spawnedFrom`
+  (`internal/cli/threadrole.go`). A thread another thread started is its
+  sub-thread; a side chat he forked (`userFork` or `btw`) is not. Every
+  other thread is a discussion thread, listing its open sub-threads and
+  "Sign off:". `ox now --thread <id>` prints it for another thread;
+  `--json` carries `role`
 - `ox journal [--days N] [--track x]`, `ox journal add|own-it|recap|status` —
   the decision journal the CLAUDE.md rules, `/own-it` and `/recap` write and read
 - `ox work refresh [--if-due] [--dry-run]` — `yoke sync` (hourly), then a
@@ -109,7 +110,6 @@ It sits here so threads that aren't about ox don't load it.
 ├── jobs/            # Background job status and locks
 ├── parked/          # Threads left on purpose, with the next step
 ├── stops.md         # What a thread stops and asks Ashvin for
-├── main             # Main's desktop thread id
 ├── memory-check/    # Last memory audit and kept suggestions
 ├── memory.db        # Memory archive from before 1.0
 ├── memory/repos/    # Per-repo knowledge docs

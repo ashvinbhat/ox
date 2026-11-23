@@ -94,8 +94,8 @@ type nowView struct {
 	Problems []string `json:"problems,omitempty"`
 	// Self is the thread the brief is for: its key and its open work.
 	Self *nowSelfView `json:"self,omitempty"`
-	// Role is the brief's thread's place: Main, a sub-thread of Main, or a
-	// work thread.
+	// Role is the brief's thread's place: a discussion thread with its
+	// sub-threads, or a sub-thread of one.
 	Role *nowRole `json:"role,omitempty"`
 	// Findings waiting for Ashvin's go, one group per ticket.
 	Findings []findingGroup `json:"findings,omitempty"`
@@ -163,9 +163,8 @@ func buildNow(oxHome string, now time.Time) nowView {
 	}
 
 	parked, _ := park.Load(oxHome)
-	mainID := mainThread(oxHome)
-	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, mainID, now), Reviews: reviewsToDo(oxHome)}
-	view.Role = roleOf(nowSelf, mainID, view.Threads, sessions)
+	view := nowView{At: now, Threads: threadsFrom(sessions, ts, parked, now), Reviews: reviewsToDo(oxHome)}
+	view.Role = roleOf(nowSelf, view.Threads, sessions)
 	dropped, _ := asks.LoadDropped(oxHome)
 	markDropped(view.Threads, dropped)
 	for _, t := range ts {
@@ -210,16 +209,12 @@ func buildNow(oxHome string, now time.Time) nowView {
 	return view
 }
 
-// threadsFrom reads each thread as ox shows it. Main is never archivable,
-// never in review and never listed with PRs: it orchestrates, its
-// sub-threads own the PRs.
-func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, mainID string, now time.Time) []nowThread {
+// threadsFrom reads each thread as ox shows it. A thread with open
+// sub-threads is never archivable.
+func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[string]park.Record, now time.Time) []nowThread {
 	out := make([]nowThread, 0, len(sessions))
+	parents := withOpenSubThreads(sessions)
 	for _, s := range sessions {
-		isMain := s.ID == mainID
-		if isMain {
-			s.PRs = nil
-		}
 		var prs []string
 		for _, p := range s.OpenPRs() {
 			prs = append(prs, prRef(p.Repo, p.Number))
@@ -232,10 +227,7 @@ func threadsFrom(sessions []desktop.Session, ts []tracks.Track, parked map[strin
 			Recap:      s.Recap(),
 			PRs:        prs,
 			LastActive: s.LastActive(),
-			Archivable: s.Archivable(now) && !isMain,
-		}
-		if isMain && t.State == desktop.StateInReview {
-			t.State = desktop.StateDone
+			Archivable: s.Archivable(now) && !parents[s.ID],
 		}
 		if r, ok := parked[s.ID]; ok && t.State != desktop.StateWorking && r.Holds(t.LastActive) {
 			t.State, t.Next, t.Archivable = desktop.StateParked, r.Next, false

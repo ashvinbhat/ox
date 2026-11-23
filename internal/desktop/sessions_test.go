@@ -25,8 +25,11 @@ func TestState(t *testing.T) {
 		{"opened, never used", Session{CreatedMs: ago(20 * time.Hour), LastActiveMs: ago(20 * time.Hour)}, StateDone},
 		{"first turn running", Session{CreatedMs: ago(3 * time.Minute), LastActiveMs: ago(2 * time.Minute)}, StateWorking},
 		{"first turn died", Session{CreatedMs: ago(3 * time.Hour), LastActiveMs: ago(3*time.Hour - time.Minute)}, StateStuck},
-		{"open PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 9670, State: "OPEN"}}}, StateInReview},
-		{"review ready", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}}, StateInReview},
+		{"open PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 9670, State: "OPEN", Own: true}}}, StateInReview},
+		{"review ready, PR open", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}, PRs: []PR{{Number: 50, State: "OPEN", Own: true}}}, StateInReview},
+		{"review ready, no PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}}, StateDone},
+		{"review ready, PRs landed", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}, PRs: []PR{{Number: 48, State: "MERGED", Own: true}}}, StateDone},
+		{"points at another's open PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "review_ready"}, PRs: []PR{{Number: 10263, State: "OPEN"}}}, StateDone},
 		{"merged PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 2195, State: "MERGED"}}}, StateDone},
 		{"finished, no PR", Session{LastActiveMs: ago(time.Hour), Summary: &Summary{Status: "completed"}}, StateDone},
 	}
@@ -58,6 +61,11 @@ func TestArchivable(t *testing.T) {
 	done.LastActiveMs = float64(now.Add(-time.Hour).UnixMilli())
 	if done.Archivable(now) {
 		t.Error("done thread idle 1 hour should not be archivable")
+	}
+	reviewing := Session{Summary: &Summary{Status: "completed"}, PRs: []PR{{Number: 10263, State: "OPEN"}}}
+	reviewing.LastActiveMs = float64(now.Add(-72 * time.Hour).UnixMilli())
+	if reviewing.State(now) != StateDone || reviewing.Archivable(now) {
+		t.Error("a done thread pointing at an open PR should not be archivable")
 	}
 }
 
@@ -110,14 +118,19 @@ func TestByCLISessionFindsEarlierSessionIDs(t *testing.T) {
 }
 
 func TestParentIsTheThreadThatStartedIt(t *testing.T) {
-	var sub, own Session
-	if err := json.Unmarshal([]byte(`{"sessionId":"local_s","spawnedFrom":{"sessionId":"local_main","taskId":"task_1","sideSession":true}}`), &sub); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal([]byte(`{"sessionId":"local_o"}`), &own); err != nil {
-		t.Fatal(err)
-	}
-	if sub.Parent() != "local_main" || own.Parent() != "" {
-		t.Errorf("parents = %q, %q; want local_main, none", sub.Parent(), own.Parent())
+	for body, want := range map[string]string{
+		`{"sessionId":"local_s","spawnedFrom":{"sessionId":"local_ox","taskId":"task_1","sideSession":true}}`: "local_ox",
+		`{"sessionId":"local_o"}`: "",
+		`{"sessionId":"local_f","spawnedFrom":{"sessionId":"local_ox","sideSession":true,"userFork":true,"btw":true}}`: "",
+		`{"sessionId":"local_u","spawnedFrom":{"sessionId":"local_ox","sideSession":true,"userFork":true}}`:            "",
+		`{"sessionId":"local_b","spawnedFrom":{"sessionId":"local_ox","sideSession":true,"btw":true}}`:                 "",
+	} {
+		var s Session
+		if err := json.Unmarshal([]byte(body), &s); err != nil {
+			t.Fatal(err)
+		}
+		if got := s.Parent(); got != want {
+			t.Errorf("%s: parent %q, want %q", s.ID, got, want)
+		}
 	}
 }

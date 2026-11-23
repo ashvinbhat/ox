@@ -19,8 +19,8 @@ var files embed.FS
 var skillMarker = []byte("owner: ox")
 
 // retired are skills and plugins earlier ox versions installed. A copy left
-// in place would keep running in threads. The ox-board panel went when Main
-// took over the overview.
+// in place would keep running in threads. The ox-board panel went when each
+// thread's brief started listing its sub-threads.
 var retired = []string{"daily-archive", "ox-board"}
 
 // Install writes each embedded skill to dir/<name> and removes ox's copy of
