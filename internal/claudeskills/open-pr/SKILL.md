@@ -15,13 +15,26 @@ PR goes ready and gets the label.
 ## 1. Title
 
 `CB-XXXXX: <what changes, in plain words>`. Take the ticket id from the thread
-or ask him; `CB-0000` when the work has no ticket. Never guess a number.
-ox PRs (ashvinbhat/ox) take a `feat:` or `fix:` title and an entry under
-`[Unreleased]` in CHANGELOG.md.
+or ask him. Never guess a number.
 
-## 2. Format, then start the tests
+- Team repos (backend, frontend, api-automation, …) always take a real CB
+  ticket: their CI checks it in Notion.
+- `CB-0000` only on ox and yoke PRs. ox PRs (ashvinbhat/ox) also get an entry
+  under `[Unreleased]` in CHANGELOG.md.
 
-Format first, the repo's way: backend
+## 2. Check, format, then start the tests
+
+Check the diff against his rules for the stack:
+
+- **Backend:** no inline FQCNs; no `while (true)`, `for (;;)` or
+  deadline-only loops (bound each by a count from the data); no new comments
+  and no CB ids in code.
+- **Frontend:** `npx i18n-check -s en --locales messages/` passes, so every
+  key is in en, es, fr and de.
+- **api-automation:** Given/When/Then the repo's way, at most 2 test methods,
+  exact assertions with a control where a check could pass vacuously.
+
+Format, the repo's way: backend
 `./mvnw spotless:apply -pl <touched modules>`, ox `gofmt`. Never reformat
 files the change didn't touch.
 
@@ -34,6 +47,9 @@ the ones that construct what it changed. Backend:
   -Dtest='<ClassA>,<ClassB>' test > "$LOG" 2>&1
 ```
 
+Typecheck, lint and the pre-push hook run in the background with the tests.
+Push once you're ~80% sure; don't hold the push or the turn on any of them.
+
 One build per checkout: no formatter or second build while it compiles.
 
 ## 3. Open the draft while they run
@@ -42,7 +58,11 @@ One build per checkout: no formatter or second build while it compiles.
 - `gh pr create --draft --base main --title … --body-file …`, with no
   labels. `ready-for-review` goes on only when the PR goes ready.
 - Body: the problem first, then what changes, what's not covered, and
-  testing ("local run in progress"). No yoke, ox or thread references.
+  testing ("local run in progress"). A new or changed Temporal workflow
+  names the 2–3 house workflows it mirrors.
+- Nothing internal on GitHub: no yoke or ox ids, task numbers, thread
+  references or AI-authorship trailers in commits, the title, the body or
+  comments.
 - Bind it to the thread: `get_status`, then `bind_pr` if it isn't bound.
 
 ## 4. When the tests finish
@@ -55,7 +75,18 @@ Read the log (`Tests run:`, `BUILD SUCCESS`), not the exit code alone.
   it). Tell him in one line.
 - **Red from this change:** fix, push, run again. It stays a draft until a
   run is green.
-- **Red from something else:** leave it draft, show him the failure, ask.
+- **Red from something else** (it fails before the changed code runs, or in
+  code the change didn't touch): name the failure in the body's testing
+  section and go ready as on green.
+
+## 5. After it's up
+
+- After every push, refresh the title and body so they describe the branch
+  as it is now, including what was reverted and what's left for follow-ups.
+- CI red from this change: reproduce it locally and fix it. Never trigger or
+  re-run CI.
+- A live run, or screenshots on the PR, waits until DARS has approved with no
+  open comments and the code is final.
 
 ## Rules
 
