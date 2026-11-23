@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a GitHub PR for Ashvin against the whole codebase at the PR head, not just the diff. On a re-review, grade every open finding against the changes since his last round, then review only the new code. Use when he asks to review or re-review a PR (a URL, or "review Neeraj's PR"). Nothing reaches GitHub until he approves the exact text.
+description: Review a GitHub PR for Ashvin against the whole codebase at the PR head, not just the diff, and explain in plain words what the PR is for, what it changes and why the old code was that way. On a re-review, grade every open finding against the changes since his last round, then review only the new code. Use when he asks to review or re-review a PR (a URL, or "review Neeraj's PR"). Nothing reaches GitHub until he approves the exact text.
 metadata:
   owner: ox
 ---
@@ -45,6 +45,16 @@ right. A PR that collects logs or metrics must collect what the question needs:
 count of repeats. A gap between the goal and what the code can deliver is an
 issue, even when every line is correct.
 
+Then learn why the code it changes is the way it is. `git blame` the changed
+and removed lines, open the PR that wrote them, and read its last commits, not
+only its description: a description can describe a state the PR later
+reversed. If the old code was a deliberate trade-off, this PR undoes a
+decision, and its author should weigh in. A body that calls it an accident, a
+leftover or dead code when it wasn't is a finding.
+
+When a PR bundles independent changes, judge each on its own. Recommend a
+split when one is ready and another isn't.
+
 ## 3. Read the diff, then the codebase around it
 
 Read the whole diff yourself. Then, in the checkout, look for what the diff
@@ -80,6 +90,12 @@ endpoint or event:
 7. **Security.** Who can send this input: any logged-in user, a service key,
    anonymous? What reaches storage, logs and metric tags verbatim? Is it scoped
    per tenant? Is metric cardinality bounded?
+8. **Where the cost goes.** When work moves (eager to lazy, startup to first
+   request, sync to async, behind a new cache), find what triggers the new
+   path: CI jobs, generated clients, crons, other services. Say whether the
+   cost goes away or only moves, and onto whom. When the PR answers a symptom
+   (an alarm, a timeout, a flaky test), say whether it fixes the cause or is a
+   stopgap, and name the lasting fix.
 
 For a large PR, one Explore subagent may sweep callers and siblings. Read the
 diff yourself and don't fan out reviewer panels.
@@ -99,7 +115,8 @@ Drop anything you can't point to in the code, and list what you dropped with a
 one-line reason each.
 
 Check the factual claims in the PR body and the new comments too: a timeout
-in another repo, "nothing maps this to Redshift", "the index must exist first".
+in another repo, "nothing maps this to Redshift", "the index must exist first",
+"this line was left in by accident".
 A wrong reason in a comment is a finding; a confirmed one goes in the dropped
 list, so he sees it was checked.
 
@@ -109,7 +126,19 @@ list, so he sees it was checked.
    Recommend approve when no finding blocks the merge, and list the rest as
    follow-ups he can raise or drop. Comment is for findings he should raise
    before merge that don't need another round.
-2. **Intent:** two sentences.
+2. **What the PR is for and what it does.** Ashvin should understand the PR
+   from this alone, without opening the diff. Use plain words and no
+   unexplained jargon.
+   - The problem it solves (the symptom, and where it showed up) and the
+     intent, in two or three sentences.
+   - Each change it makes, numbered, one line each: before → after.
+   - Then a section per independent change, with three parts:
+     - **Why it was that way:** who wrote the old code, in which PR, and the
+       reason or trade-off. Say "no reason found" when the history shows none.
+     - **What changes if merged:** for callers, outside consumers and each
+       environment (QA, prod). Say "nothing breaks" when that's what you found.
+     - **Right place?** A fix of the cause, or a stopgap. For a stopgap, name
+       the lasting fix. Name any smell it adds.
 3. **Findings**, blocker → issue → suggest → nit. Each gets `file:line`,
    severity, a one-line claim, the evidence (name the file outside the diff
    that proves it), and the fix. Use a suggestion block for a line change.
