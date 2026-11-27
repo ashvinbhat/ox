@@ -221,6 +221,10 @@ mission harness is frozen.
   to the thread ox runs in. `ox now --json` carries the `role`.
 
 ### Fixed
+- `ox work refresh` named a task by its hash. yoke reads an all-digit hash
+  as a task number, so `yoke done 0042` hit task 42; when that task was
+  dropped, the step failed every 10 minutes. Steps now name a task by its
+  number.
 - A dropped ask hid for good while it didn't change, so the board said
   nothing was waiting while 3 threads were. Each stop on the board now has
   two buttons: ⏲️ snoozes it for a day (`ox asks snooze <id>`), × dismisses

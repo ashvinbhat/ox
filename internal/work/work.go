@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -50,9 +51,12 @@ type Thread struct {
 	PRs   []PR
 }
 
-// Task is what Plan reads of a yoke task.
+// Task is what Plan reads of a yoke task. Commands name it by Seq, its
+// number, never by ID: yoke reads an all-digit id such as 0042 as a number
+// first, so `yoke done 0042` hits task 42.
 type Task struct {
 	ID     string
+	Seq    int
 	Title  string
 	Status string
 	Keys   []string
@@ -102,7 +106,7 @@ func (e *entry) complete() bool { return e.status == "done" || e.status == "drop
 func Plan(threads []Thread, tasks []Task) (steps [][]string) {
 	byKey := map[string]*entry{}
 	for _, t := range tasks {
-		e := &entry{ref: t.ID, title: t.Title, status: t.Status, keys: map[string]bool{}}
+		e := &entry{ref: strconv.Itoa(t.Seq), title: t.Title, status: t.Status, keys: map[string]bool{}}
 		for _, k := range t.Keys {
 			e.keys[strings.ToLower(k)] = true
 			byKey[strings.ToLower(k)] = e

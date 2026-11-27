@@ -12,7 +12,7 @@ func pr(n int, state string, recent bool) PR {
 }
 
 func TestNewThreadWithOpenPRGetsStartedWork(t *testing.T) {
-	ticket := Task{ID: "t1", Title: "DM2 migration", Status: "done", Keys: []string{"CB-20381"}}
+	ticket := Task{Seq: 1, Title: "DM2 migration", Status: "done", Keys: []string{"CB-20381"}}
 	th := Thread{ID: "local_a", Title: "Descope migration fix", Track: "dm2", PRs: []PR{pr(6950, Open, true)}}
 
 	steps := Plan([]Thread{th}, []Task{ticket})
@@ -35,7 +35,7 @@ func TestOldMergedThreadGetsNoWork(t *testing.T) {
 }
 
 func TestWorkIsDoneOnceNoPRIsOpen(t *testing.T) {
-	work := Task{ID: "w1", Title: "fix", Status: "in_progress", Keys: []string{"thread:local_a", "pr:backend-1", "pr:backend-2"}}
+	work := Task{Seq: 11, Title: "fix", Status: "in_progress", Keys: []string{"thread:local_a", "pr:backend-1", "pr:backend-2"}}
 	one := Thread{ID: "local_a", PRs: []PR{pr(1, Merged, true), pr(2, Open, true)}}
 	if steps := Plan([]Thread{one}, []Task{work}); len(steps) != 0 {
 		t.Fatalf("work with a PR still open got %q", steps)
@@ -43,21 +43,21 @@ func TestWorkIsDoneOnceNoPRIsOpen(t *testing.T) {
 
 	both := Thread{ID: "local_a", PRs: []PR{pr(1, Merged, true), pr(2, Merged, true)}}
 	steps := Plan([]Thread{both}, []Task{work})
-	want := [][]string{{"done", "w1", "--outcome", "Merged backend#1 CB-20381: member timeout; backend#2 CB-20381: member timeout"}}
+	want := [][]string{{"done", "11", "--outcome", "Merged backend#1 CB-20381: member timeout; backend#2 CB-20381: member timeout"}}
 	if !reflect.DeepEqual(steps, want) {
 		t.Fatalf("steps = %q, want %q", steps, want)
 	}
 }
 
 func TestNewPRReopensDoneWork(t *testing.T) {
-	work := Task{ID: "w1", Title: "fix", Status: "done", Keys: []string{"thread:local_a", "pr:backend-1"}}
+	work := Task{Seq: 11, Title: "fix", Status: "done", Keys: []string{"thread:local_a", "pr:backend-1"}}
 	th := Thread{ID: "local_a", PRs: []PR{pr(1, Merged, true), pr(2, Open, true)}}
 	steps := Plan([]Thread{th}, []Task{work})
 	want := [][]string{
-		{"key", "w1", "pr:backend-2"},
-		{"note", "w1", "PR backend#2: CB-20381: member timeout https://github.com/CBX1/backend/pull/2"},
+		{"key", "11", "pr:backend-2"},
+		{"note", "11", "PR backend#2: CB-20381: member timeout https://github.com/CBX1/backend/pull/2"},
 		{"add", "fix", "-k", "thread:local_a"},
-		{"start", "w1"},
+		{"start", "11"},
 	}
 	if !reflect.DeepEqual(steps, want) {
 		t.Fatalf("steps =\n%q\nwant\n%q", steps, want)
@@ -65,7 +65,7 @@ func TestNewPRReopensDoneWork(t *testing.T) {
 }
 
 func TestPRHeldByAnotherTaskStaysThere(t *testing.T) {
-	first := Task{ID: "w1", Title: "fix", Status: "done", Keys: []string{"thread:local_a", "pr:backend-1"}}
+	first := Task{Seq: 11, Title: "fix", Status: "done", Keys: []string{"thread:local_a", "pr:backend-1"}}
 	later := Thread{ID: "local_b", Title: "looked at it", PRs: []PR{pr(1, Merged, true), pr(2, Open, true)}}
 	steps := Plan([]Thread{later}, []Task{first})
 	want := [][]string{
@@ -74,11 +74,22 @@ func TestPRHeldByAnotherTaskStaysThere(t *testing.T) {
 		{"start", "thread:local_b"},
 	}
 	if !reflect.DeepEqual(steps, want) {
-		t.Fatalf("steps =\n%q\nwant\n%q; the held PR stays with w1", steps, want)
+		t.Fatalf("steps =\n%q\nwant\n%q; the held PR stays with 11", steps, want)
 	}
 
 	if steps := Plan([]Thread{{ID: "local_c", PRs: []PR{pr(1, Merged, true)}}}, []Task{first}); len(steps) != 0 {
 		t.Fatalf("a thread holding only another task's PR got %q", steps)
+	}
+}
+
+func TestStepsNameTaskByNumberNotAllDigitHash(t *testing.T) {
+	collides := Task{ID: "a1f3", Seq: 42, Title: "older", Status: "dropped", Keys: []string{"thread:local_old"}}
+	work := Task{ID: "0042", Seq: 97, Title: "fix", Status: "in_progress", Keys: []string{"thread:local_a", "pr:backend-1"}}
+	th := Thread{ID: "local_a", PRs: []PR{pr(1, Merged, true)}}
+	steps := Plan([]Thread{th}, []Task{collides, work})
+	want := [][]string{{"done", "97", "--outcome", "Merged backend#1 CB-20381: member timeout"}}
+	if !reflect.DeepEqual(steps, want) {
+		t.Fatalf("steps = %q, want %q; hash 0042 names task 42", steps, want)
 	}
 }
 
