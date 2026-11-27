@@ -127,6 +127,11 @@
   from: "if holder := byKey[k]; holder == nil || holder == e {"
   to: "if holder := byKey[k]; true || holder == nil || holder == e {"
 
+- why: a step names a task by its number, never an all-digit hash
+  file: internal/work/work.go
+  from: "e := &entry{ref: strconv.Itoa(t.Seq),"
+  to: "_ = strconv.Itoa; e := &entry{ref: t.ID,"
+
 - why: a PR belongs to the thread that opened it
   file: internal/cli/work.go
   from: "if _, held := owner[ref]; !held || p.Own {"

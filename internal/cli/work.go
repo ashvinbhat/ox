@@ -191,7 +191,7 @@ func prOwners(sessions []desktop.Session, mine func(desktop.PR) bool) map[string
 func workTasks(tasks []yokecli.Task) []work.Task {
 	out := make([]work.Task, 0, len(tasks))
 	for _, t := range tasks {
-		out = append(out, work.Task{ID: t.ID, Title: t.Title, Status: t.Status, Keys: t.Keys})
+		out = append(out, work.Task{ID: t.ID, Seq: t.Seq, Title: t.Title, Status: t.Status, Keys: t.Keys})
 	}
 	return out
 }
