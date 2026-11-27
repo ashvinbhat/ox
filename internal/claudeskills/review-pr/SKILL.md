@@ -35,9 +35,11 @@ the verdict. Never re-run CI.
 ## 2. Understand why before judging code
 
 Read the PR title and body and the ask message. If the body cites a ticket
-(CB-XXXXX) and the reason for the change is still unclear, read the ticket
-through the Notion connector. Write the intent in two sentences. If you
-can't, that is the first finding.
+(CB-XXXXX), read the ticket through the Notion connector. When it lists
+done-when or acceptance checks, name the ones this PR covers. Each one it
+skips is a finding, even when the body says the skip was agreed: the ticket
+gets updated or split, so it doesn't close on this PR. Write the intent in
+two sentences. If you can't, that is the first finding.
 
 Then ask whether the change does what it is for, not only whether the code is
 right. A PR that collects logs or metrics must collect what the question needs:
@@ -60,6 +62,10 @@ split when one is ready and another isn't.
 Read the whole diff yourself. A PR that calls itself a pure refactor (a move,
 a rename, an extract) gets proved: match every removed line to the added
 code. After a rebase, confirm main's changes to the moved code came along.
+
+A hard-coded outside name (a vendor's tool or toolkit slug, a provider's
+error text, an external API field) gets checked against the vendor's docs or
+a real payload. A test built on a made-up value of that name proves nothing.
 
 Then, in the checkout, look for what the diff does not show. For each changed
 function, type, field, enum value, config key, endpoint or event:

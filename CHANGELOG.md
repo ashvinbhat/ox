@@ -284,6 +284,12 @@ mission harness is frozen.
   history of the lines a PR changes (blame, then the original PR's last
   commits), asks for a split when a PR bundles independent changes, and checks
   whether moved work goes away or only lands somewhere else.
+- `/review-pr` always reads a cited ticket, names which of its done-when
+  checks the PR covers, and flags each one it skips, even one the body calls
+  agreed, so the ticket doesn't close on that PR. It checks each hard-coded
+  outside name (a vendor's slug, a provider's error text, an external API
+  field) against the vendor's docs or a real payload; a test on a made-up
+  value of it proves nothing.
 - A thread's track comes from its title first, then its PRs' repos and
   branches, so an ox thread that opened a review-desk PR stays on ox.
 - `ox now` puts a thread in review only while a PR it opened is open. A
